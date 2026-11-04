@@ -78,8 +78,8 @@
 <div dir="ltr">
 
 ```
-git clone https://github.com/alequab/fahis.git
-cd fahis
+git clone https://github.com/alequab/Fahis.git
+cd Fahis
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 npm install
@@ -257,8 +257,8 @@ Many ELM327 adapters are Bluetooth LE. Windows gives them no COM port, so most O
 **You need:** Windows 10 or 11 with Bluetooth, Python 3.12, Node.js, a BLE ELM327 adapter with the `FFF0` service, and a car that uses 11-bit CAN.
 
 ```
-git clone https://github.com/alequab/fahis.git
-cd fahis
+git clone https://github.com/alequab/Fahis.git
+cd Fahis
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 npm install
