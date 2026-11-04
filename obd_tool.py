@@ -20,7 +20,7 @@ import car_modules
 import garage
 import i18n
 from demo import DemoTransport
-from dtc_codes import dtc_name, lookup_dtc
+from dtc_codes import dtc_details, dtc_name, lookup_dtc
 from i18n import t
 
 ADAPTER_NAME_HINTS = ("OBD", "ELM")
@@ -490,14 +490,20 @@ async def read_snapshot(elm):
     has_stored = any(codes["Stored"].values())
     supported = await elm.supported_pids()
 
-    values, raw = {}, {}
+    values, raw, more = {}, {}, []
     for pid in sorted(supported - INDEX_PIDS - {0x01}):
         if pid in LIVE_PIDS:
             values[pid] = await elm.read_pid(pid)
         else:
             replies = await elm.request(0x01, pid)
-            raw[pid] = next((p[2:].hex(" ").upper() for p in replies.values()), None)
+            payload = next(iter(replies.values()), None)
+            decoded = car_modules.decode_standard(pid, payload[2:]) if payload else []
+            if decoded:
+                more += decoded
+            else:
+                raw[pid] = payload[2:].hex(" ").upper() if payload else None
     return {
+        "more": more,
         "adapter": elm.version,
         "protocol": elm.protocol,
         "voltage": await elm.voltage(),
@@ -541,6 +547,9 @@ def format_report(snapshot):
     for pid, value in snapshot["values"].items():
         name, unit, _ = LIVE_PIDS[pid]
         lines.append(f"  {pid:02X}  {t(name):24} {shown_value(value):>20} {t(unit)}")
+    if snapshot["more"]:
+        lines += ["", t("MORE STANDARD VALUES (from community definitions, read once)")]
+        lines += [f"  {item['name']:60} {item['text']:>16}" for item in snapshot["more"]]
     if snapshot["raw"]:
         lines += ["", t("OTHER DATA (not decoded by this tool, raw bytes)")]
         lines += [f"  {pid:02X}  {text or t('no reply')}" for pid, text in snapshot["raw"].items()]
@@ -643,6 +652,11 @@ async def run_live(elm, args):
     await poll(elm, args, await live_pids(elm))
 
 
+def column_title(pid, lang=None):
+    name, unit, _ = LIVE_PIDS[pid]
+    return f"{t(name, lang)} ({t(unit, lang)})" if unit else t(name, lang)
+
+
 async def run_log(elm, args):
     os.system("")
     pids = await live_pids(elm)
@@ -651,7 +665,7 @@ async def run_log(elm, args):
     # utf-8-sig lets Excel read Arabic headers correctly.
     with path.open("w", newline="", encoding="utf-8-sig") as log_file:
         writer = csv.writer(log_file)
-        writer.writerow([t("time")] + [f"{t(LIVE_PIDS[p][0])} ({t(LIVE_PIDS[p][1])})" for p in pids])
+        writer.writerow([t("time")] + [column_title(p) for p in pids])
         try:
             await poll(elm, args, pids, writer, log_file)
         finally:
@@ -684,8 +698,31 @@ def dashboard_state(snapshot, reader, demo=False, lang=None, cars=()):
                     "value": value if isinstance(value, (int, float)) else None,
                     "text": "-" if value is None else t(format_value(value), lang)}
                    for pid, value in reader.values.items()],
+        "more": snapshot["more"],
         "raw": [{"pid": f"{pid:02X}", "text": text or t("no reply", lang)} for pid, text in snapshot["raw"].items()],
     }
+
+
+def number(value):
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def car_alerts(snapshot, values, lang=None):
+    """Warnings worth interrupting for. These are guides, not a diagnosis."""
+    alerts = []
+    if any(status["mil"] for status in snapshot["monitors"].values()):
+        alerts.append(t("The check engine light is on. See the Fault codes page.", lang))
+    coolant, volts, rpm = number(values.get(0x05)), number(values.get(0x42)), number(values.get(0x0C))
+    if coolant is not None and coolant >= 110:
+        alerts.append(t("Coolant is at {value} C, which may mean overheating. If the car's temperature gauge agrees, stop safely and let the engine cool.", lang, value=round(coolant)))
+    if volts is not None and rpm is not None:
+        if rpm > 0 and volts < 13.2:
+            alerts.append(t("Voltage is {value} V with the engine running. The alternator may not be charging.", lang, value=f"{volts:.1f}"))
+        elif rpm > 0 and volts > 15.5:
+            alerts.append(t("Voltage is {value} V with the engine running. The charging system may be overcharging.", lang, value=f"{volts:.1f}"))
+        elif rpm == 0 and volts < 11.8:
+            alerts.append(t("Voltage is {value} V with the engine off. The battery is low, so start the engine or turn off the ignition soon.", lang, value=f"{volts:.1f}"))
+    return alerts
 
 
 class Job:
@@ -737,6 +774,8 @@ class DashboardApp:
         self.link = None  # the adapter currently connected, even while it's still reading the car
         self.connected_at = None
         self.connections = 0
+        self.recording = None
+        self.last_summary = None
 
     def device_status(self, lang=None):
         """Describe the adapter itself as rows of label, text and tone for the page."""
@@ -875,6 +914,18 @@ class DashboardApp:
             self.tasks.add(task)
             task.add_done_callback(self.tasks.discard)
             return 200, job.view()
+        if method == "POST" and path == "/api/record":
+            if not body.get("on"):
+                self.stop_recording()
+                return 200, self.recording_status(lang)
+            refusal = self.start_recording(lang)
+            return (400, {"error": refusal}) if refusal else (200, self.recording_status(lang))
+        if method == "GET" and path == "/api/dtc":
+            code = str(query.get("code", "")).strip().upper()
+            if not re.fullmatch(r"[PCBU][0-3][0-9A-F]{3}", code):
+                return 400, {"error": t("Enter a code like P0420.", lang)}
+            details = dtc_details(code) or {}
+            return 200, {"code": code, "title": describe_dtc(code, lang), "found": bool(details), **details}
         if self.args.demo and path in ("/api/reports", "/api/report"):
             # Demo pages get shared and screenshotted, and real reports can contain a VIN.
             return (200, []) if path == "/api/reports" else (404, {"error": t("Not found", lang)})
@@ -903,7 +954,76 @@ class DashboardApp:
                     "device": self.device_status(lang)}
         state = dashboard_state(self.snapshot, self.reader, self.args.demo, lang, self.cars)
         state["device"] = self.device_status(lang)
+        state["alerts"] = car_alerts(self.snapshot, self.reader.values, lang)
+        state["recording"] = self.recording_status(lang)
         return state
+
+    def start_recording(self, lang=None):
+        """Start saving live values to a CSV file. Returns why it can't start, or None."""
+        if self.reader is None or self.elm is None:
+            return t("Not connected to a car", lang)
+        if self.recording:
+            return t("Recording is already running.", lang)
+        LOG_DIR.mkdir(exist_ok=True)
+        path = LOG_DIR / f"drive_{datetime.now():%Y%m%d_%H%M%S}.csv"
+        log_file = path.open("w", newline="", encoding="utf-8-sig")
+        writer = csv.writer(log_file)
+        pids = list(self.reader.values)
+        writer.writerow([t("time", lang)] + [column_title(p, lang) for p in pids])
+        self.recording = {"path": path, "file": log_file, "writer": writer, "pids": pids, "rows": 0,
+                          "started": time.monotonic(), "highest": {}, "speed_total": 0.0, "speed_rows": 0}
+        self.last_summary = None
+        return None
+
+    def record_row(self):
+        recording = self.recording
+        if not recording or self.reader is None:
+            return
+        values = self.reader.values
+        recording["writer"].writerow([datetime.now().isoformat(timespec="milliseconds")]
+                                     + ["" if values.get(p) is None else format_value(values[p]) for p in recording["pids"]])
+        recording["file"].flush()
+        recording["rows"] += 1
+        for pid in (0x0C, 0x0D, 0x05):
+            value = number(values.get(pid))
+            if value is not None:
+                recording["highest"][pid] = max(value, recording["highest"].get(pid, value))
+        speed = number(values.get(0x0D))
+        if speed is not None:
+            recording["speed_total"] += speed
+            recording["speed_rows"] += 1
+
+    def stop_recording(self):
+        """Close the file and keep a summary of what was recorded."""
+        recording = self.recording
+        if not recording:
+            return
+        recording["file"].close()
+        seconds = time.monotonic() - recording["started"]
+        self.last_summary = {
+            "file": str(recording["path"]), "rows": recording["rows"], "seconds": seconds,
+            "top_speed": recording["highest"].get(0x0D), "top_rpm": recording["highest"].get(0x0C),
+            "top_coolant": recording["highest"].get(0x05),
+            "average_speed": recording["speed_total"] / recording["speed_rows"] if recording["speed_rows"] else None}
+        self.recording = None
+
+    def recording_status(self, lang=None):
+        clock = lambda seconds: f"{int(seconds // 60)}:{int(seconds % 60):02d}"
+        if self.recording:
+            return {"on": True, "text": t("Recording: {rows} rows, {time}", lang, rows=self.recording["rows"],
+                                          time=clock(time.monotonic() - self.recording["started"]))}
+        summary = self.last_summary
+        if not summary:
+            return {"on": False, "lines": []}
+        shown = lambda value, unit: "-" if value is None else f"{round(value)} {t(unit, lang)}"
+        return {"on": False, "lines": [
+            t("Saved log: {path}", lang, path=summary["file"]),
+            f"{t('Time recorded', lang)}: {clock(summary['seconds'])}",
+            f"{t('Rows recorded', lang)}: {summary['rows']}",
+            f"{t('Top speed', lang)}: {shown(summary['top_speed'], 'km/h')}",
+            f"{t('Average speed', lang)}: {shown(summary['average_speed'], 'km/h')}",
+            f"{t('Highest engine RPM', lang)}: {shown(summary['top_rpm'], 'rpm')}",
+            f"{t('Highest coolant temp', lang)}: {shown(summary['top_coolant'], 'C')}"]}
 
     async def session(self, elm, _):
         self.link = elm
@@ -923,9 +1043,11 @@ class DashboardApp:
             while self.args.samples is None or count < self.args.samples:
                 await self.run_waiting_jobs(elm)
                 await self.reader.step()
+                self.record_row()
                 count += 1
                 await asyncio.sleep(self.args.interval)
         finally:
+            self.stop_recording()
             self.elm = self.link = None
             self.fail_waiting_jobs()
 
@@ -1124,14 +1246,18 @@ async def run_clear(elm, args):
 
 async def connect_and_run(args, handler):
     from bleak import BleakClient, BleakScanner
+    from bleak.exc import BleakBluetoothNotAvailableError
 
     print(t("Looking for the adapter ..."), flush=True)
-    if args.address:
-        device = await BleakScanner.find_device_by_address(args.address, timeout=20)
-    else:
-        device = await BleakScanner.find_device_by_filter(
-            lambda d, ad: any(hint in (d.name or ad.local_name or "").upper() for hint in ADAPTER_NAME_HINTS),
-            timeout=20)
+    try:
+        if args.address:
+            device = await BleakScanner.find_device_by_address(args.address, timeout=20)
+        else:
+            device = await BleakScanner.find_device_by_filter(
+                lambda d, ad: any(hint in (d.name or ad.local_name or "").upper() for hint in ADAPTER_NAME_HINTS),
+                timeout=20)
+    except BleakBluetoothNotAvailableError:
+        raise OBDError("Bluetooth is turned off or unavailable. Turn it on in Windows settings and try again.") from None
     if device is None:
         raise OBDError("Adapter not found. Check it is plugged in, the ignition is ON, and no phone is connected to it.")
     async with BleakClient(device, timeout=30) as client:

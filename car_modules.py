@@ -2,6 +2,7 @@
 import json
 import re
 import urllib.error
+from functools import lru_cache
 import urllib.request
 from datetime import date
 from pathlib import Path
@@ -12,6 +13,7 @@ from i18n import t
 PROFILE_DIR = Path(__file__).parent / "profiles"
 DOWNLOAD_DIR = PROFILE_DIR / "downloaded"
 CATALOG_FILE = PROFILE_DIR / "catalog.json"
+STANDARD_PIDS_FILE = Path(__file__).parent / "data" / "standard-pids.json"
 OBDB_API = "https://api.github.com/repos/OBDb/{repo}/contents/signalsets/v3"
 OBDB_RAW = "https://raw.githubusercontent.com/OBDb/{repo}/HEAD/signalsets/v3/{file}"
 
@@ -227,6 +229,35 @@ def format_signal(fmt, value):
     text = f"{value:.2f}".rstrip("0").rstrip(".")
     label = t(UNITS.get(unit, ""))
     return f"{text} {label}".strip()
+
+
+@lru_cache(maxsize=1)
+def standard_pids():
+    """Return OBDb's definitions of the standard mode 01 values, by PID number."""
+    commands = json.loads(STANDARD_PIDS_FILE.read_text(encoding="utf-8"))["commands"]
+    return {int(command["cmd"]["01"], 16): command for command in commands if "01" in command["cmd"]}
+
+
+def decode_standard(pid, data):
+    """Decode a standard value this tool has no tested decoder for. Returns a list of name and text.
+
+    Many values start with flags saying which sensors exist. If the car flags none of them, what
+    follows isn't real data: one recorded reply would otherwise decode to a 3,647 C turbo.
+    """
+    command = standard_pids().get(pid)
+    if command is None:
+        return []
+    flags = [s for s in command["signals"] if s.get("hidden") and s["id"].endswith("_SUP")]
+    if flags and not any(decode_signal(s["fmt"], data) for s in flags):
+        return []
+    results = []
+    for signal in command["signals"]:
+        if signal.get("hidden"):
+            continue
+        value = decode_signal(signal["fmt"], data)
+        if value is not None:
+            results.append({"name": signal["name"], "text": format_signal(signal["fmt"], value)})
+    return results
 
 
 def decode_uds_codes(payload):

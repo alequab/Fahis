@@ -1,9 +1,11 @@
 """Fault code names and descriptions: a friendly table of common codes, then the full OBDex list."""
+import gzip
 import json
 from functools import lru_cache
 from pathlib import Path
 
 GENERIC_CODES_FILE = Path(__file__).parent / "data" / "dtc_generic.json"
+DETAILS_FILE = Path(__file__).parent / "data" / "dtc_details.json.gz"
 
 
 def dtc_name(a, b):
@@ -14,6 +16,16 @@ def dtc_name(a, b):
 @lru_cache(maxsize=1)
 def generic_codes():
     return json.loads(GENERIC_CODES_FILE.read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=1)
+def all_details():
+    return json.loads(gzip.decompress(DETAILS_FILE.read_bytes()))
+
+
+def dtc_details(code):
+    """Return the causes, symptoms and description for a generic code, in English, or None."""
+    return all_details().get(code)
 
 
 def lookup_dtc(code, lang="en"):

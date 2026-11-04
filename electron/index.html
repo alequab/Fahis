@@ -92,6 +92,17 @@
   .car-sub { color: var(--muted); font-size: 13px; }
   details { margin-top: 6px; }
   summary { cursor: pointer; color: var(--accent); }
+  .alert { background: #4a1f22; border: 1px solid #a8444a; color: #ffd7d9; border-radius: 10px; padding: 10px 14px; margin: 0 0 12px; font-weight: 600; }
+  .graph { border-top: 1px solid var(--line); padding: 10px 0; }
+  .graph:first-child { border-top: 0; }
+  .graph svg { display: block; width: 100%; height: 110px; margin-top: 6px; background: var(--bg); border-radius: 6px; }
+  .graph polyline { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+  .link { background: none; border: 0; padding: 0; color: var(--bad); font-weight: 650; text-decoration: underline; unicode-bidi: isolate; direction: ltr; }
+  #lookup-form input { flex: 0 1 180px; text-transform: uppercase; }
+  #lookup-result h3 { margin: 0 0 6px; font-size: 18px; }
+  #lookup-result h4 { margin: 12px 0 4px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  #lookup-result ul { margin: 0; padding-inline-start: 20px; }
+  .tag { display: inline-block; font-size: 13px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; margin: 4px 0 0; margin-inline-end: 6px; }
   .report-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
   #action-error { color: var(--bad); font-weight: 600; margin: 8px 0 0; }
   footer { color: var(--muted); font-size: 13px; padding: 4px 0 16px; }
@@ -126,6 +137,7 @@
     <a href="#/commands" data-page="commands" data-i18n="Commands">Commands</a>
     <a href="#/cars" data-page="cars" data-i18n="Supported cars">Supported cars</a>
     <a href="#/saved" data-page="saved" data-i18n="Saved cars">Saved cars</a>
+    <a href="#/lookup" data-page="lookup" data-i18n="Code lookup">Code lookup</a>
     <a href="#/reports" data-page="reports" data-i18n="Reports">Reports</a>
   </nav>
   <main>
@@ -137,6 +149,7 @@
       </div>
     </header>
     <div id="demo-banner" hidden data-i18n="Demo mode: this is simulated data, not your car.">Demo mode: this is simulated data, not your car.</div>
+    <div id="alerts" role="status"></div>
     <section id="waiting" hidden>
       <h2 data-i18n="Not connected to a car">Not connected to a car</h2>
       <p id="waiting-message" class="dim"></p>
@@ -165,7 +178,25 @@
 
     <div class="page" id="page-live" hidden>
       <div class="needs-car">
+        <section>
+          <h2 data-i18n="Record">Record</h2>
+          <div class="action-head">
+            <span id="recording-status" class="dim"></span>
+            <button id="recording-button" type="button" class="primary" data-i18n="Start recording">Start recording</button>
+          </div>
+          <pre id="recording-summary" dir="auto" hidden></pre>
+        </section>
+        <section>
+          <h2 data-i18n="Graphs">Graphs</h2>
+          <div class="catalog-tools"><select id="graph-add" aria-label="Add a graph"></select></div>
+          <div id="graphs"></div>
+        </section>
         <section><h2 data-i18n="All live values">All live values</h2><div class="values" id="values"></div></section>
+        <section id="more-section" hidden>
+          <h2 data-i18n="More standard values">More standard values</h2>
+          <p class="needs" data-i18n="From community definitions, read once when connecting. Treat any value that looks wrong as unreliable.">From community definitions, read once when connecting. Treat any value that looks wrong as unreliable.</p>
+          <div class="values" id="more"></div>
+        </section>
         <section id="raw-section" hidden><h2 data-i18n="Other data, not decoded (raw bytes)">Other data, not decoded (raw bytes)</h2><div class="values" id="raw"></div></section>
       </div>
     </div>
@@ -213,6 +244,19 @@
       <section><div id="cars"></div></section>
     </div>
 
+    <div class="page" id="page-lookup" hidden>
+      <p class="intro" data-i18n="Search any generic fault code, without needing a car.">Search any generic fault code, without needing a car.</p>
+      <section>
+        <form id="lookup-form" class="catalog-tools">
+          <input id="lookup-code" type="text" dir="ltr" placeholder="P0420" aria-label="Code" autocomplete="off" maxlength="5">
+          <button type="submit" class="primary" data-i18n="Look up">Look up</button>
+        </form>
+        <p id="lookup-error" class="bad" role="alert" hidden></p>
+        <div id="lookup-result"></div>
+        <p class="needs" data-i18n="Details come from OBDex and are in English. Treat them as a starting point, not a diagnosis.">Details come from OBDex and are in English. Treat them as a starting point, not a diagnosis.</p>
+      </section>
+    </div>
+
     <div class="page" id="page-reports" hidden>
       <p class="intro" data-i18n="Reports saved on this laptop. They can contain a VIN, so be careful who you share them with.">Reports saved on this laptop. They can contain a VIN, so be careful who you share them with.</p>
       <section><div id="reports"></div><pre id="report-text" hidden></pre></section>
@@ -229,7 +273,13 @@ const TILES = ["0C", "0D", "05", "0F", "11", "04"];
 const HISTORY = 60;
 const CATALOG_LIMIT = 200;
 const PAGES = {overview: "Overview", live: "Live data", faults: "Fault codes", commands: "Commands",
-               cars: "Supported cars", saved: "Saved cars", reports: "Reports"};
+               cars: "Supported cars", saved: "Saved cars", lookup: "Code lookup", reports: "Reports"};
+const LIKELIHOOD = {high: "More likely", medium: "Possible", low: "Less likely"};
+const FLAGS = {mil: "Usually turns on the check engine light", emissions_relevant: "Affects emissions",
+               drive_cycle_required: "May need driving to confirm a repair", limp_mode_possible: "May limit engine power"};
+const GRAPH_HISTORY = 300;
+const MAX_GRAPHS = 4;
+const graphData = {};
 const ACTIONS = [
   {id: "battery", title: "Battery check", what: "Explains the battery voltage. With the engine running, it also checks charging.",
    needs: "Needs: adapter powered by the car. Works even if the car's computer doesn't answer.", cmd: ".\\obd battery"},
@@ -389,7 +439,10 @@ function codeNodes(state) {
                    found.length ? "bad" : "dim"));
     for (const c of found) {
       const line = el("div");
-      line.append(el("span", c.code, "code bad"), " ", el("span", `${c.description} (${tr("Module {header}", {header: c.module})})`));
+      const link = el("button", c.code, "link");
+      link.type = "button";
+      link.addEventListener("click", () => openLookup(c.code));
+      line.append(link, " ", el("span", `${c.description} (${tr("Module {header}", {header: c.module})})`));
       nodes.push(line);
     }
     if (answered) {
@@ -462,10 +515,139 @@ function renderSavedCars(cars) {
       const list = el("div", undefined, "values");
       fill(list, Object.entries(values).map(([name, text]) => row(tr(name), text)));
       details.append(list);
+      const past = (record.history || []).slice(-10).reverse();
+      if (past.length) {
+        details.append(el("div", tr("Past readings"), "car-sub"));
+        const pastList = el("div", undefined, "values");
+        fill(pastList, past.map(item => row(item.time.replace("T", " "),
+          `${tr("Check engine light")}: ${tr(item.light ? "ON" : "off")} · ${item.codes.join(", ") || tr("none")}`)));
+        details.append(pastList);
+      }
     });
     node.append(details);
     return node;
   }));
+}
+
+function savedGraphs() {
+  try { return JSON.parse(localStorage.getItem("graphs")) || ["0C", "0D"]; } catch (error) { return ["0C", "0D"]; }
+}
+
+let chosenGraphs = savedGraphs();
+
+function setGraphs(pids) {
+  chosenGraphs = pids.slice(0, MAX_GRAPHS);
+  try { localStorage.setItem("graphs", JSON.stringify(chosenGraphs)); } catch (error) { /* just not remembered */ }
+}
+
+function renderGraphs(values) {
+  const numeric = values.filter(v => v.value !== null);
+  for (const v of numeric) {
+    const past = graphData[v.pid] = graphData[v.pid] || [];
+    past.push(v.value);
+    if (past.length > GRAPH_HISTORY) past.shift();
+  }
+  const select = document.getElementById("graph-add");
+  if (document.activeElement !== select) {
+    fill(select, [Object.assign(el("option", tr("Add a graph")), {value: ""}),
+                  ...numeric.filter(v => !chosenGraphs.includes(v.pid)).map(v => Object.assign(el("option", v.name), {value: v.pid}))]);
+  }
+  fill(document.getElementById("graphs"), chosenGraphs.map(pid => {
+    const v = numeric.find(item => item.pid === pid);
+    if (!v) return el("div");
+    const past = graphData[pid];
+    const low = Math.min(...past), high = Math.max(...past), span = high - low || 1;
+    const node = el("div", undefined, "graph");
+    const head = el("div", undefined, "action-head");
+    const remove = el("button", tr("Remove"), "small");
+    remove.type = "button";
+    remove.addEventListener("click", () => { setGraphs(chosenGraphs.filter(item => item !== pid)); renderGraphs([]); });
+    head.append(el("strong", `${v.name}: ${v.text} ${v.unit}`.trim()), remove);
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 100 40");
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.setAttribute("aria-hidden", "true");
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    line.setAttribute("points", past.map((value, i) =>
+      `${(i / (GRAPH_HISTORY - 1) * 100).toFixed(2)},${(37 - (value - low) / span * 34).toFixed(2)}`).join(" "));
+    svg.append(line);
+    const range = el("div", tr("lowest {low}, highest {high}", {low: Math.round(low * 10) / 10, high: Math.round(high * 10) / 10}), "needs");
+    node.append(head, svg, range);
+    return node;
+  }));
+}
+
+function renderRecording(recording) {
+  const button = document.getElementById("recording-button");
+  button.dataset.i18n = recording.on ? "Stop recording" : "Start recording";
+  button.textContent = tr(button.dataset.i18n);
+  button.className = recording.on ? "danger" : "primary";
+  document.getElementById("recording-status").textContent = recording.on ? recording.text : "";
+  const summary = document.getElementById("recording-summary");
+  const lines = recording.lines || [];
+  summary.hidden = recording.on || !lines.length;
+  summary.textContent = lines.join("\n");
+}
+
+async function toggleRecording() {
+  try {
+    await post("/api/record", {on: !(lastState && lastState.recording && lastState.recording.on)});
+  } catch (problem) {
+    document.getElementById("recording-status").textContent = problem.message;
+  }
+}
+
+function openLookup(code) {
+  document.getElementById("lookup-code").value = code;
+  location.hash = "#/lookup";
+  runLookup(code);
+}
+
+async function runLookup(code) {
+  const error = document.getElementById("lookup-error");
+  const result = document.getElementById("lookup-result");
+  error.hidden = true;
+  try {
+    const data = await api("GET", "/api/dtc", {code, lang: language});
+    const nodes = [el("h3", `${data.code}: ${data.title}`)];
+    nodes[0].dir = "auto";
+    if (!data.found) {
+      nodes.push(el("p", tr("No extra details for this code. Manufacturer-specific codes depend on the carmaker."), "dim"));
+    } else {
+      const description = el("p", data.description);
+      description.dir = "ltr";
+      nodes.push(description);
+      const tags = el("div");
+      for (const [flag, label] of Object.entries(FLAGS)) {
+        if (data.flags[flag]) tags.append(el("span", tr(label), "tag"));
+      }
+      nodes.push(tags);
+      if (data.causes.length) {
+        nodes.push(el("h4", tr("Common causes")));
+        const list = el("ul");
+        list.dir = "ltr";
+        for (const cause of data.causes) {
+          const item = el("li", cause.text);
+          item.append(el("span", ` (${tr(LIKELIHOOD[cause.likelihood] || "Possible")})`, "dim"));
+          list.append(item);
+        }
+        nodes.push(list);
+      }
+      if (data.symptoms.length) {
+        nodes.push(el("h4", tr("Symptoms")));
+        const list = el("ul");
+        list.dir = "ltr";
+        for (const symptom of data.symptoms) list.append(el("li", symptom));
+        nodes.push(list);
+      }
+      if (data.reviewed) nodes.push(el("p", tr("Checked by OBDex reviewers on {date}", {date: data.reviewed}), "needs"));
+    }
+    fill(result, nodes);
+  } catch (problem) {
+    fill(result, []);
+    error.textContent = problem.message;
+    error.hidden = false;
+  }
 }
 
 function render(state) {
@@ -475,6 +657,7 @@ function render(state) {
   renderSavedCars(state.cars);
   fill(document.getElementById("device"), state.device.map(item => row(item.label, item.text, item.tone)));
   updateConnectionViews();
+  fill(document.getElementById("alerts"), (state.alerts || []).map(text => el("div", text, "alert")));
   if (!state.connected) {
     status.textContent = tr("Not connected");
     status.className = "lost";
@@ -491,6 +674,10 @@ function render(state) {
   renderMonitors(state.monitors);
   renderVehicle(state);
   fill(document.getElementById("values"), state.values.map(v => row(v.name, `${v.text} ${v.unit}`.trim())));
+  renderGraphs(state.values);
+  renderRecording(state.recording);
+  document.getElementById("more-section").hidden = !state.more.length;
+  fill(document.getElementById("more"), state.more.map(item => row(item.name, item.text)));
   document.getElementById("raw-section").hidden = !state.raw.length;
   fill(document.getElementById("raw"), state.raw.map(r => row(`PID ${r.pid}`, r.text)));
   document.getElementById("freeze-section").hidden = !state.freeze;
@@ -710,6 +897,15 @@ document.getElementById("lang-toggle").addEventListener("click", () => {
   setLanguage(next);
 });
 document.getElementById("scan-button").addEventListener("click", () => runAction("scan"));
+document.getElementById("recording-button").addEventListener("click", toggleRecording);
+document.getElementById("graph-add").addEventListener("change", event => {
+  if (event.target.value) setGraphs([...chosenGraphs, event.target.value]);
+  event.target.blur();
+});
+document.getElementById("lookup-form").addEventListener("submit", event => {
+  event.preventDefault();
+  runLookup(document.getElementById("lookup-code").value);
+});
 document.getElementById("catalog-search").addEventListener("input", renderCatalog);
 document.getElementById("catalog-make").addEventListener("change", renderCatalog);
 window.addEventListener("hashchange", showPage);

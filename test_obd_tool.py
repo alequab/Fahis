@@ -165,10 +165,11 @@ class EverythingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(snapshot["freeze"])
 
     async def test_undecoded_pid_shown_raw(self):
-        snapshot = await self.snapshot(**{
-            "0100": ["7E8 06 41 00 40 00 00 00"],
-            "0102": ["7E8 04 41 02 12 34"],
-        })
+        with mock.patch.object(car_modules, "decode_standard", return_value=[]):
+            snapshot = await self.snapshot(**{
+                "0100": ["7E8 06 41 00 40 00 00 00"],
+                "0102": ["7E8 04 41 02 12 34"],
+            })
         self.assertEqual(snapshot["raw"], {0x02: "12 34"})
         self.assertIn("02  12 34", obd_tool.format_report(snapshot))
 
@@ -550,7 +551,7 @@ class LocalizationTests(unittest.TestCase):
         page = bridge.PAGE.read_text(encoding="utf-8")
         found = {html.unescape(text) for text in re.findall(r'data-i18n(?:-placeholder)?="([^"]+)"', page)}
         found |= {text for text in re.findall(r'\b(?:title|what|needs): "([^"]+)"', page)}
-        found |= set(re.findall(r'\b(?:overview|live|faults|commands|cars|saved|reports|queued|running|done|failed): "([^"]+)"', page))
+        found |= set(re.findall(r'\b(?:overview|live|faults|commands|cars|saved|lookup|reports|queued|running|done|failed|high|medium|low|mil|emissions_relevant|drive_cycle_required|limp_mode_possible): "([^"]+)"', page))
         found |= {text.replace("\\\\", "\\") for text in re.findall(r'\btr\("((?:[^"\\]|\\.)+)"', page)}
         for pair in re.findall(r'\btr\(\w+(?:\.\w+)? \? "([^"]+)" : "([^"]+)"\)', page):
             found |= set(pair)
@@ -889,6 +890,149 @@ class WebJobTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("error", data)
 
 
+class StandardValueTests(unittest.TestCase):
+    """Replies recorded from a real diesel car."""
+
+    def names(self, pid, hexed):
+        return {item["name"]: item["text"] for item in car_modules.decode_standard(pid, bytes.fromhex(hexed))}
+
+    def test_values_match_tested_decoders(self):
+        self.assertEqual(self.names(0x0C, "0D48")["Engine RPM"], "850 rpm")
+        self.assertEqual(self.names(0x05, "78")["Engine coolant temperature"], "80 C")
+
+    def test_flagged_as_unsupported_is_hidden(self):
+        self.assertEqual(self.names(0x75, "005A01900624"), {})
+
+    def test_unknown_pid_gives_nothing(self):
+        self.assertEqual(car_modules.decode_standard(0xFE, b"\x00"), [])
+
+    def test_tested_decoders_stay_first(self):
+        # OBDb's definition of this PID gave -210 on a reply that really means about 1.
+        self.assertAlmostEqual(LIVE_PIDS[0x5D][2](bytes.fromhex("6981")), 1.0, places=0)
+        self.assertIn(0x5D, LIVE_PIDS)
+
+
+class FaultDetailTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.app = obd_tool.DashboardApp(SimpleNamespace(demo=True, samples=1, interval=0))
+
+    def test_details_match_known_codes(self):
+        details = dtc_codes.dtc_details("P0741")
+        self.assertIn("converter clutch", details["description"])
+        self.assertEqual(details["causes"][0]["likelihood"], "high")
+        self.assertTrue(details["flags"]["mil"])
+        self.assertIn("Catalyst", dtc_codes.generic_codes()["P0420"])
+        self.assertIsNone(dtc_codes.dtc_details("P1234"))
+
+    async def test_lookup_api(self):
+        code, data = await self.app.api("GET", "/api/dtc", {"code": " p0420 ", "lang": "ar"}, {})
+        self.assertEqual((code, data["code"], data["found"]), (200, "P0420", True))
+        self.assertIn("المحفّز", data["title"])
+        code, data = await self.app.api("GET", "/api/dtc", {"code": "U1112"}, {})
+        self.assertEqual((code, data["found"]), (200, False))
+        self.assertIn("manufacturer", data["title"])
+
+    async def test_lookup_refuses_bad_input(self):
+        for bad in ("", "P04", "X0420", "P04200", "../x", "P9420"):
+            code, data = await self.app.api("GET", "/api/dtc", {"code": bad}, {})
+            self.assertEqual(code, 400, bad)
+            self.assertIn("P0420", data["error"])
+
+
+class AlertTests(unittest.TestCase):
+    QUIET = {"monitors": {"7E8": {"mil": False}}}
+
+    def alerts(self, snapshot=None, **values):
+        pids = {"coolant": 0x05, "volts": 0x42, "rpm": 0x0C}
+        return obd_tool.car_alerts(snapshot or self.QUIET, {pids[k]: v for k, v in values.items()}, "en")
+
+    def test_normal_readings_are_quiet(self):
+        self.assertEqual(self.alerts(coolant=90, volts=14.1, rpm=850), [])
+        self.assertEqual(self.alerts(coolant=90, volts=12.4, rpm=0), [])
+        self.assertEqual(self.alerts(), [])
+
+    def test_each_warning(self):
+        self.assertIn("overheating", self.alerts(coolant=112)[0])
+        self.assertIn("alternator", self.alerts(volts=12.5, rpm=800)[0])
+        self.assertIn("overcharging", self.alerts(volts=15.9, rpm=800)[0])
+        self.assertIn("battery is low", self.alerts(volts=11.4, rpm=0)[0])
+        self.assertIn("check engine", self.alerts({"monitors": {"7E8": {"mil": True}}})[0])
+
+    def test_invalid_values_are_ignored(self):
+        self.assertEqual(self.alerts(coolant="255+", volts=None, rpm=None), [])
+
+    def test_arabic(self):
+        self.assertIn("الدينامو", obd_tool.car_alerts(self.QUIET, {0x42: 12.5, 0x0C: 800}, "ar")[0])
+
+
+class RecordingTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        patcher = mock.patch.object(obd_tool, "LOG_DIR", Path(folder.name))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.app = obd_tool.DashboardApp(SimpleNamespace(demo=True, samples=1, interval=0))
+        self.elm = ELM(demo.DemoTransport())
+        self.elm.demo = True
+        await self.elm.setup()
+        values = {0x0C: 2000.0, 0x0D: 50, 0x05: 90}
+        self.app.reader = obd_tool.LiveReader(self.elm, values, values, "14.0V")
+        self.app.elm = self.elm
+
+    def test_records_and_summarizes(self):
+        self.assertIsNone(self.app.start_recording("en"))
+        self.app.record_row()
+        self.app.reader.values.update({0x0D: 70, 0x0C: 3000.0})
+        self.app.record_row()
+        self.assertEqual(self.app.recording_status("en")["on"], True)
+        self.assertIn("2 rows", self.app.recording_status("en")["text"])
+        path = self.app.recording["path"]
+        self.app.stop_recording()
+        rows = path.read_text(encoding="utf-8-sig").strip().splitlines()
+        self.assertEqual(len(rows), 3)
+        lines = "\n".join(self.app.recording_status("en")["lines"])
+        self.assertIn("Top speed: 70 km/h", lines)
+        self.assertIn("Average speed: 60 km/h", lines)
+        self.assertIn("Highest engine RPM: 3000 rpm", lines)
+
+    def test_column_titles(self):
+        self.assertEqual(obd_tool.column_title(0x0C, "en"), "Engine RPM (rpm)")
+        self.assertEqual(obd_tool.column_title(0x03, "en"), "Fuel system")
+
+    def test_cannot_record_twice_or_without_a_car(self):
+        self.assertIsNone(self.app.start_recording("en"))
+        self.assertIn("already", self.app.start_recording("en"))
+        self.app.stop_recording()
+        self.app.elm = None
+        self.assertIn("Not connected", self.app.start_recording("en"))
+
+    async def test_connection_loss_closes_the_file(self):
+        self.assertIsNone(self.app.start_recording("en"))
+        recording = self.app.recording
+        self.app.stop_recording()
+        self.assertTrue(recording["file"].closed)
+        self.app.stop_recording()  # safe to call again
+
+    async def test_api(self):
+        code, data = await self.app.api("POST", "/api/record", {}, {"on": True, "lang": "en"})
+        self.assertEqual((code, data["on"]), (200, True))
+        code, data = await self.app.api("POST", "/api/record", {}, {"on": True, "lang": "en"})
+        self.assertEqual(code, 400)
+        code, data = await self.app.api("POST", "/api/record", {}, {"on": False, "lang": "en"})
+        self.assertEqual((code, data["on"]), (200, False))
+
+
+class BluetoothOffTests(unittest.IsolatedAsyncioTestCase):
+    async def test_clear_message_when_bluetooth_is_off(self):
+        from bleak.exc import BleakBluetoothNotAvailableError, BleakBluetoothNotAvailableReason
+        error = BleakBluetoothNotAvailableError("off", BleakBluetoothNotAvailableReason.POWERED_OFF)
+        args = SimpleNamespace(address=None)
+        with mock.patch("bleak.BleakScanner.find_device_by_filter", mock.AsyncMock(side_effect=error)), \
+                mock.patch("builtins.print"), self.assertRaisesRegex(OBDError, "Bluetooth is turned off"):
+            await obd_tool.connect_and_run(args, obd_tool.run_info)
+
+
 class AdapterStatusTests(unittest.IsolatedAsyncioTestCase):
     def rows(self, app, lang="en"):
         return {row["label"]: row for row in app.device_status(lang)}
@@ -988,7 +1132,7 @@ class DemoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(snapshot["codes"]["Stored"]["7E8"], ["P0171"])
         self.assertEqual(snapshot["freeze"]["code"], "P0171")
         self.assertEqual(sorted(snapshot["monitors"]), ["7E8", "7E9"])
-        self.assertIn(0x41, snapshot["raw"])
+        self.assertTrue(snapshot["more"])
         self.assertNotIn(None, snapshot["values"].values())
 
         reader = obd_tool.LiveReader(elm, snapshot["values"], snapshot["values"], snapshot["voltage"])

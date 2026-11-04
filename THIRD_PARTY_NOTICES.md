@@ -8,7 +8,8 @@ The Fahis license does not apply to these components. Each remains under its own
 |---|---|---|---|
 | Kia Picanto profile and catalog of profile names (`profiles/`) | Reading extra car values | [OBDb](https://github.com/OBDb) editors and contributors | CC BY-SA 4.0, full text in [profiles/LICENSE](profiles/LICENSE) |
 | Test recordings in `test_obd_tool.py` | Offline tests | [OBDb](https://github.com/OBDb) editors and contributors | CC BY-SA 4.0 |
-| Fault code descriptions (`data/dtc_generic.json`) | Describing fault codes | [OBDex](https://github.com/foerbsnavi/OBDex) contributors | CC0 1.0, full text in [data/LICENSE-OBDex](data/LICENSE-OBDex) |
+| Standard value definitions (`data/standard-pids.json`) | Decoding extra standard values | [OBDb](https://github.com/OBDb) editors and contributors | CC BY-SA 4.0, full text in [profiles/LICENSE](profiles/LICENSE) |
+| Fault code titles and details (`data/dtc_generic.json`, `data/dtc_details.json.gz`) | Describing fault codes, causes and symptoms | [OBDex](https://github.com/foerbsnavi/OBDex) contributors | CC0 1.0, full text in [data/LICENSE-OBDex](data/LICENSE-OBDex) |
 
 ## Downloaded when you use Fahis
 
