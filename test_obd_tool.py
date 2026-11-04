@@ -193,6 +193,73 @@ class EverythingTests(unittest.IsolatedAsyncioTestCase):
         for pid in ("0105", "010F", "0110"):
             self.assertIn(pid, sent)
 
+    async def test_several_values_in_one_request_when_the_car_allows_it(self):
+        transport = FakeTransport({
+            # 7E8's reply is cut off after its first frame, so only 7E9's complete one may be used.
+            "010C0D": ["7E8 10 07 41 0C 1A F8 0D 32", "7E9 06 41 0C 1B 00 0D 33"],
+            "010C": ["7E8 04 41 0C 1A F8", "7E9 04 41 0C 1B 00"], "010D": ["7E8 03 41 0D 32"]})
+        elm = ELM(transport)
+        await elm.read_pid(0x0C)
+        await elm.read_pid(0x0D)
+        values = await elm.read_pids([0x0C, 0x0D])
+        self.assertTrue(elm.can_group)
+        self.assertEqual(values, {0x0C: 1728.0, 0x0D: 51})
+        self.assertEqual(transport.sent[-1], "010C0D")
+
+    async def test_falls_back_when_the_car_refuses_several_values(self):
+        for refusal in (["NO DATA"], ["?"], None, ["7E8 04 41 0C 1A F8"], ["7E8 05 41 0C 1A F8 99"]):
+            transport = FakeTransport({"010C0D": refusal, "010C": ["7E8 04 41 0C 1A F8"], "010D": ["7E8 03 41 0D 32"]})
+            elm = ELM(transport)
+            await elm.read_pid(0x0C)
+            await elm.read_pid(0x0D)
+            self.assertEqual(await elm.read_pids([0x0C, 0x0D]), {0x0C: 1726.0, 0x0D: 50}, refusal)
+            self.assertIs(elm.can_group, False, refusal)
+            sent = len(transport.sent)
+            await elm.read_pids([0x0C, 0x0D])
+            self.assertNotIn("010C0D", transport.sent[sent:])
+
+    def test_a_group_reply_never_guesses_at_unexpected_bytes(self):
+        sizes = {0x0C: 2, 0x0D: 1}
+        split = lambda data: obd_tool.split_group(obd_tool.Reply(bytes(data)), sizes, {0x0C, 0x0D})
+        self.assertEqual(split([0x41, 0x0C, 1, 2, 0x0D, 3]), {0x0C: bytes([1, 2]), 0x0D: bytes([3])})
+        self.assertEqual(split([0x41, 0x0C, 1, 2, 0x0D]), {})  # cut short
+        self.assertEqual(split([0x41, 0x0C, 1, 2, 0x05, 3]), {})  # not asked for
+        self.assertEqual(split([0x7F, 0x01, 0x12]), {})  # a refusal
+        cut = obd_tool.Reply(bytes([0x41, 0x0C, 1, 2]))
+        cut.complete = False
+        self.assertEqual(obd_tool.split_group(cut, sizes, {0x0C}), {})
+
+    async def test_reply_count_is_learned_and_dropped_if_the_adapter_refuses(self):
+        transport = FakeTransport({"010C": ["7E8 04 41 0C 1A F8", "7E9 04 41 0C 1A F8"], "010C2": ["7E8 04 41 0C 1A F8", "7E9 04 41 0C 1A F8"]})
+        elm = ELM(transport)
+        elm.can_group = False
+        for _ in range(obd_tool.READS_BEFORE_COUNTING):
+            await elm.read_pid(0x0C)
+        self.assertEqual(transport.sent[-1], "010C")
+        self.assertEqual(await elm.read_pid(0x0C), 1726.0)
+        self.assertEqual(transport.sent[-1], "010C2")
+        refused = FakeTransport({"010C": ["7E8 04 41 0C 1A F8"], "010C1": ["?"]})
+        elm = ELM(refused)
+        for _ in range(obd_tool.READS_BEFORE_COUNTING):
+            await elm.read_pid(0x0C)
+        self.assertEqual(await elm.read_pid(0x0C), 1726.0)
+        self.assertFalse(elm.use_counts)
+        await elm.read_pid(0x0C)
+        self.assertEqual(refused.sent[-1], "010C")
+
+    async def test_grouped_updates_reach_slow_values_much_sooner(self):
+        pids = [0x0C, 0x0D, 0x11, 0x04, 0x05, 0x0F, 0x0B, 0x0E, 0x06, 0x07, 0x2F, 0x33, 0x46, 0x10]
+        elm = obd_tool.ELM(obd_tool.DemoTransport())
+        for pid in pids:
+            await elm.read_pid(pid)
+        reader = obd_tool.LiveReader(elm, pids, {pid: 0 for pid in pids})
+        for _ in range(3):
+            await reader.step()
+        self.assertTrue(elm.can_group)
+        self.assertTrue(all(reader.values[pid] != 0 or pid in (0x07,) for pid in (0x0C, 0x05, 0x10)))
+        # The first update tries it with 2 slow values, then each later one takes 8.
+        self.assertEqual(reader.next_slow, (2 + 2 * obd_tool.GROUP_SLOW_PER_STEP) % len(reader.slow))
+
     def test_values_are_marked_only_once_they_are_old(self):
         reader = obd_tool.LiveReader(ELM(FakeTransport({})), [0x0C, 0x05], {0x0C: 800.0, 0x05: 90})
         self.assertIsNone(reader.age_note(0x0C))
@@ -229,6 +296,70 @@ class EverythingTests(unittest.IsolatedAsyncioTestCase):
                     "this_drive": [], "more": [], "raw": {}}
         value = obd_tool.dashboard_state(snapshot, reader, lang="en")["values"][0]
         self.assertIn("seconds ago", value["note"])
+
+
+class FaultDataTests(unittest.TestCase):
+    def setUp(self):
+        self.addCleanup(dtc_codes.set_car_make, None)
+
+    def test_make_comes_from_the_vin(self):
+        self.assertEqual(dtc_codes.make_from_vin("KNA00000000000000"), "Kia")
+        self.assertEqual(dtc_codes.make_from_vin("JTH00000000000000"), "Lexus")
+        self.assertEqual(dtc_codes.make_from_vin("JTD00000000000000"), "Toyota")
+        self.assertIsNone(dtc_codes.make_from_vin("DEMO0000000000000"))
+        self.assertIsNone(dtc_codes.make_from_vin(None))
+
+    def test_a_makers_code_is_only_named_for_that_makers_car(self):
+        self.assertIn("manufacturer-specific", obd_tool.describe_dtc("P1102", "en"))
+        self.assertGreater(len(dtc_codes.oem_meanings("P1102")), 1)
+        dtc_codes.set_car_make("Kia")
+        self.assertEqual(obd_tool.describe_dtc("P1102", "en"), "HO2S11 Heater Circuit High Voltage (Kia)")
+        self.assertEqual(list(dtc_codes.oem_meanings("P1102")), ["Kia"])
+        self.assertEqual(obd_tool.describe_dtc("P0420", "en"), obd_tool.lookup_dtc("P0420", "en"))
+        dtc_codes.set_car_make("Hyundai")  # no list for this make, so it stays honest
+        self.assertIn("manufacturer-specific", obd_tool.describe_dtc("P1102", "en"))
+
+    def test_only_manufacturer_ranges_are_in_the_maker_lists(self):
+        for make, codes in dtc_codes.oem_codes().items():
+            for code in codes:
+                self.assertRegex(code, r"^(P1|P3[0-3]|B1|B2|C1|C2|U1|U2)", make)
+
+    def test_plans_are_complete_in_both_languages(self):
+        difficulties = set()
+        for code, plans in dtc_codes._plans().items():
+            for plan, arabic in zip(plans, dtc_codes.repair_plans(code, "ar")):
+                self.assertIn(plan["source"], ("MechanicDB", "Fahis"))
+                for fix, translated in zip(plan["fixes"], arabic["fixes"]):
+                    difficulties.add(fix["difficulty"])
+                    self.assertTrue(fix["steps"], code)
+                    for text in [translated["title"], *translated["steps"]]:
+                        self.assertRegex(text, r"[؀-ۿ]", code)
+        for difficulty in difficulties:
+            self.assertNotEqual(i18n.t(difficulty, "ar"), difficulty)
+
+    def test_your_cars_codes_have_plans(self):
+        for code in ("P0741", "P0700", "P0455", "P0420", "P2003"):
+            self.assertTrue(dtc_codes.repair_plans(code), code)
+        self.assertEqual(dtc_codes.repair_plans("P2003")[0]["source"], "Fahis")
+
+    def test_another_makers_plan_is_hidden_for_a_known_car(self):
+        code, plan = next((c, p[0]) for c, p in dtc_codes._plans().items() if p[0]["make"])
+        self.assertTrue(dtc_codes.repair_plans(code))
+        dtc_codes.set_car_make(plan["make"])
+        self.assertTrue(dtc_codes.repair_plans(code))
+        dtc_codes.set_car_make("Kia" if plan["make"] != "Kia" else "Ford")
+        self.assertFalse(dtc_codes.repair_plans(code))
+
+    def test_estimates_leave_out_what_is_unknown(self):
+        unknown = {"parts_min": None, "parts_max": None, "labor_hours": None}
+        self.assertEqual(obd_tool.fix_estimate(unknown, "en"), "")
+        known = {"parts_min": 10.0, "parts_max": 60.0, "labor_hours": 0.8}
+        self.assertEqual(obd_tool.fix_estimate(known, "en"), "Parts: $10 to $60, US estimate | Labor: about 0.8 hours")
+
+    def test_licence_notices_ship_with_the_data(self):
+        data = Path(obd_tool.__file__).parent / "data"
+        self.assertIn("MIT License", (data / "LICENSE-dtc-database").read_text(encoding="utf-8"))
+        self.assertIn("ODbL", (data / "LICENSE-MechanicDB").read_text(encoding="utf-8"))
 
 
 class BatteryTests(unittest.IsolatedAsyncioTestCase):

@@ -21,7 +21,8 @@ import car_modules
 import garage
 import i18n
 from demo import DemoTransport
-from dtc_codes import dtc_details, dtc_name, lookup_dtc
+from dtc_codes import (car_make, dtc_details, dtc_name, lookup_dtc, make_from_vin, oem_meaning, oem_meanings, repair_plans,
+                       set_car_make)
 from i18n import t
 
 ADAPTER_NAME_HINTS = ("OBD", "ELM")
@@ -130,6 +131,13 @@ for _index, _pid in enumerate(range(0x14, 0x1C)):
 # Read on every update; everything else takes turns so the fast values stay responsive.
 FAST_PIDS = (0x0C, 0x0D, 0x11, 0x04)
 SLOW_PER_STEP = 2
+# When the car accepts several values in one request, far more of the slow ones fit in each update.
+GROUP_SLOW_PER_STEP = 8
+MAX_PIDS_PER_REQUEST = 6
+GROUP_MISSES_ALLOWED = 3
+# Reads of a value before trusting how many modules answer it, and the largest reply in one CAN frame.
+READS_BEFORE_COUNTING = 3
+SINGLE_FRAME_DATA_BYTES = 5
 # A value older than this is marked as old. Slow values normally come round about every 20 seconds.
 FAST_STALE_SECONDS = 5
 SLOW_STALE_SECONDS = 30
@@ -211,6 +219,9 @@ def describe_dtc(code, lang=None):
     description = lookup_dtc(code, lang)
     if description:
         return description
+    meaning = oem_meaning(code)
+    if meaning:
+        return f"{meaning} ({car_make()})"
     system = t({"P": "Powertrain", "C": "Chassis", "B": "Body", "U": "Network"}[code[0]], lang)
     if code[:2] in ("P1", "B1", "B2", "C1", "C2", "U1", "U2") or code[:3] in ("P30", "P31", "P32", "P33"):
         return t("{system}: manufacturer-specific code, look it up for your car's make", lang, system=system)
@@ -228,6 +239,21 @@ def decode_monitors(payload):
         if name and c & (1 << bit):
             tests.append((name, not d & (1 << bit)))
     return {"mil": bool(a & 0x80), "count": a & 0x7F, "tests": tests}
+
+
+def split_group(payload, sizes, wanted):
+    """Split a reply to several values into {pid: data}. Anything unexpected returns nothing rather than a guess."""
+    found, position = {}, 1
+    if not payload or payload[0] != 0x41 or not getattr(payload, "complete", True):
+        return {}
+    while position < len(payload):
+        pid = payload[position]
+        end = position + 1 + sizes.get(pid, len(payload))
+        if pid not in wanted or end > len(payload):
+            return {}
+        found[pid] = bytes(payload[position + 1:end])
+        position = end
+    return found
 
 
 def format_value(value):
@@ -303,6 +329,12 @@ class ELM:
         self.device_name = self.device_address = None
         self.vehicle = None
         self.demo = False
+        self.can_group = None  # None until tried on this car
+        self.group_misses = 0
+        self.sizes = {}  # bytes each value used when this car answered it alone
+        self.use_counts = True
+        self.reply_counts = {}
+        self.reads_seen = {}
 
     async def setup(self):
         reply = await self.transport.send("ATZ", 5)
@@ -395,15 +427,70 @@ class ELM:
             base += 0x20
         return supported
 
+    async def counted_request(self, pid):
+        """Ask for one value, saying how many replies to expect once that's known, which skips the adapter's wait."""
+        count = self.reply_counts.get(pid)
+        if self.use_counts and count:
+            lines = await self.transport.send(f"01{pid:02X}{count:X}", 5)
+            good = {h: p for h, p in parse_can(lines or []).items() if p.startswith(bytes([0x41, pid]))}
+            if good:
+                return good
+            if lines and any("?" in line for line in lines):
+                self.use_counts = False  # this adapter doesn't understand it
+            self.reply_counts.pop(pid, None)
+        replies = await self.request(0x01, pid)
+        if replies and self.use_counts and all(len(p) - 2 <= SINGLE_FRAME_DATA_BYTES for p in replies.values()):
+            reads, most = self.reads_seen.get(pid, (0, 0))
+            self.reads_seen[pid] = (reads + 1, max(most, len(replies)))
+            if reads + 1 >= READS_BEFORE_COUNTING:
+                self.reply_counts[pid] = self.reads_seen[pid][1]
+        return replies
+
     async def read_pid(self, pid):
         """Read a live value from the first module that answers, or None."""
-        replies = await self.request(0x01, pid)
+        replies = await self.counted_request(pid)
         for payload in replies.values():
             try:
-                return LIVE_PIDS[pid][2](payload[2:])
+                value = LIVE_PIDS[pid][2](payload[2:])
             except IndexError:
                 continue
+            self.sizes[pid] = len(payload) - 2
+            return value
         return None
+
+    async def read_group(self, pids):
+        """Ask for several values in one request. Returns the ones that came back clearly."""
+        wanted = set(pids)
+        lines = await self.transport.send("01" + "".join(f"{pid:02X}" for pid in pids), 2)
+        found = {}
+        for _, payload in sorted(parse_can(lines or []).items()):
+            for pid, data in split_group(payload, self.sizes, wanted).items():
+                try:
+                    found.setdefault(pid, LIVE_PIDS[pid][2](data))
+                except IndexError:
+                    continue
+        if len(found) >= 2:
+            self.can_group, self.group_misses = True, 0
+        elif self.can_group is None:
+            self.can_group = False
+        else:
+            self.group_misses += 1
+            if self.group_misses >= GROUP_MISSES_ALLOWED:
+                self.can_group = False
+        return found
+
+    async def read_pids(self, pids):
+        """Read several values the fastest way this car allows, and anything missed one at a time."""
+        values = {}
+        known = [pid for pid in pids if pid in self.sizes]
+        for start in range(0, len(known), MAX_PIDS_PER_REQUEST):
+            chunk = known[start:start + MAX_PIDS_PER_REQUEST]
+            if len(chunk) >= 2 and self.can_group is not False:
+                values.update(await self.read_group(chunk))
+        for pid in pids:
+            if pid not in values:
+                values[pid] = await self.read_pid(pid)
+        return {pid: values[pid] for pid in pids}
 
 
 def monitor_lines(status, header, indent="  "):
@@ -491,6 +578,7 @@ async def read_identity(elm):
             vehicle[label] = {h: p[3:].hex().upper() for h, p in replies.items()}
         else:
             vehicle[label] = {h: decode_text(p) for h, p in replies.items()}
+    set_car_make(make_from_vin(next(iter(vehicle["VIN"].values()), None)))
     return vehicle
 
 
@@ -656,14 +744,16 @@ class LiveReader:
         self.voltage = await self.elm.voltage()
 
     async def step(self):
-        for pid in self.fast:
-            self.store(pid, await self.elm.read_pid(pid))
-        for _ in range(min(SLOW_PER_STEP, len(self.slow))):
-            pid = self.slow[self.next_slow]
-            self.store(pid, await self.elm.read_pid(pid))
+        batch = list(self.fast)
+        wrapped = False
+        for _ in range(min(GROUP_SLOW_PER_STEP if self.elm.can_group else SLOW_PER_STEP, len(self.slow))):
+            batch.append(self.slow[self.next_slow])
             self.next_slow = (self.next_slow + 1) % len(self.slow)
-            if self.next_slow == 0:
-                self.voltage = await self.elm.voltage()
+            wrapped = wrapped or self.next_slow == 0
+        for pid, value in (await self.elm.read_pids(batch)).items():
+            self.store(pid, value)
+        if wrapped:
+            self.voltage = await self.elm.voltage()
 
 
 async def poll(elm, args, pids, writer=None, log_file=None):
@@ -760,6 +850,23 @@ def dashboard_state(snapshot, reader, demo=False, lang=None, cars=()):
 
 def number(value):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def fix_estimate(fix, lang=None):
+    """Describe a repair's estimated cost and time, leaving out whatever isn't known."""
+    parts = []
+    if fix["parts_max"]:
+        parts.append(t("Parts: ${low} to ${high}, US estimate", lang, low=f"{fix['parts_min']:g}", high=f"{fix['parts_max']:g}"))
+    if fix["labor_hours"]:
+        parts.append(t("Labor: about {hours} hours", lang, hours=f"{fix['labor_hours']:g}"))
+    return " | ".join(parts)
+
+
+def page_plans(code, lang=None):
+    return [{"make": plan["make"], "source": plan["source"],
+             "fixes": [{"title": fix["title"], "difficulty": t(fix["difficulty"], lang), "estimate": fix_estimate(fix, lang),
+                        "steps": fix["steps"]} for fix in plan["fixes"]]}
+            for plan in repair_plans(code, lang or i18n.current_language())]
 
 
 def charging_out_of_range(values):
@@ -887,6 +994,8 @@ class DashboardApp:
                  row("Voltage at adapter (approximate)", t(self.reader.voltage, lang) if self.reader else "-"),
                  row("Connected for", f"{int(since // 60)}:{int(since % 60):02d}"),
                  row("Times connected", self.connections)]
+        if elm.can_group is not None:
+            rows.append(row("Reading method", t("Several values per request" if elm.can_group else "One value per request", lang)))
         if stats.replied:
             rows.append(row("Average reply time", t("{ms} ms", lang, ms=round(stats.total_seconds / stats.replied * 1000))))
             quiet = time.monotonic() - stats.last_reply
@@ -1014,7 +1123,9 @@ class DashboardApp:
             if not re.fullmatch(r"[PCBU][0-3][0-9A-F]{3}", code):
                 return 400, {"error": t("Enter a code like P0420.", lang)}
             details = dtc_details(code) or {}
-            return 200, {"code": code, "title": describe_dtc(code, lang), "found": bool(details), **details}
+            return 200, {"code": code, "title": describe_dtc(code, lang), "found": bool(details), **details,
+                         "oem": [{"make": make, "meaning": meaning} for make, meaning in sorted(oem_meanings(code).items())],
+                         "plans": page_plans(code, lang)}
         if self.args.demo and path in ("/api/reports", "/api/report"):
             # Demo pages get shared and screenshotted, and real reports can contain a VIN.
             return (200, []) if path == "/api/reports" else (404, {"error": t("Not found", lang)})
@@ -1145,6 +1256,7 @@ class DashboardApp:
         finally:
             self.stop_recording()
             self.elm = self.link = None
+            set_car_make(None)
             self.fail_waiting_jobs()
 
     async def connect(self):
@@ -1428,7 +1540,7 @@ def main():
                                 ("log", run_log, t("live values, saved to CSV")),
                                 ("app", None, t("backend for the desktop app, started by npm start"))):
         command = commands.add_parser(name, help=text)
-        command.add_argument("--interval", type=float, default=0.1, help=t("seconds between readings"))
+        command.add_argument("--interval", type=float, default=0.02, help=t("seconds between readings"))
         command.add_argument("--samples", type=int, help=t("stop after this many readings"))
         command.set_defaults(handler=handler)
         if name == "app":

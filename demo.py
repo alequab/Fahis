@@ -79,6 +79,14 @@ class DemoTransport:
         return reply if reply else ["NO DATA"]
 
     def reply(self, command):
+        if command.startswith("01") and len(command) == 5:
+            command = command[:4]  # the last digit only says how many replies to expect
+        if command.startswith("01") and len(command) > 5:
+            payload = [0x41]
+            for pid in bytes.fromhex(command[2:]):
+                data = live_bytes(pid, time.time())
+                payload += [pid] + data if data else []
+            return frames("7E8", payload) if len(payload) > 1 else None
         if command.startswith("01") and len(command) == 4:
             pid = int(command[2:], 16)
             if pid in (0x00, 0x20, 0x40):

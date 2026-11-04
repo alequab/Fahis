@@ -1,0 +1,4999 @@
+{
+"C0031": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 25.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the sensor connector near the hub or knuckle at the affected corner",
+"Unplug and inspect for corrosion, moisture, or a bent pin",
+"Follow the harness up to the body grommet checking for chafing against the strut or subframe",
+"Clean, reseat, clear the code, and road test"
+],
+"title": "Inspect wheel speed sensor connector and harness routing"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 40.0,
+"parts_min": 10.0,
+"steps": [
+"Unplug the sensor and measure coil resistance against the factory specification",
+"Reconnect and back-probe the signal circuit while rotating the wheel by hand",
+"Confirm a clean, consistent AC signal with no dropouts",
+"Replace the sensor if resistance is out of range or the signal is erratic"
+],
+"title": "Test wheel speed sensor resistance and signal"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 120.0,
+"parts_min": 30.0,
+"steps": [
+"Disconnect the battery negative terminal",
+"Remove the sensor mounting bolt and pull the sensor from the knuckle",
+"Install the replacement sensor, confirming it seats fully against the tone ring",
+"Clear the code and confirm signal quality across a range of speeds"
+],
+"title": "Replace wheel speed sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 65.0,
+"parts_min": 15.0,
+"steps": [
+"Trace the harness from the sensor to the body connector along the strut and control arm",
+"Identify the chafe point, commonly where the harness crosses suspension travel",
+"Repair damaged conductors with solder and heat-shrink, then re-route and secure the harness",
+"Clear codes and confirm all four corners correlate correctly on a road test"
+],
+"title": "Repair chafed wheel speed sensor harness wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"C0035": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 25.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the sensor connector near the hub or knuckle at the affected corner",
+"Unplug and inspect for corrosion, moisture, or a bent pin",
+"Follow the harness up to the body grommet checking for chafing against the strut or subframe",
+"Clean, reseat, clear the code, and road test"
+],
+"title": "Inspect wheel speed sensor connector and harness routing"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 40.0,
+"parts_min": 10.0,
+"steps": [
+"Unplug the sensor and measure coil resistance against the factory specification",
+"Reconnect and back-probe the signal circuit while rotating the wheel by hand",
+"Confirm a clean, consistent AC signal with no dropouts",
+"Replace the sensor if resistance is out of range or the signal is erratic"
+],
+"title": "Test wheel speed sensor resistance and signal"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 120.0,
+"parts_min": 30.0,
+"steps": [
+"Disconnect the battery negative terminal",
+"Remove the sensor mounting bolt and pull the sensor from the knuckle",
+"Install the replacement sensor, confirming it seats fully against the tone ring",
+"Clear the code and confirm signal quality across a range of speeds"
+],
+"title": "Replace wheel speed sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 65.0,
+"parts_min": 15.0,
+"steps": [
+"Trace the harness from the sensor to the body connector along the strut and control arm",
+"Identify the chafe point, commonly where the harness crosses suspension travel",
+"Repair damaged conductors with solder and heat-shrink, then re-route and secure the harness",
+"Clear codes and confirm all four corners correlate correctly on a road test"
+],
+"title": "Repair chafed wheel speed sensor harness wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"C0040": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.3,
+"parts_max": 15.0,
+"parts_min": 3.0,
+"steps": [
+"Locate the brake pedal switch mounted on the pedal bracket above the pedal arm",
+"Loosen the switch locknut and adjust plunger contact per the service manual clearance spec",
+"Pull the pedal fully rearward to auto-adjust the switch on platforms that support it",
+"Verify stop lamps and scan tool brake switch PID respond correctly to pedal travel"
+],
+"title": "Adjust brake pedal switch plunger clearance"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.3,
+"parts_max": 20.0,
+"parts_min": 5.0,
+"steps": [
+"Unplug the switch connector and inspect pins for corrosion",
+"Clean with electrical contact cleaner and reseat the connector",
+"Confirm both switch channels toggle together with a multimeter",
+"Clear the code and verify stop lamp operation"
+],
+"title": "Inspect brake pedal switch connector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.5,
+"parts_max": 60.0,
+"parts_min": 15.0,
+"steps": [
+"Disconnect the battery negative terminal",
+"Rotate and remove the switch from the pedal bracket",
+"Install the replacement switch and adjust plunger clearance to spec",
+"Clear codes and confirm correct stop lamp and brake-applied signal operation"
+],
+"title": "Replace brake pedal switch"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 15.0,
+"steps": [
+"Trace the harness from the switch to the module and stop lamp fuse",
+"Check for chafing near the pedal bracket and steering column",
+"Repair with solder and heat-shrink where damaged",
+"Verify both switch channels and stop lamps function correctly"
+],
+"title": "Repair stop lamp/brake switch circuit wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0011": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 60.0,
+"parts_min": 25.0,
+"steps": [
+"Drain and inspect oil condition for sludge or debris",
+"Replace with OEM-viscosity oil and a new filter",
+"Clear codes and run a phaser sweep test with a scan tool",
+"Road test through varied load to confirm stable timing"
+],
+"title": "Change engine oil and filter to spec viscosity"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.3,
+"parts_max": 160.0,
+"parts_min": 35.0,
+"steps": [
+"Remove the OCV solenoid and inspect its filter screen",
+"Clean the oil feed passage to the phaser of sludge with solvent and compressed air",
+"Install a new OCV solenoid",
+"Clear adaptive learning and verify timing response"
+],
+"title": "Replace oil control valve and clean phaser feed passage"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 2.8,
+"parts_max": 550.0,
+"parts_min": 180.0,
+"steps": [
+"Set the engine to TDC and lock the timing chain",
+"Remove the worn phaser and inspect the chain/tensioner for related wear",
+"Install the new phaser and retime to factory marks",
+"Verify actuator sweep and clear codes"
+],
+"title": "Replace worn camshaft phaser assembly"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 3.5,
+"parts_max": 900.0,
+"parts_min": 150.0,
+"steps": [
+"Remove the timing cover and verify marks against factory specification",
+"Correct any tooth-count misalignment on the chain or belt",
+"Replace the tensioner and guides while accessed",
+"Confirm cam/crank correlation and phaser response"
+],
+"title": "Correct timing chain/belt installation"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0016": [
+{
+"fixes": [
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.8,
+"parts_max": 90.0,
+"parts_min": 25.0,
+"steps": [
+"Identify which sensor the correlation fault points to on the scan tool freeze frame",
+"Unplug and remove the affected position sensor",
+"Inspect the reluctor wheel/tone ring for chips or debris",
+"Install the new sensor with correct air-gap shim and clear codes"
+],
+"title": "Inspect and replace crankshaft/camshaft position sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 3.5,
+"parts_max": 900.0,
+"parts_min": 150.0,
+"steps": [
+"Remove the timing cover and verify cam-to-crank alignment against factory timing marks",
+"Measure chain stretch or check belt tooth wear",
+"Replace the timing chain/belt, tensioner, and guides as a set",
+"Reset timing to factory marks and verify correlation with a scan tool"
+],
+"title": "Inspect timing chain/belt for stretch or jumped timing"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the sensor signal and ground at each connector while cranking",
+"Voltage-drop test the harness runs back to the ECM",
+"Repair chafed conductors near the timing cover with heat-shrink splices",
+"Confirm clean square-wave signals on a scope"
+],
+"title": "Repair crank/cam sensor wiring and connectors"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0101": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": null,
+"parts_max": 0.0,
+"parts_min": 0.0,
+"steps": [
+"Inspect the intake duct between the MAF and the throttle body for cracks or splits",
+"Check every clamp downstream of the sensor for looseness"
+],
+"title": "Inspect intake ducting and clamps downstream of the MAF"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": null,
+"parts_max": 20.0,
+"parts_min": 8.0,
+"steps": [
+"Remove the intake duct clamp and unplug the MAF connector",
+"Remove the sensor with a security Torx bit",
+"Spray the hot-wire element with dedicated MAF cleaner (never touch it)",
+"Reinstall, clear the code, and road test"
+],
+"title": "Clean MAF sensing element"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": null,
+"parts_max": 0.0,
+"parts_min": 0.0,
+"steps": [
+"Smoke-test or spray-test the intake tract between the MAF and throttle body"
+],
+"title": "Smoke-test the intake tract downstream of the MAF for leaks"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": null,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Replace cracked intake boots and hardened couplers",
+"Torque all clamps and verify fuel trims return toward 0% at idle"
+],
+"title": "Replace cracked intake boots and couplers downstream of the MAF"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": null,
+"parts_max": 0.0,
+"parts_min": 0.0,
+"steps": [
+"Back-probe the 5V reference, signal, and ground at the MAF connector",
+"Perform a voltage-drop test on each leg back to the ECM",
+"Confirm live airflow (g/s) tracks RPM on a scan tool"
+],
+"title": "Test MAF 5V reference, signal and ground circuits"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": null,
+"parts_max": 40.0,
+"parts_min": 5.0,
+"steps": [
+"Repair chafed or corroded conductors found in the circuit test with solder and heat-shrink",
+"Confirm live airflow (g/s) tracks RPM on a scan tool"
+],
+"title": "Repair MAF circuit wiring"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.5,
+"parts_max": 220.0,
+"parts_min": 45.0,
+"steps": [
+"Disconnect the battery negative terminal",
+"Unplug the MAF harness connector and remove the sensor screws",
+"Install the replacement sensor without touching the element",
+"Reconnect and perform an ECU idle relearn if the platform requires it"
+],
+"title": "Replace mass air flow sensor"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0102": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": null,
+"parts_max": 0.0,
+"parts_min": 0.0,
+"steps": [
+"Inspect the intake duct between the MAF and the throttle body for cracks or splits",
+"Check every clamp downstream of the sensor for looseness"
+],
+"title": "Inspect intake ducting and clamps downstream of the MAF"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": null,
+"parts_max": 20.0,
+"parts_min": 8.0,
+"steps": [
+"Remove the intake duct clamp and unplug the MAF connector",
+"Remove the sensor with a security Torx bit",
+"Spray the hot-wire element with dedicated MAF cleaner (never touch it)",
+"Reinstall, clear the code, and road test"
+],
+"title": "Clean MAF sensing element"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": null,
+"parts_max": 0.0,
+"parts_min": 0.0,
+"steps": [
+"Smoke-test or spray-test the intake tract between the MAF and throttle body"
+],
+"title": "Smoke-test the intake tract downstream of the MAF for leaks"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": null,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Replace cracked intake boots and hardened couplers",
+"Torque all clamps and verify fuel trims return toward 0% at idle"
+],
+"title": "Replace cracked intake boots and couplers downstream of the MAF"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": null,
+"parts_max": 0.0,
+"parts_min": 0.0,
+"steps": [
+"Back-probe the 5V reference, signal, and ground at the MAF connector",
+"Perform a voltage-drop test on each leg back to the ECM",
+"Confirm live airflow (g/s) tracks RPM on a scan tool"
+],
+"title": "Test MAF 5V reference, signal and ground circuits"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": null,
+"parts_max": 40.0,
+"parts_min": 5.0,
+"steps": [
+"Repair chafed or corroded conductors found in the circuit test with solder and heat-shrink",
+"Confirm live airflow (g/s) tracks RPM on a scan tool"
+],
+"title": "Repair MAF circuit wiring"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.5,
+"parts_max": 220.0,
+"parts_min": 45.0,
+"steps": [
+"Disconnect the battery negative terminal",
+"Unplug the MAF harness connector and remove the sensor screws",
+"Install the replacement sensor without touching the element",
+"Reconnect and perform an ECU idle relearn if the platform requires it"
+],
+"title": "Replace mass air flow sensor"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0106": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 20.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the MAP sensor on the intake manifold",
+"Remove and inspect the vacuum port for oil or debris",
+"Clean the port and sensor housing",
+"Reinstall and clear codes"
+],
+"title": "Inspect and clean MAP sensor vacuum port"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 90.0,
+"parts_min": 20.0,
+"steps": [
+"Unplug the sensor connector",
+"Remove the sensor from the manifold or its remote mount",
+"Install the replacement sensor with a new O-ring",
+"Clear codes and verify reading against known altitude/barometric baseline"
+],
+"title": "Replace MAP/barometric pressure sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the 5V reference, signal, and ground at the connector",
+"Voltage-drop test each leg back to the ECM",
+"Repair chafed or corroded conductors with heat-shrink splices",
+"Confirm signal tracks vacuum/boost changes smoothly"
+],
+"title": "Repair MAP sensor circuit wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0113": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 15.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the IAT sensor in the intake tube or integrated into the MAF housing",
+"Unplug and inspect for corrosion or debris",
+"Clean contacts and apply dielectric grease",
+"Reconnect and clear codes"
+],
+"title": "Inspect and clean IAT sensor connector"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 50.0,
+"parts_min": 10.0,
+"steps": [
+"Locate the affected IAT sensor per the bank/position in the code",
+"Disconnect and remove the sensor from its bore",
+"Install the replacement sensor with a new seal",
+"Clear codes and verify reading tracks ambient at cold start"
+],
+"title": "Replace intake air temperature sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.1,
+"parts_max": 55.0,
+"parts_min": 10.0,
+"steps": [
+"Measure sensor resistance at the connector against a temperature/resistance chart",
+"Voltage-drop test the circuit back to the ECM",
+"Repair chafed or corroded wiring near the intake tract with heat-shrink splices",
+"Confirm stable readings across temperature swings"
+],
+"title": "Repair IAT sensor circuit wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0114": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 15.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the IAT sensor in the intake tube or integrated into the MAF housing",
+"Unplug and inspect for corrosion or debris",
+"Clean contacts and apply dielectric grease",
+"Reconnect and clear codes"
+],
+"title": "Inspect and clean IAT sensor connector"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 50.0,
+"parts_min": 10.0,
+"steps": [
+"Locate the affected IAT sensor per the bank/position in the code",
+"Disconnect and remove the sensor from its bore",
+"Install the replacement sensor with a new seal",
+"Clear codes and verify reading tracks ambient at cold start"
+],
+"title": "Replace intake air temperature sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.1,
+"parts_max": 55.0,
+"parts_min": 10.0,
+"steps": [
+"Measure sensor resistance at the connector against a temperature/resistance chart",
+"Voltage-drop test the circuit back to the ECM",
+"Repair chafed or corroded wiring near the intake tract with heat-shrink splices",
+"Confirm stable readings across temperature swings"
+],
+"title": "Repair IAT sensor circuit wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0118": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 30.0,
+"parts_min": 10.0,
+"steps": [
+"Check coolant level and top off with the correct spec coolant",
+"Unplug the ECT sensor connector and inspect for corrosion",
+"Clean contacts and reconnect",
+"Clear codes and monitor warm-up temperature curve"
+],
+"title": "Top off coolant and inspect ECT sensor connector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 70.0,
+"parts_min": 15.0,
+"steps": [
+"Relieve cooling system pressure and drain coolant to below sensor level",
+"Remove the sensor from the head, housing, or radiator tank",
+"Install the replacement sensor with sealant or new seal as specified",
+"Refill coolant, bleed air, and clear codes"
+],
+"title": "Replace engine/radiator coolant temperature sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Measure sensor resistance at the connector against a temperature/resistance chart",
+"Voltage-drop test the circuit back to the ECM",
+"Repair chafed or corroded wiring with heat-shrink splices",
+"Confirm reading tracks actual coolant temperature"
+],
+"title": "Repair coolant temperature sensor wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0121": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 20.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the throttle body or accelerator pedal assembly connector",
+"Unplug and inspect for corrosion or bent pins",
+"Clean contacts and reseat firmly",
+"Clear codes and verify smooth voltage sweep"
+],
+"title": "Inspect and clean throttle/pedal position sensor connector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.8,
+"parts_max": 280.0,
+"parts_min": 60.0,
+"steps": [
+"Unplug the connector and remove the mounting fasteners",
+"Install the replacement throttle body or pedal assembly",
+"Reconnect and perform a throttle relearn if required",
+"Clear codes and verify all channels track together"
+],
+"title": "Replace throttle body or pedal position sensor assembly"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.3,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the reference, signal, and ground circuits at the connector",
+"Voltage-drop test each leg back to the ECM",
+"Repair chafed conductors with heat-shrink splices",
+"Confirm all sensor channels agree throughout the pedal/throttle sweep"
+],
+"title": "Repair throttle/pedal position sensor wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0128": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 40.0,
+"parts_min": 10.0,
+"steps": [
+"Check coolant level cold and top off to spec",
+"Inspect hoses, radiator, and water pump weep hole for leaks",
+"Repair any obvious external leak source",
+"Clear codes and monitor warm-up time"
+],
+"title": "Check coolant level and inspect for external leaks"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 90.0,
+"parts_min": 20.0,
+"steps": [
+"Drain coolant below the thermostat housing",
+"Remove the housing and replace the thermostat and gasket",
+"Refill coolant and bleed air from the system",
+"Confirm engine reaches operating temperature within expected time"
+],
+"title": "Replace stuck-open thermostat"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 2.0,
+"parts_max": 450.0,
+"parts_min": 120.0,
+"steps": [
+"Drain coolant and remove drive components to access the water pump",
+"Remove the worn pump and inspect the impeller and bearing",
+"Install the replacement pump with a new gasket",
+"Refill, bleed, and verify stable circulation and temperature"
+],
+"title": "Replace failing water pump"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0131": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.6,
+"parts_max": 40.0,
+"parts_min": 5.0,
+"steps": [
+"Inspect the exhaust manifold and pipe joints near the sensor bung for leaks",
+"Listen and smoke-test for exhaust leaks upstream of the sensor",
+"Replace gaskets or tighten fasteners as needed",
+"Clear codes and monitor sensor voltage trace"
+],
+"title": "Inspect for exhaust leaks near the O2 sensor"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 180.0,
+"parts_min": 50.0,
+"steps": [
+"Identify the affected bank/sensor position",
+"Remove the sensor with an O2 sensor socket",
+"Apply anti-seize to threads (avoid the tip) and install the new sensor",
+"Clear codes and confirm a normal switching voltage trace"
+],
+"title": "Replace oxygen sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the signal and ground at the connector with the engine running",
+"Voltage-drop test the circuit back to the ECM",
+"Repair chafed or corroded wiring near the exhaust with high-temp splices",
+"Confirm proper switching activity"
+],
+"title": "Repair O2 sensor signal circuit wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0133": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.8,
+"parts_max": 60.0,
+"parts_min": 5.0,
+"steps": [
+"Check for oil consumption, coolant leaks, or recent use of silicone sealant near the intake/exhaust",
+"Repair the contamination source if found",
+"Inspect the sensor tip for a sooty or white/gray glassy coating",
+"Clear codes after addressing the source"
+],
+"title": "Inspect for contamination sources (oil, coolant, silicone) reaching the exhaust"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 180.0,
+"parts_min": 50.0,
+"steps": [
+"Identify the affected bank/sensor position",
+"Remove with an O2 sensor socket and inspect the old sensor tip for contamination",
+"Apply anti-seize and install the new sensor",
+"Clear codes and verify switching frequency improves"
+],
+"title": "Replace slow-responding oxygen sensor"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.2,
+"parts_max": 120.0,
+"parts_min": 20.0,
+"steps": [
+"Smoke-test the exhaust system upstream of the affected sensor",
+"Replace leaking gaskets or cracked pipe sections",
+"Torque fasteners to spec",
+"Clear codes and re-verify switching speed"
+],
+"title": "Repair exhaust leak diluting sensor sample"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0135": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 25.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the O2 heater fuse and relay in the underhood fuse box",
+"Inspect and test with a multimeter for continuity and proper switching",
+"Replace any blown fuse or failed relay",
+"Clear codes and verify heater current draw"
+],
+"title": "Test O2 sensor heater circuit fuse and relay"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 180.0,
+"parts_min": 50.0,
+"steps": [
+"Identify the affected bank/sensor position from the code",
+"Unplug the connector and remove the sensor with an O2 sensor socket",
+"Apply anti-seize to threads (avoid the sensor tip) and install the new sensor",
+"Reconnect and clear codes"
+],
+"title": "Replace oxygen sensor with failed heater"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Measure heater element resistance at the connector against spec",
+"Voltage-drop test the heater supply and ground legs",
+"Repair chafed or corroded wiring near the exhaust manifold with high-temp splices",
+"Confirm heater current draw matches spec"
+],
+"title": "Repair O2 heater circuit wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0138": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.6,
+"parts_max": 40.0,
+"parts_min": 5.0,
+"steps": [
+"Inspect the exhaust manifold and pipe joints near the sensor bung for leaks",
+"Listen and smoke-test for exhaust leaks upstream of the sensor",
+"Replace gaskets or tighten fasteners as needed",
+"Clear codes and monitor sensor voltage trace"
+],
+"title": "Inspect for exhaust leaks near the O2 sensor"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 180.0,
+"parts_min": 50.0,
+"steps": [
+"Identify the affected bank/sensor position",
+"Remove the sensor with an O2 sensor socket",
+"Apply anti-seize to threads (avoid the tip) and install the new sensor",
+"Clear codes and confirm a normal switching voltage trace"
+],
+"title": "Replace oxygen sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the signal and ground at the connector with the engine running",
+"Voltage-drop test the circuit back to the ECM",
+"Repair chafed or corroded wiring near the exhaust with high-temp splices",
+"Confirm proper switching activity"
+],
+"title": "Repair O2 sensor signal circuit wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0141": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 25.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the O2 heater fuse and relay in the underhood fuse box",
+"Inspect and test with a multimeter for continuity and proper switching",
+"Replace any blown fuse or failed relay",
+"Clear codes and verify heater current draw"
+],
+"title": "Test O2 sensor heater circuit fuse and relay"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 180.0,
+"parts_min": 50.0,
+"steps": [
+"Identify the affected bank/sensor position from the code",
+"Unplug the connector and remove the sensor with an O2 sensor socket",
+"Apply anti-seize to threads (avoid the sensor tip) and install the new sensor",
+"Reconnect and clear codes"
+],
+"title": "Replace oxygen sensor with failed heater"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Measure heater element resistance at the connector against spec",
+"Voltage-drop test the heater supply and ground legs",
+"Repair chafed or corroded wiring near the exhaust manifold with high-temp splices",
+"Confirm heater current draw matches spec"
+],
+"title": "Repair O2 heater circuit wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0171": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.8,
+"parts_max": 40.0,
+"parts_min": 10.0,
+"steps": [
+"Connect a smoke machine to the intake at idle",
+"Watch for smoke escaping at intake gaskets, PCV hoses, or brake booster line",
+"Replace any leaking gasket or hose",
+"Clear codes and verify fuel trims return toward 0%"
+],
+"title": "Smoke-test intake for vacuum/air leaks"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 150.0,
+"parts_min": 30.0,
+"steps": [
+"Replace the fuel filter if serviceable",
+"Measure fuel pump pressure and volume against spec under load",
+"Replace a weak pump if it fails the test",
+"Clear codes and confirm rail pressure holds steady"
+],
+"title": "Replace fuel filter and test fuel pump output"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Inspect the exhaust manifold gasket and studs near the upstream O2 sensor for leaks",
+"Replace the gasket and any corroded studs",
+"Torque to spec in sequence",
+"Clear codes and re-verify trim correction"
+],
+"title": "Inspect and repair exhaust manifold gasket leak"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0172": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 25.0,
+"parts_min": 8.0,
+"steps": [
+"Remove the MAF sensor and inspect the hot-wire element for contamination",
+"Clean with dedicated MAF cleaner (never touch the element)",
+"Reinstall and clear codes",
+"Compare live MAF g/s reading against expected values"
+],
+"title": "Clean MAF sensor and inspect for false-high airflow readings"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 220.0,
+"parts_min": 40.0,
+"steps": [
+"Perform a fuel injector leak-down/drip test",
+"Identify any injector leaking past its seat",
+"Replace the faulty injector(s) and seals",
+"Clear codes and verify trims return toward 0%"
+],
+"title": "Test fuel injectors for leakage and replace as needed"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Depressurize the fuel system",
+"Remove the regulator and inspect the diaphragm/valve for sticking",
+"Install the replacement regulator with new seals",
+"Clear codes and confirm rail pressure holds at commanded target"
+],
+"title": "Replace stuck-open fuel pressure regulator"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0174": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.8,
+"parts_max": 40.0,
+"parts_min": 10.0,
+"steps": [
+"Connect a smoke machine to the intake at idle",
+"Watch for smoke escaping at intake gaskets, PCV hoses, or brake booster line",
+"Replace any leaking gasket or hose",
+"Clear codes and verify fuel trims return toward 0%"
+],
+"title": "Smoke-test intake for vacuum/air leaks"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 150.0,
+"parts_min": 30.0,
+"steps": [
+"Replace the fuel filter if serviceable",
+"Measure fuel pump pressure and volume against spec under load",
+"Replace a weak pump if it fails the test",
+"Clear codes and confirm rail pressure holds steady"
+],
+"title": "Replace fuel filter and test fuel pump output"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Inspect the exhaust manifold gasket and studs near the upstream O2 sensor for leaks",
+"Replace the gasket and any corroded studs",
+"Torque to spec in sequence",
+"Clear codes and re-verify trim correction"
+],
+"title": "Inspect and repair exhaust manifold gasket leak"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0175": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 25.0,
+"parts_min": 8.0,
+"steps": [
+"Remove the MAF sensor and inspect the hot-wire element for contamination",
+"Clean with dedicated MAF cleaner (never touch the element)",
+"Reinstall and clear codes",
+"Compare live MAF g/s reading against expected values"
+],
+"title": "Clean MAF sensor and inspect for false-high airflow readings"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 220.0,
+"parts_min": 40.0,
+"steps": [
+"Perform a fuel injector leak-down/drip test",
+"Identify any injector leaking past its seat",
+"Replace the faulty injector(s) and seals",
+"Clear codes and verify trims return toward 0%"
+],
+"title": "Test fuel injectors for leakage and replace as needed"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Depressurize the fuel system",
+"Remove the regulator and inspect the diaphragm/valve for sticking",
+"Install the replacement regulator with new seals",
+"Clear codes and confirm rail pressure holds at commanded target"
+],
+"title": "Replace stuck-open fuel pressure regulator"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0300": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 1.2,
+"parts_max": 90.0,
+"parts_min": 30.0,
+"steps": [
+"Retrieve freeze-frame data to see which cylinders were flagged",
+"Remove and inspect all spark plugs for wear, fouling, or incorrect gap",
+"Replace the full set with OE-spec plugs",
+"Swap coils between cylinders if a weak coil is suspected",
+"Clear codes and monitor misfire counters on a drive cycle"
+],
+"title": "Replace spark plugs and inspect ignition coils as a set"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 15.0,
+"steps": [
+"Connect a smoke machine at the intake tract with all accessory vacuum ports capped",
+"Watch for smoke escaping at intake gaskets, PCV hoses, or brake booster lines",
+"Replace any cracked hose or gasket found",
+"Clear the code and verify fuel trims return to normal"
+],
+"title": "Smoke-test intake and vacuum lines for a shared leak"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.2,
+"parts_max": 20.0,
+"parts_min": 5.0,
+"steps": [
+"Check the fuel gauge and refuel above one-quarter tank if low",
+"Scan for low fuel pressure or pump duty-cycle codes stored alongside the misfire",
+"Clear the code and complete a drive cycle to confirm it does not return"
+],
+"title": "Verify fuel delivery and refuel if the tank is low"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.3,
+"parts_max": 250.0,
+"parts_min": 20.0,
+"steps": [
+"Connect a fuel pressure gauge to the test port or rail",
+"Compare static and key-on pressure to spec",
+"Perform a timed volume test at the return line if accessible",
+"Replace a fuel pump that cannot hold pressure or deliver volume under load"
+],
+"title": "Test fuel pump output pressure and delivery volume"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0301": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.6,
+"parts_max": 45.0,
+"parts_min": 15.0,
+"steps": [
+"Remove the coil and plug from the misfiring cylinder",
+"Inspect the plug for fouling, wear, or an incorrect gap",
+"Swap the coil with a known-good adjacent cylinder's coil",
+"Clear the code and see if the misfire follows the coil or stays with the cylinder",
+"Replace the plug and/or coil based on the result"
+],
+"title": "Swap spark plug and ignition coil to confirm the cylinder"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Perform an injector balance or ohms test on the affected cylinder",
+"Swap the injector with a neighboring cylinder to see if the misfire follows",
+"Clean the injector on an ultrasonic bench or replace it",
+"Reinstall with new O-rings and clear codes"
+],
+"title": "Test and clean or replace the cylinder's fuel injector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 80.0,
+"parts_min": 20.0,
+"steps": [
+"Disable fuel and ignition for a dry compression test on all cylinders",
+"Compare the flagged cylinder's reading against its neighbors",
+"Add oil and retest (wet test) to isolate rings vs. valves",
+"Follow up with a leak-down test to confirm the exact leak path"
+],
+"title": "Run a cylinder compression or leak-down test"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 4.5,
+"parts_max": 900.0,
+"parts_min": 150.0,
+"steps": [
+"Confirm the leak-down result points to a head gasket or valve seat",
+"Remove the valve cover/head as required for access",
+"Replace the head gasket or recondition the valve seat",
+"Reassemble to torque spec and verify compression returns to spec"
+],
+"title": "Inspect and replace a leaking or damaged cylinder head gasket/valve"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0302": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.6,
+"parts_max": 45.0,
+"parts_min": 15.0,
+"steps": [
+"Remove the coil and plug from the misfiring cylinder",
+"Inspect the plug for fouling, wear, or an incorrect gap",
+"Swap the coil with a known-good adjacent cylinder's coil",
+"Clear the code and see if the misfire follows the coil or stays with the cylinder",
+"Replace the plug and/or coil based on the result"
+],
+"title": "Swap spark plug and ignition coil to confirm the cylinder"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Perform an injector balance or ohms test on the affected cylinder",
+"Swap the injector with a neighboring cylinder to see if the misfire follows",
+"Clean the injector on an ultrasonic bench or replace it",
+"Reinstall with new O-rings and clear codes"
+],
+"title": "Test and clean or replace the cylinder's fuel injector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 80.0,
+"parts_min": 20.0,
+"steps": [
+"Disable fuel and ignition for a dry compression test on all cylinders",
+"Compare the flagged cylinder's reading against its neighbors",
+"Add oil and retest (wet test) to isolate rings vs. valves",
+"Follow up with a leak-down test to confirm the exact leak path"
+],
+"title": "Run a cylinder compression or leak-down test"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 4.5,
+"parts_max": 900.0,
+"parts_min": 150.0,
+"steps": [
+"Confirm the leak-down result points to a head gasket or valve seat",
+"Remove the valve cover/head as required for access",
+"Replace the head gasket or recondition the valve seat",
+"Reassemble to torque spec and verify compression returns to spec"
+],
+"title": "Inspect and replace a leaking or damaged cylinder head gasket/valve"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0303": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.6,
+"parts_max": 45.0,
+"parts_min": 15.0,
+"steps": [
+"Remove the coil and plug from the misfiring cylinder",
+"Inspect the plug for fouling, wear, or an incorrect gap",
+"Swap the coil with a known-good adjacent cylinder's coil",
+"Clear the code and see if the misfire follows the coil or stays with the cylinder",
+"Replace the plug and/or coil based on the result"
+],
+"title": "Swap spark plug and ignition coil to confirm the cylinder"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Perform an injector balance or ohms test on the affected cylinder",
+"Swap the injector with a neighboring cylinder to see if the misfire follows",
+"Clean the injector on an ultrasonic bench or replace it",
+"Reinstall with new O-rings and clear codes"
+],
+"title": "Test and clean or replace the cylinder's fuel injector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 80.0,
+"parts_min": 20.0,
+"steps": [
+"Disable fuel and ignition for a dry compression test on all cylinders",
+"Compare the flagged cylinder's reading against its neighbors",
+"Add oil and retest (wet test) to isolate rings vs. valves",
+"Follow up with a leak-down test to confirm the exact leak path"
+],
+"title": "Run a cylinder compression or leak-down test"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 4.5,
+"parts_max": 900.0,
+"parts_min": 150.0,
+"steps": [
+"Confirm the leak-down result points to a head gasket or valve seat",
+"Remove the valve cover/head as required for access",
+"Replace the head gasket or recondition the valve seat",
+"Reassemble to torque spec and verify compression returns to spec"
+],
+"title": "Inspect and replace a leaking or damaged cylinder head gasket/valve"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0304": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.6,
+"parts_max": 45.0,
+"parts_min": 15.0,
+"steps": [
+"Remove the coil and plug from the misfiring cylinder",
+"Inspect the plug for fouling, wear, or an incorrect gap",
+"Swap the coil with a known-good adjacent cylinder's coil",
+"Clear the code and see if the misfire follows the coil or stays with the cylinder",
+"Replace the plug and/or coil based on the result"
+],
+"title": "Swap spark plug and ignition coil to confirm the cylinder"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Perform an injector balance or ohms test on the affected cylinder",
+"Swap the injector with a neighboring cylinder to see if the misfire follows",
+"Clean the injector on an ultrasonic bench or replace it",
+"Reinstall with new O-rings and clear codes"
+],
+"title": "Test and clean or replace the cylinder's fuel injector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 80.0,
+"parts_min": 20.0,
+"steps": [
+"Disable fuel and ignition for a dry compression test on all cylinders",
+"Compare the flagged cylinder's reading against its neighbors",
+"Add oil and retest (wet test) to isolate rings vs. valves",
+"Follow up with a leak-down test to confirm the exact leak path"
+],
+"title": "Run a cylinder compression or leak-down test"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 4.5,
+"parts_max": 900.0,
+"parts_min": 150.0,
+"steps": [
+"Confirm the leak-down result points to a head gasket or valve seat",
+"Remove the valve cover/head as required for access",
+"Replace the head gasket or recondition the valve seat",
+"Reassemble to torque spec and verify compression returns to spec"
+],
+"title": "Inspect and replace a leaking or damaged cylinder head gasket/valve"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0305": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.6,
+"parts_max": 45.0,
+"parts_min": 15.0,
+"steps": [
+"Remove the coil and plug from the misfiring cylinder",
+"Inspect the plug for fouling, wear, or an incorrect gap",
+"Swap the coil with a known-good adjacent cylinder's coil",
+"Clear the code and see if the misfire follows the coil or stays with the cylinder",
+"Replace the plug and/or coil based on the result"
+],
+"title": "Swap spark plug and ignition coil to confirm the cylinder"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Perform an injector balance or ohms test on the affected cylinder",
+"Swap the injector with a neighboring cylinder to see if the misfire follows",
+"Clean the injector on an ultrasonic bench or replace it",
+"Reinstall with new O-rings and clear codes"
+],
+"title": "Test and clean or replace the cylinder's fuel injector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 80.0,
+"parts_min": 20.0,
+"steps": [
+"Disable fuel and ignition for a dry compression test on all cylinders",
+"Compare the flagged cylinder's reading against its neighbors",
+"Add oil and retest (wet test) to isolate rings vs. valves",
+"Follow up with a leak-down test to confirm the exact leak path"
+],
+"title": "Run a cylinder compression or leak-down test"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 4.5,
+"parts_max": 900.0,
+"parts_min": 150.0,
+"steps": [
+"Confirm the leak-down result points to a head gasket or valve seat",
+"Remove the valve cover/head as required for access",
+"Replace the head gasket or recondition the valve seat",
+"Reassemble to torque spec and verify compression returns to spec"
+],
+"title": "Inspect and replace a leaking or damaged cylinder head gasket/valve"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0306": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.6,
+"parts_max": 45.0,
+"parts_min": 15.0,
+"steps": [
+"Remove the coil and plug from the misfiring cylinder",
+"Inspect the plug for fouling, wear, or an incorrect gap",
+"Swap the coil with a known-good adjacent cylinder's coil",
+"Clear the code and see if the misfire follows the coil or stays with the cylinder",
+"Replace the plug and/or coil based on the result"
+],
+"title": "Swap spark plug and ignition coil to confirm the cylinder"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Perform an injector balance or ohms test on the affected cylinder",
+"Swap the injector with a neighboring cylinder to see if the misfire follows",
+"Clean the injector on an ultrasonic bench or replace it",
+"Reinstall with new O-rings and clear codes"
+],
+"title": "Test and clean or replace the cylinder's fuel injector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 80.0,
+"parts_min": 20.0,
+"steps": [
+"Disable fuel and ignition for a dry compression test on all cylinders",
+"Compare the flagged cylinder's reading against its neighbors",
+"Add oil and retest (wet test) to isolate rings vs. valves",
+"Follow up with a leak-down test to confirm the exact leak path"
+],
+"title": "Run a cylinder compression or leak-down test"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 4.5,
+"parts_max": 900.0,
+"parts_min": 150.0,
+"steps": [
+"Confirm the leak-down result points to a head gasket or valve seat",
+"Remove the valve cover/head as required for access",
+"Replace the head gasket or recondition the valve seat",
+"Reassemble to torque spec and verify compression returns to spec"
+],
+"title": "Inspect and replace a leaking or damaged cylinder head gasket/valve"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0325": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 15.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the knock sensor(s), usually threaded into the block under the intake manifold",
+"Unplug and inspect for oil contamination or corroded pins",
+"Clean contacts and reseat the connector",
+"Clear the code and monitor knock counts on a scan tool"
+],
+"title": "Inspect and reseat the knock sensor connector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.2,
+"parts_max": 100.0,
+"parts_min": 30.0,
+"steps": [
+"Remove the intake manifold or components blocking sensor access",
+"Unbolt the failed knock sensor",
+"Install the replacement and torque to the exact factory spec (over- or under-torquing causes false readings)",
+"Reconnect, clear codes, and verify signal activity while revving the engine"
+],
+"title": "Replace the knock sensor at correct torque spec"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.3,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the signal and shield/ground legs at the sensor connector",
+"Voltage-drop test the harness back to the ECM",
+"Repair chafed or corroded conductors with soldered, heat-shrunk, shielded splices",
+"Confirm a clean knock signal waveform on a scope"
+],
+"title": "Repair knock sensor circuit wiring"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.5,
+"parts_max": 250.0,
+"parts_min": 15.0,
+"steps": [
+"Confirm all sensors and wiring test good in isolation",
+"Check for a shared power/ground fault affecting the knock control circuit",
+"Update or reflash ECM software if a known knock-strategy bulletin applies",
+"Replace the ECM only after all external causes are ruled out"
+],
+"title": "Diagnose knock control module/ECM internal fault"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0335": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 15.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the sensor near the crank pulley or bellhousing",
+"Unplug and inspect for oil intrusion or corroded pins",
+"Clean contacts and reseat until it clicks",
+"Clear the code and crank the engine to verify a start"
+],
+"title": "Inspect and reseat the crankshaft position sensor connector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.7,
+"parts_max": 140.0,
+"parts_min": 30.0,
+"steps": [
+"Remove the sensor's retaining bolt and withdraw it from its bore",
+"Inspect the reluctor wheel/tone ring for damaged teeth or debris",
+"Install the replacement sensor, setting the air gap per spec if not self-adjusting",
+"Clear codes and confirm a stable RPM signal at idle and under load"
+],
+"title": "Replace the crankshaft position sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.4,
+"parts_max": 65.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the signal, shield, and ground legs at the sensor connector",
+"Voltage-drop test each leg back to the ECM",
+"Repair chafed or corroded conductors with soldered, heat-shrunk splices",
+"Confirm a clean signal waveform on a scope while cranking"
+],
+"title": "Repair crankshaft position sensor circuit wiring"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 2.5,
+"parts_max": 300.0,
+"parts_min": 40.0,
+"steps": [
+"Remove the sensor and inspect the reluctor wheel through the access bore or with the crank pulley/cover removed",
+"Clean off accumulated debris or rust",
+"Replace a reluctor wheel with bent, missing, or chipped teeth",
+"Reinstall the sensor, reset the gap, and verify a clean signal"
+],
+"title": "Clean or replace a damaged reluctor wheel/tone ring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0340": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 15.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the sensor at the valve cover, timing cover, or distributor housing per platform",
+"Unplug and inspect for oil intrusion or corroded pins",
+"Clean contacts and reseat fully",
+"Clear the code and verify the engine restarts promptly"
+],
+"title": "Inspect and reseat the camshaft position sensor connector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 130.0,
+"parts_min": 25.0,
+"steps": [
+"Remove the sensor's retaining bolt and withdraw it from its bore",
+"Inspect the O-ring and trigger wheel for wear or debris",
+"Install the replacement sensor with a fresh O-ring",
+"Clear codes and confirm cylinder identification on a scan tool"
+],
+"title": "Replace the camshaft position sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.3,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the signal, reference, and ground legs at the sensor connector",
+"Voltage-drop test each leg back to the ECM",
+"Repair chafed or corroded conductors with soldered, heat-shrunk splices",
+"Confirm a clean signal waveform on a scope while cranking"
+],
+"title": "Repair camshaft position sensor circuit wiring"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 3.0,
+"parts_max": 400.0,
+"parts_min": 60.0,
+"steps": [
+"Remove valve cover components as needed to view the trigger wheel",
+"Check for chipped, bent, or slipped trigger wheel teeth from a prior timing chain/belt issue",
+"Correct the underlying timing fault and replace a damaged trigger wheel",
+"Reinstall the sensor and verify cam-crank correlation with a scan tool"
+],
+"title": "Inspect the camshaft trigger wheel for timing-related damage"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0341": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 15.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the sensor at the valve cover, timing cover, or distributor housing per platform",
+"Unplug and inspect for oil intrusion or corroded pins",
+"Clean contacts and reseat fully",
+"Clear the code and verify the engine restarts promptly"
+],
+"title": "Inspect and reseat the camshaft position sensor connector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 130.0,
+"parts_min": 25.0,
+"steps": [
+"Remove the sensor's retaining bolt and withdraw it from its bore",
+"Inspect the O-ring and trigger wheel for wear or debris",
+"Install the replacement sensor with a fresh O-ring",
+"Clear codes and confirm cylinder identification on a scan tool"
+],
+"title": "Replace the camshaft position sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.3,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the signal, reference, and ground legs at the sensor connector",
+"Voltage-drop test each leg back to the ECM",
+"Repair chafed or corroded conductors with soldered, heat-shrunk splices",
+"Confirm a clean signal waveform on a scope while cranking"
+],
+"title": "Repair camshaft position sensor circuit wiring"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 3.0,
+"parts_max": 400.0,
+"parts_min": 60.0,
+"steps": [
+"Remove valve cover components as needed to view the trigger wheel",
+"Check for chipped, bent, or slipped trigger wheel teeth from a prior timing chain/belt issue",
+"Correct the underlying timing fault and replace a damaged trigger wheel",
+"Reinstall the sensor and verify cam-crank correlation with a scan tool"
+],
+"title": "Inspect the camshaft trigger wheel for timing-related damage"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0401": [
+{
+"fixes": [
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 80.0,
+"parts_min": 20.0,
+"steps": [
+"Remove the EGR valve from the intake manifold",
+"Scrape and solvent-clean carbon deposits from the valve pintle and seat",
+"Clean or snake out the connecting EGR passages/tube",
+"Reinstall with a new gasket and clear codes"
+],
+"title": "Clean the EGR valve and passages of carbon buildup"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 2.0,
+"parts_max": 150.0,
+"parts_min": 30.0,
+"steps": [
+"Locate and remove the EGR cooler from the exhaust/coolant circuit",
+"Inspect for soot buildup restricting the internal passages",
+"Clean with an approved solvent or replace if clogged/cracked internally",
+"Reinstall with new gaskets/clamps and clear codes"
+],
+"title": "Inspect and clean the EGR cooler for restriction"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 15.0,
+"steps": [
+"Command the EGR valve through its full range with a scan tool",
+"Monitor commanded vs. actual position sensor feedback",
+"Replace the valve if it does not reach commanded positions or the sensor does not track smoothly",
+"Clear the code and verify flow response"
+],
+"title": "Test EGR valve position sensor tracking and valve travel"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.3,
+"parts_max": 350.0,
+"parts_min": 80.0,
+"steps": [
+"Confirm cleaning did not restore free valve movement",
+"Remove and replace the EGR valve assembly",
+"Install with a new gasket and torque to spec",
+"Clear codes and verify commanded flow is achieved"
+],
+"title": "Replace a mechanically stuck or worn EGR valve"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0402": [
+{
+"fixes": [
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 80.0,
+"parts_min": 20.0,
+"steps": [
+"Remove the EGR valve from the intake manifold",
+"Scrape and solvent-clean carbon deposits from the valve pintle and seat",
+"Clean or snake out the connecting EGR passages/tube",
+"Reinstall with a new gasket and clear codes"
+],
+"title": "Clean the EGR valve and passages of carbon buildup"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 2.0,
+"parts_max": 150.0,
+"parts_min": 30.0,
+"steps": [
+"Locate and remove the EGR cooler from the exhaust/coolant circuit",
+"Inspect for soot buildup restricting the internal passages",
+"Clean with an approved solvent or replace if clogged/cracked internally",
+"Reinstall with new gaskets/clamps and clear codes"
+],
+"title": "Inspect and clean the EGR cooler for restriction"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 15.0,
+"steps": [
+"Command the EGR valve through its full range with a scan tool",
+"Monitor commanded vs. actual position sensor feedback",
+"Replace the valve if it does not reach commanded positions or the sensor does not track smoothly",
+"Clear the code and verify flow response"
+],
+"title": "Test EGR valve position sensor tracking and valve travel"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.3,
+"parts_max": 350.0,
+"parts_min": 80.0,
+"steps": [
+"Confirm cleaning did not restore free valve movement",
+"Remove and replace the EGR valve assembly",
+"Install with a new gasket and torque to spec",
+"Clear codes and verify commanded flow is achieved"
+],
+"title": "Replace a mechanically stuck or worn EGR valve"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0403": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 20.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the EGR valve or EGR throttle connector",
+"Unplug and inspect for carbon contamination or corroded pins",
+"Clean contacts and reseat fully",
+"Clear the code and command the valve with a scan tool"
+],
+"title": "Inspect and reseat the EGR valve/throttle connector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.4,
+"parts_max": 90.0,
+"parts_min": 20.0,
+"steps": [
+"Remove the valve or throttle body from its mounting",
+"Scrape and solvent-clean carbon from the pintle/plate and bore",
+"Verify smooth full-range movement by hand before reinstalling",
+"Reinstall with a new gasket, clear codes, and command through full range"
+],
+"title": "Free a carbon-stuck EGR valve/throttle and clean the bore"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.3,
+"parts_max": 300.0,
+"parts_min": 60.0,
+"steps": [
+"Confirm cleaning did not restore proper electrical/mechanical response",
+"Remove and replace the valve/throttle assembly",
+"Install with a new gasket, torqued to spec",
+"Clear codes and verify commanded vs. actual position match"
+],
+"title": "Replace the EGR control valve/throttle solenoid or motor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.4,
+"parts_max": 65.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the control and feedback legs at the connector",
+"Voltage-drop test the harness back to the ECM",
+"Repair chafed or corroded conductors with soldered, heat-shrunk splices",
+"Clear codes and confirm clean commanded/actual position tracking"
+],
+"title": "Repair EGR control circuit wiring back to the ECM"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0411": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.7,
+"parts_max": 50.0,
+"parts_min": 15.0,
+"steps": [
+"Inspect the air delivery hose from the pump to the exhaust manifold for collapse, cracking, or disconnection",
+"Check the one-way check valve for exhaust blow-by damage",
+"Replace any damaged hose or check valve",
+"Clear the code and verify airflow with the system commanded on"
+],
+"title": "Inspect AIR delivery hoses and check valves"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Command the switching valve with a scan tool while listening/feeling for valve movement",
+"Inspect the valve and its connector for carbon or corrosion",
+"Replace a valve that does not switch cleanly",
+"Clear codes and verify flow direction changes correctly"
+],
+"title": "Test and replace the AIR switching/combination valve"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.2,
+"parts_max": 350.0,
+"parts_min": 80.0,
+"steps": [
+"Command the AIR pump on with a scan tool and listen/feel for operation",
+"Check the pump relay and fuse if it does not run",
+"Replace a pump that is seized, noisy, or produces insufficient flow",
+"Clear codes and verify flow readings meet spec"
+],
+"title": "Replace a seized or weak secondary air injection pump"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.3,
+"parts_max": 65.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the control legs at the pump/valve connector",
+"Voltage-drop test the harness back to the ECM/relay",
+"Repair chafed or corroded conductors with soldered, heat-shrunk splices",
+"Clear codes and confirm the system responds to commands"
+],
+"title": "Repair AIR system control circuit wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0420": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.8,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Inspect the exhaust manifold, downpipe, and catalyst housing welds/gaskets for leaks near the O2 sensor bungs",
+"Repair any leak found with a new gasket or weld repair",
+"Clear the code and complete a catalyst monitor drive cycle"
+],
+"title": "Inspect for exhaust leaks near the oxygen sensors"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 100.0,
+"parts_min": 15.0,
+"steps": [
+"Check for stored fuel trim, misfire, or O2 sensor codes alongside the catalyst code",
+"Repair the root fuel/ignition fault (it can chemically damage a good catalyst if left unaddressed)",
+"Clear the code and monitor fuel trims before assuming the catalyst itself is bad"
+],
+"title": "Correct an underlying rich/lean fuel condition first"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 2.0,
+"parts_max": 1500.0,
+"parts_min": 250.0,
+"steps": [
+"Confirm no upstream fault is masquerading as a catalyst fault",
+"Remove the old converter, cutting welded joints or unbolting flanges as applicable",
+"Install a CARB/EPA-compliant replacement converter for the application",
+"Clear codes and complete the catalyst monitor drive cycle to confirm the fix"
+],
+"title": "Replace the catalytic converter"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 3.0,
+"parts_max": 900.0,
+"parts_min": 100.0,
+"steps": [
+"Check for blue (oil) or white sweet-smelling (coolant) exhaust smoke",
+"Diagnose and repair the oil-burning or coolant-leak source (valve seals, rings, head gasket)",
+"Replace the poisoned catalytic converter after the root cause is fixed",
+"Clear codes and verify the catalyst monitor passes"
+],
+"title": "Address oil or coolant consumption poisoning the catalyst"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0430": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.8,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Inspect the exhaust manifold, downpipe, and catalyst housing welds/gaskets for leaks near the O2 sensor bungs",
+"Repair any leak found with a new gasket or weld repair",
+"Clear the code and complete a catalyst monitor drive cycle"
+],
+"title": "Inspect for exhaust leaks near the oxygen sensors"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 100.0,
+"parts_min": 15.0,
+"steps": [
+"Check for stored fuel trim, misfire, or O2 sensor codes alongside the catalyst code",
+"Repair the root fuel/ignition fault (it can chemically damage a good catalyst if left unaddressed)",
+"Clear the code and monitor fuel trims before assuming the catalyst itself is bad"
+],
+"title": "Correct an underlying rich/lean fuel condition first"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 2.0,
+"parts_max": 1500.0,
+"parts_min": 250.0,
+"steps": [
+"Confirm no upstream fault is masquerading as a catalyst fault",
+"Remove the old converter, cutting welded joints or unbolting flanges as applicable",
+"Install a CARB/EPA-compliant replacement converter for the application",
+"Clear codes and complete the catalyst monitor drive cycle to confirm the fix"
+],
+"title": "Replace the catalytic converter"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 3.0,
+"parts_max": 900.0,
+"parts_min": 100.0,
+"steps": [
+"Check for blue (oil) or white sweet-smelling (coolant) exhaust smoke",
+"Diagnose and repair the oil-burning or coolant-leak source (valve seals, rings, head gasket)",
+"Replace the poisoned catalytic converter after the root cause is fixed",
+"Clear codes and verify the catalyst monitor passes"
+],
+"title": "Address oil or coolant consumption poisoning the catalyst"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0440": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.2,
+"parts_max": 25.0,
+"parts_min": 10.0,
+"steps": [
+"Inspect the filler cap gasket for cracks or dry rot",
+"Reseat the cap until it clicks",
+"Clear the code and complete an EVAP drive cycle",
+"Replace the cap if the code returns"
+],
+"title": "Inspect and reseat or replace fuel filler cap"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 15.0,
+"steps": [
+"Connect a smoke machine to the EVAP service port",
+"Watch for smoke at hose unions, the canister, and the filler neck",
+"Replace the leaking hose or seal",
+"Re-test until the system holds pressure"
+],
+"title": "Smoke-test EVAP system and replace leaking hose"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 90.0,
+"parts_min": 25.0,
+"steps": [
+"Locate the purge solenoid on the engine-side EVAP line",
+"Verify it holds vacuum when de-energized with a hand pump",
+"Replace the solenoid and clip the harness",
+"Clear the code and re-run the EVAP monitor"
+],
+"title": "Replace EVAP purge solenoid valve"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.8,
+"parts_max": 350.0,
+"parts_min": 90.0,
+"steps": [
+"Raise the vehicle and remove the canister shield",
+"Test the vent valve for sealing with a scan-tool actuator command",
+"Replace the canister or vent valve assembly",
+"Verify the leak-detection monitor passes"
+],
+"title": "Replace charcoal canister / vent valve assembly"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0441": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.6,
+"parts_max": 40.0,
+"parts_min": 10.0,
+"steps": [
+"Trace the purge line from the canister to the intake/throttle body",
+"Look for a kinked, collapsed, or pinched section, especially near heat sources",
+"Replace the damaged hose section",
+"Clear the code and monitor purge flow on a scan tool"
+],
+"title": "Inspect the purge line for kinks, collapse, or restriction"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.7,
+"parts_max": 100.0,
+"parts_min": 25.0,
+"steps": [
+"Command the purge solenoid with a scan tool while monitoring flow/vacuum",
+"Bench-test the solenoid for proper sealing when de-energized and full flow when energized",
+"Replace a solenoid that leaks or restricts flow",
+"Clear codes and verify purge flow matches command"
+],
+"title": "Test and replace a leaking or sticking purge solenoid"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.2,
+"parts_max": 220.0,
+"parts_min": 60.0,
+"steps": [
+"Remove the canister and inspect for saturated or degraded carbon media restricting flow",
+"Replace the canister if internally restricted",
+"Reinstall with new seals",
+"Clear the code and verify purge flow normalizes"
+],
+"title": "Clean or replace a restricted charcoal canister"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.8,
+"parts_max": 150.0,
+"parts_min": 40.0,
+"steps": [
+"Compare the purge flow sensor's reading against a known commanded duty cycle",
+"Inspect the sensor's connector and mounting for damage",
+"Replace the sensor if it reads inconsistently with actual system behavior",
+"Clear codes and verify flow data now tracks correctly"
+],
+"title": "Replace the EVAP purge flow sensor if flow readings disagree with actual flow"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0442": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.2,
+"parts_max": 25.0,
+"parts_min": 10.0,
+"steps": [
+"Inspect the filler cap gasket for cracks or dry rot",
+"Reseat the cap until it clicks",
+"Clear the code and complete an EVAP drive cycle",
+"Replace the cap if the code returns"
+],
+"title": "Inspect and reseat or replace fuel filler cap"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 15.0,
+"steps": [
+"Connect a smoke machine to the EVAP service port",
+"Watch for smoke at hose unions, the canister, and the filler neck",
+"Replace the leaking hose or seal",
+"Re-test until the system holds pressure"
+],
+"title": "Smoke-test EVAP system and replace leaking hose"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 90.0,
+"parts_min": 25.0,
+"steps": [
+"Locate the purge solenoid on the engine-side EVAP line",
+"Verify it holds vacuum when de-energized with a hand pump",
+"Replace the solenoid and clip the harness",
+"Clear the code and re-run the EVAP monitor"
+],
+"title": "Replace EVAP purge solenoid valve"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.8,
+"parts_max": 350.0,
+"parts_min": 90.0,
+"steps": [
+"Raise the vehicle and remove the canister shield",
+"Test the vent valve for sealing with a scan-tool actuator command",
+"Replace the canister or vent valve assembly",
+"Verify the leak-detection monitor passes"
+],
+"title": "Replace charcoal canister / vent valve assembly"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0446": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.3,
+"parts_max": 15.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the vent solenoid, typically near the charcoal canister under the vehicle",
+"Unplug and inspect for corrosion, mud, or road-spray damage",
+"Clean contacts and reseat fully",
+"Clear the code and command the valve with a scan tool"
+],
+"title": "Inspect and reseat the vent solenoid connector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.7,
+"parts_max": 120.0,
+"parts_min": 30.0,
+"steps": [
+"Disconnect the vent solenoid's air inlet and electrical connector",
+"Verify sealing and switching function with a hand pump before condemning it",
+"Install the replacement solenoid",
+"Clear the code and re-run the EVAP monitor"
+],
+"title": "Replace the EVAP vent control solenoid"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 20.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the vent solenoid's fresh-air inlet filter/port",
+"Clear mud, leaves, or ice blocking the intake",
+"Verify free valve movement by hand or with a scan-tool command",
+"Clear the code and re-run the EVAP monitor"
+],
+"title": "Clear debris or ice blocking the vent valve"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the control leg at the vent solenoid connector",
+"Voltage-drop test the circuit back to the ECM and to chassis ground",
+"Repair chafed or corroded conductors with soldered, heat-shrunk splices",
+"Clear codes and confirm the vent valve opens and closes cleanly on command"
+],
+"title": "Repair vent solenoid circuit wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0455": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.2,
+"parts_max": 25.0,
+"parts_min": 5.0,
+"steps": [
+"Confirm the fuel cap is present, undamaged, and threaded on correctly",
+"Replace a cracked or missing cap",
+"Clear the code and complete an EVAP drive cycle"
+],
+"title": "Check for a missing, damaged, or off-track fuel filler cap"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.8,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Visually trace the EVAP hose routing from the tank to the canister and engine",
+"Look for a hose knocked loose, split, or chewed by rodents",
+"Reconnect or replace the damaged section",
+"Smoke-test to confirm the leak is closed"
+],
+"title": "Locate and repair a disconnected or split EVAP hose"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.2,
+"parts_max": 250.0,
+"parts_min": 60.0,
+"steps": [
+"Command the vent valve closed with a scan tool and verify it holds vacuum with a hand pump",
+"Replace a valve that will not seal",
+"Reinstall and clear codes",
+"Re-run the EVAP monitor to confirm the large-leak fault clears"
+],
+"title": "Replace a failed-open EVAP canister vent valve"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.5,
+"parts_max": 300.0,
+"parts_min": 40.0,
+"steps": [
+"Apply controlled test pressure/vacuum to the fuel tank via the service port",
+"Monitor for a leak at the fuel sending unit seal or tank seam",
+"Replace the sending unit seal or repair the tank as needed",
+"Clear codes and confirm the system holds"
+],
+"title": "Pressure/vacuum-test the fuel tank and sending unit seal"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0456": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.2,
+"parts_max": 25.0,
+"parts_min": 10.0,
+"steps": [
+"Inspect the filler cap gasket for cracks or dry rot",
+"Reseat the cap until it clicks",
+"Clear the code and complete an EVAP drive cycle",
+"Replace the cap if the code returns"
+],
+"title": "Inspect and reseat or replace fuel filler cap"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 15.0,
+"steps": [
+"Connect a smoke machine to the EVAP service port",
+"Watch for smoke at hose unions, the canister, and the filler neck",
+"Replace the leaking hose or seal",
+"Re-test until the system holds pressure"
+],
+"title": "Smoke-test EVAP system and replace leaking hose"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 90.0,
+"parts_min": 25.0,
+"steps": [
+"Locate the purge solenoid on the engine-side EVAP line",
+"Verify it holds vacuum when de-energized with a hand pump",
+"Replace the solenoid and clip the harness",
+"Clear the code and re-run the EVAP monitor"
+],
+"title": "Replace EVAP purge solenoid valve"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.8,
+"parts_max": 350.0,
+"parts_min": 90.0,
+"steps": [
+"Raise the vehicle and remove the canister shield",
+"Test the vent valve for sealing with a scan-tool actuator command",
+"Replace the canister or vent valve assembly",
+"Verify the leak-detection monitor passes"
+],
+"title": "Replace charcoal canister / vent valve assembly"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0457": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.2,
+"parts_max": 25.0,
+"parts_min": 10.0,
+"steps": [
+"Inspect the filler cap gasket for cracks or dry rot",
+"Reseat the cap until it clicks",
+"Clear the code and complete an EVAP drive cycle",
+"Replace the cap if the code returns"
+],
+"title": "Inspect and reseat or replace fuel filler cap"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 15.0,
+"steps": [
+"Connect a smoke machine to the EVAP service port",
+"Watch for smoke at hose unions, the canister, and the filler neck",
+"Replace the leaking hose or seal",
+"Re-test until the system holds pressure"
+],
+"title": "Smoke-test EVAP system and replace leaking hose"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 90.0,
+"parts_min": 25.0,
+"steps": [
+"Locate the purge solenoid on the engine-side EVAP line",
+"Verify it holds vacuum when de-energized with a hand pump",
+"Replace the solenoid and clip the harness",
+"Clear the code and re-run the EVAP monitor"
+],
+"title": "Replace EVAP purge solenoid valve"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.8,
+"parts_max": 350.0,
+"parts_min": 90.0,
+"steps": [
+"Raise the vehicle and remove the canister shield",
+"Test the vent valve for sealing with a scan-tool actuator command",
+"Replace the canister or vent valve assembly",
+"Verify the leak-detection monitor passes"
+],
+"title": "Replace charcoal canister / vent valve assembly"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0500": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 15.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the VSS at the transmission output shaft or transfer case",
+"Remove the sensor and inspect the tip for metal debris",
+"Clean the toothed reluctor wheel with brake cleaner",
+"Reinstall with correct air-gap spacer if equipped and clear the code"
+],
+"title": "Clean tone ring and inspect sensor air gap"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 30.0,
+"parts_min": 10.0,
+"steps": [
+"Unplug the VSS connector and check for corrosion or bent pins",
+"Clean contacts with electrical contact cleaner",
+"Replace a damaged pigtail with a soldered, heat-shrunk splice",
+"Verify a clean speed trace on a scan tool at a slow roll"
+],
+"title": "Repair or replace VSS connector and pigtail"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 90.0,
+"parts_min": 20.0,
+"steps": [
+"Disconnect the battery negative terminal",
+"Remove the sensor retaining bolt and pull the sensor from its bore",
+"Install the new sensor with a fresh O-ring seated fully",
+"Clear the code and confirm speedometer/cruise operation on a test drive"
+],
+"title": "Replace vehicle speed sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 60.0,
+"parts_min": 15.0,
+"steps": [
+"Back-probe signal, reference, and ground at the ECM connector",
+"Trace the harness for chafe points near the transmission or subframe",
+"Repair with proper gauge wire and abrasion-resistant loom",
+"Road test through the full speed range while monitoring signal quality"
+],
+"title": "Diagnose and repair VSS harness wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0505": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 20.0,
+"parts_min": 8.0,
+"steps": [
+"Remove the intake duct and IAC valve or throttle body cover",
+"Spray throttle-body cleaner into the idle air passage and throttle bore",
+"Wipe away carbon with a shop towel, avoiding the throttle plate seal edge",
+"Reinstall, reset idle relearn, and confirm idle stabilizes"
+],
+"title": "Clean throttle body and IAC passage"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Inspect all vacuum hoses, PCV lines, and intake gaskets for cracks",
+"Smoke-test or use a propane/carb-cleaner leak check at idle",
+"Replace any hose, gasket, or clamp found leaking",
+"Verify idle RPM and fuel trims return to normal"
+],
+"title": "Inspect and repair vacuum/intake leaks"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.7,
+"parts_max": 140.0,
+"parts_min": 30.0,
+"steps": [
+"Disconnect the battery negative terminal",
+"Unplug the IAC connector and remove its mounting screws",
+"Install the replacement valve with a new gasket",
+"Perform the ECM idle relearn procedure and road test"
+],
+"title": "Replace idle air control valve/motor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 45.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the IAC driver circuits at the connector with a scan tool commanding sweep",
+"Voltage-drop test each leg back to the ECM",
+"Repair chafed or corroded conductors",
+"Confirm commanded vs actual idle counts track together"
+],
+"title": "Diagnose IAC circuit wiring at the ECM"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0506": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 20.0,
+"parts_min": 8.0,
+"steps": [
+"Remove the intake duct and IAC valve or throttle body cover",
+"Spray throttle-body cleaner into the idle air passage and throttle bore",
+"Wipe away carbon with a shop towel, avoiding the throttle plate seal edge",
+"Reinstall, reset idle relearn, and confirm idle stabilizes"
+],
+"title": "Clean throttle body and IAC passage"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Inspect all vacuum hoses, PCV lines, and intake gaskets for cracks",
+"Smoke-test or use a propane/carb-cleaner leak check at idle",
+"Replace any hose, gasket, or clamp found leaking",
+"Verify idle RPM and fuel trims return to normal"
+],
+"title": "Inspect and repair vacuum/intake leaks"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.7,
+"parts_max": 140.0,
+"parts_min": 30.0,
+"steps": [
+"Disconnect the battery negative terminal",
+"Unplug the IAC connector and remove its mounting screws",
+"Install the replacement valve with a new gasket",
+"Perform the ECM idle relearn procedure and road test"
+],
+"title": "Replace idle air control valve/motor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 45.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the IAC driver circuits at the connector with a scan tool commanding sweep",
+"Voltage-drop test each leg back to the ECM",
+"Repair chafed or corroded conductors",
+"Confirm commanded vs actual idle counts track together"
+],
+"title": "Diagnose IAC circuit wiring at the ECM"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0507": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 20.0,
+"parts_min": 8.0,
+"steps": [
+"Remove the intake duct and IAC valve or throttle body cover",
+"Spray throttle-body cleaner into the idle air passage and throttle bore",
+"Wipe away carbon with a shop towel, avoiding the throttle plate seal edge",
+"Reinstall, reset idle relearn, and confirm idle stabilizes"
+],
+"title": "Clean throttle body and IAC passage"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Inspect all vacuum hoses, PCV lines, and intake gaskets for cracks",
+"Smoke-test or use a propane/carb-cleaner leak check at idle",
+"Replace any hose, gasket, or clamp found leaking",
+"Verify idle RPM and fuel trims return to normal"
+],
+"title": "Inspect and repair vacuum/intake leaks"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.7,
+"parts_max": 140.0,
+"parts_min": 30.0,
+"steps": [
+"Disconnect the battery negative terminal",
+"Unplug the IAC connector and remove its mounting screws",
+"Install the replacement valve with a new gasket",
+"Perform the ECM idle relearn procedure and road test"
+],
+"title": "Replace idle air control valve/motor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 45.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the IAC driver circuits at the connector with a scan tool commanding sweep",
+"Voltage-drop test each leg back to the ECM",
+"Repair chafed or corroded conductors",
+"Confirm commanded vs actual idle counts track together"
+],
+"title": "Diagnose IAC circuit wiring at the ECM"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0562": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 25.0,
+"parts_min": 5.0,
+"steps": [
+"Clean and tighten battery terminals and main ground straps",
+"Load-test the battery for cranking capacity",
+"Replace a battery that fails the load test",
+"Clear the code and recheck system voltage"
+],
+"title": "Test battery condition and terminal connections"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 30.0,
+"parts_min": 5.0,
+"steps": [
+"Measure voltage at idle, at 2000 RPM, and with accessories loaded (headlights, blower, defrost)",
+"Compare to the expected 13.5-14.7V charging range",
+"Note whether voltage is chronically low, high, or unstable",
+"Proceed to the alternator or wiring repair matching the finding"
+],
+"title": "Test charging system output under load"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 15.0,
+"steps": [
+"Inspect engine-to-body and battery-to-chassis ground straps for corrosion",
+"Clean or replace corroded straps and terminals",
+"Verify voltage drop across each strap is under 0.2V while cranking",
+"Clear the code and retest"
+],
+"title": "Repair main power/ground straps and connections"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.5,
+"parts_max": 350.0,
+"parts_min": 40.0,
+"steps": [
+"Measure key-off parasitic current draw and pull fuses to isolate an excessive draw",
+"Bench-test or load-test the alternator output and diode ripple",
+"Replace the alternator if output is deficient or a diode has failed",
+"Recheck system voltage stability across a full drive cycle"
+],
+"title": "Diagnose parasitic draw or replace alternator"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0563": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 25.0,
+"parts_min": 5.0,
+"steps": [
+"Clean and tighten battery terminals and main ground straps",
+"Load-test the battery for cranking capacity",
+"Replace a battery that fails the load test",
+"Clear the code and recheck system voltage"
+],
+"title": "Test battery condition and terminal connections"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 30.0,
+"parts_min": 5.0,
+"steps": [
+"Measure voltage at idle, at 2000 RPM, and with accessories loaded (headlights, blower, defrost)",
+"Compare to the expected 13.5-14.7V charging range",
+"Note whether voltage is chronically low, high, or unstable",
+"Proceed to the alternator or wiring repair matching the finding"
+],
+"title": "Test charging system output under load"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 15.0,
+"steps": [
+"Inspect engine-to-body and battery-to-chassis ground straps for corrosion",
+"Clean or replace corroded straps and terminals",
+"Verify voltage drop across each strap is under 0.2V while cranking",
+"Clear the code and retest"
+],
+"title": "Repair main power/ground straps and connections"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.5,
+"parts_max": 350.0,
+"parts_min": 40.0,
+"steps": [
+"Measure key-off parasitic current draw and pull fuses to isolate an excessive draw",
+"Bench-test or load-test the alternator output and diode ripple",
+"Replace the alternator if output is deficient or a diode has failed",
+"Recheck system voltage stability across a full drive cycle"
+],
+"title": "Diagnose parasitic draw or replace alternator"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0601": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.3,
+"parts_max": 25.0,
+"parts_min": 5.0,
+"steps": [
+"Confirm battery voltage is above 12.4V and charging system output is normal",
+"Low or unstable voltage during a reflash can itself corrupt module memory, mimicking this fault",
+"Correct any battery/charging issue found",
+"Clear the code and retest"
+],
+"title": "Verify battery/charging voltage before further diagnosis"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.0,
+"parts_max": 150.0,
+"parts_min": 5.0,
+"steps": [
+"Connect a scan tool with manufacturer reprogramming access on a stable power supply",
+"Reflash the module with the latest available calibration",
+"Clear codes and cycle the ignition",
+"Drive-cycle and confirm the fault does not return"
+],
+"title": "Reflash the control module to the latest calibration"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.5,
+"parts_max": 900.0,
+"parts_min": 200.0,
+"steps": [
+"Confirm the fault persists after a successful reflash, indicating a hardware failure",
+"Disconnect the battery and remove the affected module",
+"Install and program the replacement module with the correct VIN/calibration",
+"Clear codes and verify normal operation across all monitored channels"
+],
+"title": "Replace the control module"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0606": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.3,
+"parts_max": 25.0,
+"parts_min": 5.0,
+"steps": [
+"Confirm battery voltage is above 12.4V and charging system output is normal",
+"Low or unstable voltage during a reflash can itself corrupt module memory, mimicking this fault",
+"Correct any battery/charging issue found",
+"Clear the code and retest"
+],
+"title": "Verify battery/charging voltage before further diagnosis"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.0,
+"parts_max": 150.0,
+"parts_min": 5.0,
+"steps": [
+"Connect a scan tool with manufacturer reprogramming access on a stable power supply",
+"Reflash the module with the latest available calibration",
+"Clear codes and cycle the ignition",
+"Drive-cycle and confirm the fault does not return"
+],
+"title": "Reflash the control module to the latest calibration"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.5,
+"parts_max": 900.0,
+"parts_min": 200.0,
+"steps": [
+"Confirm the fault persists after a successful reflash, indicating a hardware failure",
+"Disconnect the battery and remove the affected module",
+"Install and program the replacement module with the correct VIN/calibration",
+"Clear codes and verify normal operation across all monitored channels"
+],
+"title": "Replace the control module"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0700": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 40.0,
+"parts_min": 10.0,
+"steps": [
+"Check fluid level and color per the platform's check procedure (dipstick or level plug)",
+"Top off or service fluid if low, dark, or burnt-smelling",
+"Clear the code and drive-cycle",
+"Recheck for the code returning"
+],
+"title": "Check transmission fluid level and condition"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.8,
+"parts_max": 50.0,
+"parts_min": 15.0,
+"steps": [
+"Locate the main TCM connector (often at the transmission case or under the hood)",
+"Disconnect and inspect for corrosion, bent pins, or fluid intrusion",
+"Clean and reseat, or repair a damaged pin",
+"Clear the code and road test"
+],
+"title": "Inspect main TCM harness connector"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.0,
+"parts_max": 150.0,
+"parts_min": 5.0,
+"steps": [
+"Check for a manufacturer TSB covering this shift-quality/MIL-request code",
+"Reflash the TCM with the latest calibration if applicable",
+"Clear codes and perform any required adaptive relearn",
+"Road test through a full shift cycle"
+],
+"title": "Reflash the TCM to the latest calibration"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0705": [
+{
+"fixes": [
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.7,
+"parts_max": 40.0,
+"parts_min": 15.0,
+"steps": [
+"Locate the range sensor on the shift shaft at the transmission case",
+"Loosen the sensor and align it to the neutral/park index mark per spec",
+"Re-torque and verify each gear selection is confirmed by the sensor",
+"Clear the code and road test"
+],
+"title": "Adjust transmission range sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.1,
+"parts_max": 50.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the range sensor circuits at the connector through each gear position",
+"Trace the harness for fluid intrusion or chafing at the case connector",
+"Repair with solder and heat-shrink, resealing the connector",
+"Confirm correct PRNDL reporting in every position"
+],
+"title": "Repair range sensor circuit wiring"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 150.0,
+"parts_min": 40.0,
+"steps": [
+"Disconnect the battery negative terminal",
+"Remove the shift linkage and unbolt the range sensor",
+"Install and align the new sensor per spec, then reconnect linkage",
+"Clear the code and verify PRNDL matches actual gear"
+],
+"title": "Replace transmission range sensor"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0706": [
+{
+"fixes": [
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.7,
+"parts_max": 40.0,
+"parts_min": 15.0,
+"steps": [
+"Locate the range sensor on the shift shaft at the transmission case",
+"Loosen the sensor and align it to the neutral/park index mark per spec",
+"Re-torque and verify each gear selection is confirmed by the sensor",
+"Clear the code and road test"
+],
+"title": "Adjust transmission range sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.1,
+"parts_max": 50.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the range sensor circuits at the connector through each gear position",
+"Trace the harness for fluid intrusion or chafing at the case connector",
+"Repair with solder and heat-shrink, resealing the connector",
+"Confirm correct PRNDL reporting in every position"
+],
+"title": "Repair range sensor circuit wiring"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 150.0,
+"parts_min": 40.0,
+"steps": [
+"Disconnect the battery negative terminal",
+"Remove the shift linkage and unbolt the range sensor",
+"Install and align the new sensor per spec, then reconnect linkage",
+"Clear the code and verify PRNDL matches actual gear"
+],
+"title": "Replace transmission range sensor"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0715": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 20.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the sensor connector at the transmission case",
+"Disconnect and inspect for fluid/corrosion in the pins",
+"Clean and reseat with a fresh seal",
+"Clear the code and road test"
+],
+"title": "Inspect sensor connector for fluid intrusion"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.9,
+"parts_max": 110.0,
+"parts_min": 30.0,
+"steps": [
+"Disconnect the battery negative terminal",
+"Remove the sensor from the transmission case, noting fluid loss",
+"Install the new sensor with a fresh O-ring",
+"Top off fluid, clear the code, and verify signal on a scan tool"
+],
+"title": "Replace input/turbine shaft speed sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 2.0,
+"parts_max": 200.0,
+"parts_min": 40.0,
+"steps": [
+"Back-probe the sensor circuit at the TCM connector",
+"Trace the internal transmission harness for chafing (may require pan removal)",
+"Repair or replace the internal harness section",
+"Refill fluid, clear the code, and verify a clean speed trace"
+],
+"title": "Repair internal/external transmission wiring harness"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0720": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 20.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the sensor connector at the transmission tail housing/case",
+"Disconnect and inspect for fluid intrusion/corrosion",
+"Clean and reseat with a fresh seal",
+"Clear the code and road test"
+],
+"title": "Inspect output shaft speed sensor connector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.8,
+"parts_max": 90.0,
+"parts_min": 25.0,
+"steps": [
+"Raise the vehicle and locate the sensor at the transmission tail housing",
+"Remove its retaining bolt and withdraw the sensor, catching any fluid drip",
+"Install the replacement sensor with a new O-ring, seated fully",
+"Clear the code and confirm output speed tracks vehicle speed"
+],
+"title": "Replace output shaft speed sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.8,
+"parts_max": 150.0,
+"parts_min": 30.0,
+"steps": [
+"Back-probe the sensor circuit at the TCM connector",
+"Trace the internal/external harness for chafing",
+"Repair or replace the affected harness section",
+"Clear the code and verify a clean, correctly-directioned speed trace"
+],
+"title": "Repair output shaft sensor wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0741": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.7,
+"parts_max": 80.0,
+"parts_min": 20.0,
+"steps": [
+"Check fluid level and condition",
+"Change fluid and filter if contaminated, since debris commonly sticks the TCC solenoid",
+"Clear the code and drive-cycle at steady highway speed",
+"Monitor for the code returning"
+],
+"title": "Verify transmission fluid level before TCC diagnosis"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.5,
+"parts_max": 25.0,
+"parts_min": 10.0,
+"steps": [
+"Connect a scan tool with bi-directional solenoid control",
+"Command the torque converter clutch solenoid on and off at a safe steady speed",
+"Confirm RPM/converter-slip PID responds to the command",
+"No response isolates the fault to the TCC solenoid or its wiring rather than internal converter wear"
+],
+"title": "Command the TCC solenoid with a scan-tool actuator test"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.2,
+"parts_max": 160.0,
+"parts_min": 40.0,
+"steps": [
+"Test TCC solenoid resistance against spec",
+"Command the solenoid with a scan tool and verify a response",
+"Replace a solenoid that is open, shorted, or stuck",
+"Clear the code and verify lockup engages/releases smoothly"
+],
+"title": "Test and replace TCC solenoid"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.3,
+"parts_max": 60.0,
+"parts_min": 15.0,
+"steps": [
+"Back-probe the driver circuit during a commanded test",
+"Voltage-drop test the harness back to the TCM",
+"Repair chafed or corroded conductors",
+"Confirm commanded lockup duty cycle is achieved"
+],
+"title": "Repair TCC control circuit wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0743": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.7,
+"parts_max": 80.0,
+"parts_min": 20.0,
+"steps": [
+"Check fluid level and condition",
+"Change fluid and filter if contaminated, since debris commonly sticks the TCC solenoid",
+"Clear the code and drive-cycle at steady highway speed",
+"Monitor for the code returning"
+],
+"title": "Verify transmission fluid level before TCC diagnosis"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.5,
+"parts_max": 25.0,
+"parts_min": 10.0,
+"steps": [
+"Connect a scan tool with bi-directional solenoid control",
+"Command the torque converter clutch solenoid on and off at a safe steady speed",
+"Confirm RPM/converter-slip PID responds to the command",
+"No response isolates the fault to the TCC solenoid or its wiring rather than internal converter wear"
+],
+"title": "Command the TCC solenoid with a scan-tool actuator test"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.2,
+"parts_max": 160.0,
+"parts_min": 40.0,
+"steps": [
+"Test TCC solenoid resistance against spec",
+"Command the solenoid with a scan tool and verify a response",
+"Replace a solenoid that is open, shorted, or stuck",
+"Clear the code and verify lockup engages/releases smoothly"
+],
+"title": "Test and replace TCC solenoid"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.3,
+"parts_max": 60.0,
+"parts_min": 15.0,
+"steps": [
+"Back-probe the driver circuit during a commanded test",
+"Voltage-drop test the harness back to the TCM",
+"Repair chafed or corroded conductors",
+"Confirm commanded lockup duty cycle is achieved"
+],
+"title": "Repair TCC control circuit wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P0755": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.7,
+"parts_max": 80.0,
+"parts_min": 20.0,
+"steps": [
+"Check fluid level and condition",
+"Change fluid and filter, since debris is the most common cause of a sticking shift solenoid",
+"Clear the code and drive-cycle through all gears",
+"Monitor for the code returning"
+],
+"title": "Check transmission fluid level and filter condition"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.5,
+"parts_max": 25.0,
+"parts_min": 10.0,
+"steps": [
+"Connect a scan tool with bi-directional solenoid control",
+"Command the named shift solenoid on and off",
+"Confirm line pressure or shift-quality PID responds to the command",
+"No response isolates the fault to that solenoid or its valve-body connector before condemning the whole pack"
+],
+"title": "Command the named shift solenoid with a scan-tool actuator test"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.3,
+"parts_max": 150.0,
+"parts_min": 35.0,
+"steps": [
+"Test the named solenoid's resistance against spec",
+"Command it individually with a scan tool and listen/feel for a click and gear response",
+"Replace the solenoid, typically as part of the valve-body solenoid pack",
+"Clear the code and verify normal shifting"
+],
+"title": "Test and replace the named shift solenoid"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.5,
+"parts_max": 80.0,
+"parts_min": 20.0,
+"steps": [
+"Remove the valve body pan for access to the internal connector",
+"Inspect for corrosion or a broken pin at the solenoid connector",
+"Repair or replace the connector/harness section",
+"Refill fluid, clear the code, and verify commanded shifts"
+],
+"title": "Repair shift solenoid wiring at the valve body connector"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P1000": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 1.5,
+"parts_max": 5.0,
+"parts_min": 1.0,
+"steps": [
+"Confirm no other DTCs are stored - address any real faults first",
+"Drive the manufacturer's specified drive cycle (typically a cold start, mixed city and 55 mph steady-state segments)",
+"Re-scan and confirm all readiness monitors report Complete"
+],
+"title": "Complete the manufacturer drive cycle"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.3,
+"parts_max": 25.0,
+"parts_min": 5.0,
+"steps": [
+"Test battery resting voltage (12.4V+) and charging voltage (13.5-14.7V)",
+"A weak battery resets monitors and prevents completion",
+"Recharge or replace the battery before repeating the drive cycle"
+],
+"title": "Verify battery and charging health before the drive cycle"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Identify which monitor stays incomplete on a capable scan tool",
+"Check the enabling criteria for that monitor (fuel level, ambient temperature, trip requirements)",
+"Pinpoint-test the sensors that gate the monitor per service information"
+],
+"title": "Diagnose a monitor that never completes"
+}
+],
+"make": "Ford",
+"source": "MechanicDB"
+},
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 1.5,
+"parts_max": 5.0,
+"parts_min": 1.0,
+"steps": [
+"Confirm no other DTCs are stored - address any real faults first",
+"Drive the manufacturer's specified drive cycle (typically a cold start, mixed city and 55 mph steady-state segments)",
+"Re-scan and confirm all readiness monitors report Complete"
+],
+"title": "Complete the manufacturer drive cycle"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.3,
+"parts_max": 25.0,
+"parts_min": 5.0,
+"steps": [
+"Test battery resting voltage (12.4V+) and charging voltage (13.5-14.7V)",
+"A weak battery resets monitors and prevents completion",
+"Recharge or replace the battery before repeating the drive cycle"
+],
+"title": "Verify battery and charging health before the drive cycle"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Identify which monitor stays incomplete on a capable scan tool",
+"Check the enabling criteria for that monitor (fuel level, ambient temperature, trip requirements)",
+"Pinpoint-test the sensors that gate the monitor per service information"
+],
+"title": "Diagnose a monitor that never completes"
+}
+],
+"make": "Lincoln",
+"source": "MechanicDB"
+}
+],
+"P1083": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.8,
+"parts_max": 40.0,
+"parts_min": 10.0,
+"steps": [
+"Connect a smoke machine to the intake at idle",
+"Watch for smoke escaping at intake gaskets, PCV hoses, or brake booster line",
+"Replace any leaking gasket or hose",
+"Clear codes and verify fuel trims return toward 0%"
+],
+"title": "Smoke-test intake for vacuum/air leaks"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 150.0,
+"parts_min": 30.0,
+"steps": [
+"Replace the fuel filter if serviceable",
+"Measure fuel pump pressure and volume against spec under load",
+"Replace a weak pump if it fails the test",
+"Clear codes and confirm rail pressure holds steady"
+],
+"title": "Replace fuel filter and test fuel pump output"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Inspect the exhaust manifold gasket and studs near the upstream O2 sensor for leaks",
+"Replace the gasket and any corroded studs",
+"Torque to spec in sequence",
+"Clear codes and re-verify trim correction"
+],
+"title": "Inspect and repair exhaust manifold gasket leak"
+}
+],
+"make": "BMW",
+"source": "MechanicDB"
+}
+],
+"P1086": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 25.0,
+"parts_min": 8.0,
+"steps": [
+"Remove the MAF sensor and inspect the hot-wire element for contamination",
+"Clean with dedicated MAF cleaner (never touch the element)",
+"Reinstall and clear codes",
+"Compare live MAF g/s reading against expected values"
+],
+"title": "Clean MAF sensor and inspect for false-high airflow readings"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 220.0,
+"parts_min": 40.0,
+"steps": [
+"Perform a fuel injector leak-down/drip test",
+"Identify any injector leaking past its seat",
+"Replace the faulty injector(s) and seals",
+"Clear codes and verify trims return toward 0%"
+],
+"title": "Test fuel injectors for leakage and replace as needed"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Depressurize the fuel system",
+"Remove the regulator and inspect the diaphragm/valve for sticking",
+"Install the replacement regulator with new seals",
+"Clear codes and confirm rail pressure holds at commanded target"
+],
+"title": "Replace stuck-open fuel pressure regulator"
+}
+],
+"make": "BMW",
+"source": "MechanicDB"
+}
+],
+"P1100": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.3,
+"parts_max": 15.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the external BARO sensor and its atmospheric sampling port",
+"Clear dust or insect debris blocking the port opening",
+"Reseat the connector while there",
+"Clear the code and compare the reading against local ambient pressure"
+],
+"title": "Clear debris from the barometric sensor sampling port"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 95.0,
+"parts_min": 30.0,
+"steps": [
+"Verify the reading is frozen or offset against a known ambient pressure at key-on",
+"Unplug and unbolt the sensor from its mounting",
+"Install the replacement and reconnect",
+"Confirm the new reading matches ambient and tracks altitude changes"
+],
+"title": "Replace the external barometric pressure sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 18.0,
+"steps": [
+"Back-probe the connector and verify 5V reference, signal, and ground",
+"Trace and repair any damaged conductor between sensor and ECM",
+"Verify a clean, ambient-plausible signal after repair",
+"Clear the code and monitor across several key cycles"
+],
+"title": "Repair BARO sensor reference or signal wiring"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 2.0,
+"parts_max": 900.0,
+"parts_min": 350.0,
+"steps": [
+"Confirm the platform integrates the BARO sensor inside the ECM and no external sensor exists",
+"Rule out connector and supply faults at the ECM first",
+"Install and program the replacement module per the manufacturer's security procedure",
+"Verify the internal sensor now reads ambient correctly"
+],
+"title": "Replace the ECM housing an internal BARO sensor"
+}
+],
+"make": "Toyota",
+"source": "MechanicDB"
+}
+],
+"P1128": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.8,
+"parts_max": 40.0,
+"parts_min": 10.0,
+"steps": [
+"Review short- and long-term fuel trim values by bank on a scan tool",
+"Smoke-test the intake for leaks matching the trending bank",
+"Repair any leak found",
+"Clear codes and recheck trims after a drive cycle"
+],
+"title": "Inspect for vacuum leaks and check fuel trim data with a scan tool"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.7,
+"parts_max": 50.0,
+"parts_min": 15.0,
+"steps": [
+"Clean the throttle body bore and blade of carbon buildup",
+"Compare MAF/MAP readings against expected values at idle and 2,500 RPM",
+"Address any sensor reading found out of spec",
+"Clear codes and monitor trim recovery"
+],
+"title": "Clean throttle body and check MAF/MAP sensor readings"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.8,
+"parts_max": 250.0,
+"parts_min": 40.0,
+"steps": [
+"Compare fuel pressure and injector pulse width between banks",
+"Identify a restricted injector, filter sock, or fuel rail issue isolated to one bank",
+"Repair or replace the faulted component",
+"Clear codes and confirm trims converge between banks"
+],
+"title": "Diagnose fuel delivery imbalance affecting one bank"
+}
+],
+"make": "Volkswagen",
+"source": "MechanicDB"
+}
+],
+"P1131": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.8,
+"parts_max": 60.0,
+"parts_min": 5.0,
+"steps": [
+"Check for oil consumption, coolant leaks, or recent use of silicone sealant near the intake/exhaust",
+"Repair the contamination source if found",
+"Inspect the sensor tip for a sooty or white/gray glassy coating",
+"Clear codes after addressing the source"
+],
+"title": "Inspect for contamination sources (oil, coolant, silicone) reaching the exhaust"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 180.0,
+"parts_min": 50.0,
+"steps": [
+"Identify the affected bank/sensor position",
+"Remove with an O2 sensor socket and inspect the old sensor tip for contamination",
+"Apply anti-seize and install the new sensor",
+"Clear codes and verify switching frequency improves"
+],
+"title": "Replace slow-responding oxygen sensor"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.2,
+"parts_max": 120.0,
+"parts_min": 20.0,
+"steps": [
+"Smoke-test the exhaust system upstream of the affected sensor",
+"Replace leaking gaskets or cracked pipe sections",
+"Torque fasteners to spec",
+"Clear codes and re-verify switching speed"
+],
+"title": "Repair exhaust leak diluting sensor sample"
+}
+],
+"make": "Ford",
+"source": "MechanicDB"
+}
+],
+"P1155": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 25.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the O2 heater fuse and relay in the underhood fuse box",
+"Inspect and test with a multimeter for continuity and proper switching",
+"Replace any blown fuse or failed relay",
+"Clear codes and verify heater current draw"
+],
+"title": "Test O2 sensor heater circuit fuse and relay"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 180.0,
+"parts_min": 50.0,
+"steps": [
+"Identify the affected bank/sensor position from the code",
+"Unplug the connector and remove the sensor with an O2 sensor socket",
+"Apply anti-seize to threads (avoid the sensor tip) and install the new sensor",
+"Reconnect and clear codes"
+],
+"title": "Replace oxygen sensor with failed heater"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Measure heater element resistance at the connector against spec",
+"Voltage-drop test the heater supply and ground legs",
+"Repair chafed or corroded wiring near the exhaust manifold with high-temp splices",
+"Confirm heater current draw matches spec"
+],
+"title": "Repair O2 heater circuit wiring"
+}
+],
+"make": "Toyota",
+"source": "MechanicDB"
+}
+],
+"P1259": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.3,
+"parts_max": 45.0,
+"parts_min": 20.0,
+"steps": [
+"Check engine oil level on the dipstick with the engine off and cold",
+"Inspect oil color and consistency for sludge or fuel dilution",
+"Top up or perform a full oil and filter change with the specified viscosity",
+"Clear the code and verify VTEC engagement returns at the commanded RPM"
+],
+"title": "Check engine oil level and condition"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.6,
+"parts_max": 55.0,
+"parts_min": 15.0,
+"steps": [
+"Locate the VTEC oil pressure switch on the cylinder head",
+"Back-probe the switch connector and confirm it opens/closes with engine oil pressure",
+"Replace the switch if it stays open or closed regardless of pressure",
+"Clear the code and confirm the switch now toggles during a test drive"
+],
+"title": "Test the VTEC oil pressure switch"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 100.0,
+"parts_min": 30.0,
+"steps": [
+"Remove the spool valve assembly and its inline oil strainer screen",
+"Clean or replace a screen clogged with sludge or metal debris",
+"Measure spool valve solenoid coil resistance against the factory specification",
+"Command the solenoid with a scan tool and confirm it clicks and moves freely",
+"Reinstall with a new gasket and road-test for clean VTEC engagement"
+],
+"title": "Clean the VTEC oil strainer and test the spool valve solenoid"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.3,
+"parts_max": 160.0,
+"parts_min": 40.0,
+"steps": [
+"Inspect the harness and connectors between the PCM and both VTEC components",
+"Test each circuit for continuity, shorts to ground, and shorts to power",
+"Repair or replace chafed wiring or a corroded connector pin",
+"Clear the code and confirm the PCM data list shows correct switch/solenoid activity"
+],
+"title": "Repair PCM wiring to the VTEC solenoid and pressure switch"
+}
+],
+"make": "Honda",
+"source": "MechanicDB"
+}
+],
+"P1320": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.3,
+"parts_max": 15.0,
+"parts_min": 5.0,
+"steps": [
+"Unplug the connector for the affected coil letter/cylinder",
+"Inspect pins for corrosion, heat damage, or a bent terminal",
+"Clean contacts with electrical contact cleaner and reseat fully",
+"Clear the code and re-test under load"
+],
+"title": "Inspect and reseat the ignition coil connector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.4,
+"parts_max": 120.0,
+"parts_min": 25.0,
+"steps": [
+"Remove the engine cover and any coil retaining bolts",
+"Disconnect the harness and pull the coil from its plug well",
+"Install the replacement coil and torque the retaining bolt to spec",
+"Reconnect, clear the code, and verify no misfire returns"
+],
+"title": "Replace the ignition coil"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.4,
+"parts_max": 70.0,
+"parts_min": 10.0,
+"steps": [
+"Measure coil primary resistance at the connector against spec",
+"Voltage-drop test the driver, ground, and reference legs to the ECM or ignition control module",
+"Repair chafed or corroded conductors with soldered, heat-shrunk splices",
+"Clear codes and confirm clean coil-on/coil-off waveforms with a scope"
+],
+"title": "Repair coil driver wiring back to the ECM/ignition module"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 2.0,
+"parts_max": 400.0,
+"parts_min": 80.0,
+"steps": [
+"Confirm coil and wiring test good but the driver circuit still faults",
+"Locate the ignition control module or driver stage (stand-alone or integrated in the ECM)",
+"Replace the module and reprogram/relearn as required",
+"Clear codes and verify all coil channels fire correctly"
+],
+"title": "Replace a failed ignition control/driver module"
+}
+],
+"make": "Nissan",
+"source": "MechanicDB"
+}
+],
+"P1345": [
+{
+"fixes": [
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.8,
+"parts_max": 90.0,
+"parts_min": 25.0,
+"steps": [
+"Identify which sensor the correlation fault points to on the scan tool freeze frame",
+"Unplug and remove the affected position sensor",
+"Inspect the reluctor wheel/tone ring for chips or debris",
+"Install the new sensor with correct air-gap shim and clear codes"
+],
+"title": "Inspect and replace crankshaft/camshaft position sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 3.5,
+"parts_max": 900.0,
+"parts_min": 150.0,
+"steps": [
+"Remove the timing cover and verify cam-to-crank alignment against factory timing marks",
+"Measure chain stretch or check belt tooth wear",
+"Replace the timing chain/belt, tensioner, and guides as a set",
+"Reset timing to factory marks and verify correlation with a scan tool"
+],
+"title": "Inspect timing chain/belt for stretch or jumped timing"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the sensor signal and ground at each connector while cranking",
+"Voltage-drop test the harness runs back to the ECM",
+"Repair chafed conductors near the timing cover with heat-shrink splices",
+"Confirm clean square-wave signals on a scope"
+],
+"title": "Repair crank/cam sensor wiring and connectors"
+}
+],
+"make": "Chevrolet",
+"source": "MechanicDB"
+}
+],
+"P1351": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.3,
+"parts_max": 15.0,
+"parts_min": 5.0,
+"steps": [
+"Unplug the connector for the affected coil letter/cylinder",
+"Inspect pins for corrosion, heat damage, or a bent terminal",
+"Clean contacts with electrical contact cleaner and reseat fully",
+"Clear the code and re-test under load"
+],
+"title": "Inspect and reseat the ignition coil connector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.4,
+"parts_max": 120.0,
+"parts_min": 25.0,
+"steps": [
+"Remove the engine cover and any coil retaining bolts",
+"Disconnect the harness and pull the coil from its plug well",
+"Install the replacement coil and torque the retaining bolt to spec",
+"Reconnect, clear the code, and verify no misfire returns"
+],
+"title": "Replace the ignition coil"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.4,
+"parts_max": 70.0,
+"parts_min": 10.0,
+"steps": [
+"Measure coil primary resistance at the connector against spec",
+"Voltage-drop test the driver, ground, and reference legs to the ECM or ignition control module",
+"Repair chafed or corroded conductors with soldered, heat-shrunk splices",
+"Clear codes and confirm clean coil-on/coil-off waveforms with a scope"
+],
+"title": "Repair coil driver wiring back to the ECM/ignition module"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 2.0,
+"parts_max": 400.0,
+"parts_min": 80.0,
+"steps": [
+"Confirm coil and wiring test good but the driver circuit still faults",
+"Locate the ignition control module or driver stage (stand-alone or integrated in the ECM)",
+"Replace the module and reprogram/relearn as required",
+"Clear codes and verify all coil channels fire correctly"
+],
+"title": "Replace a failed ignition control/driver module"
+}
+],
+"make": "GMC",
+"source": "MechanicDB"
+}
+],
+"P1626": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 10.0,
+"parts_min": 1.0,
+"steps": [
+"Determine whether the vehicle uses VATS/PASS-Key (resistor pellet key, roughly 1986-1996) or Passlock/PASS-Key III (plain or transponder key, no pellet, roughly 1996-on) from its model year and RPO code",
+"With the key in the ignition, turn to RUN and leave it there without cranking through the full theft-deterrent lamp cycle (commonly about 10 minutes)",
+"Turn the key OFF, then back to RUN or START to attempt a normal start",
+"Repeat the wait-and-start sequence up to three times if the first attempt does not succeed",
+"If the vehicle starts and stays running, no further theft-deterrent diagnosis is needed"
+],
+"title": "Identify the theft-deterrent generation and run the manufacturer relearn procedure"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 80.0,
+"parts_min": 20.0,
+"steps": [
+"Confirm the vehicle is VATS/PASS-Key-equipped with a resistor pellet key before proceeding, since this test does not apply to Passlock vehicles",
+"Remove the key and measure the pellet's resistance with an ohmmeter",
+"Compare the reading against the value the PCM/BCM expects for this vehicle",
+"Clean the decoder-ring contacts inside the ignition lock cylinder",
+"Have a correctly coded replacement key pellet cut if the resistance is wrong or unstable",
+"Test-start the vehicle to confirm the fuel-enable signal is restored"
+],
+"title": "Test the VATS key pellet and clean the decoder-ring contacts (VATS-equipped vehicles only)"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 250.0,
+"parts_min": 60.0,
+"steps": [
+"Confirm the vehicle is Passlock/PASS-Key III-equipped with a plain or transponder key and no pellet before proceeding, since this test does not apply to VATS vehicles",
+"Backprobe the Passlock sensor signal wire at the BCM connector with a digital multimeter",
+"Sweep the voltage while slowly rotating the key from OFF to RUN and watch for a smooth reading versus an erratic one",
+"Inspect the sensor's connector and wiring for corrosion or a poor ground",
+"Replace the lock-cylinder sensor or housing if the signal is erratic, flat, or absent",
+"Run the manufacturer relearn procedure after replacement and confirm normal starting"
+],
+"title": "Diagnose the Passlock lock-cylinder sensor circuit (Passlock-equipped vehicles only)"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.5,
+"parts_max": 450.0,
+"parts_min": 100.0,
+"steps": [
+"Trace the theft-deterrent harness between the ignition lock, BCM, and PCM for chafed insulation or a corroded splice",
+"Repair any damaged wiring and recheck for a stable signal with a scan tool",
+"Confirm the key pellet, decoder ring, or Passlock sensor all test within specification before condemning the module",
+"Replace the BCM or theft-deterrent module if the wiring and sensor both check out",
+"Program the replacement module and relearn all working keys",
+"Verify normal starting across several ignition cycles and confirm no theft-deterrent codes return"
+],
+"title": "Repair theft-deterrent wiring or replace the BCM/security module"
+}
+],
+"make": "Chevrolet",
+"source": "MechanicDB"
+}
+],
+"P1698": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 25.0,
+"parts_min": 8.0,
+"steps": [
+"Identify the fuse feeding the specific powertrain module or sensor node named in the code",
+"Inspect the fuse and the engine-bay ground strap for corrosion",
+"Replace the fuse if blown and retest for communication"
+],
+"title": "Check the module's dedicated fuse and battery/ground connections"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 40.0,
+"parts_min": 12.0,
+"steps": [
+"Locate the connector for the module or sensor identified in the fault description",
+"Inspect for melted plastic, oil contamination, or backed-out terminals",
+"Clean contacts with electrical contact cleaner and apply dielectric grease on reassembly",
+"Clear codes and confirm the module rejoins the network"
+],
+"title": "Inspect and clean the engine-harness connector at the named module"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.3,
+"parts_max": 90.0,
+"parts_min": 20.0,
+"steps": [
+"Trace the sub-bus wire from the named module toward the gateway connection point",
+"Inspect for chafe against exhaust heat shields or engine mount brackets",
+"Cut out and splice in heat-resistant wire rated for engine-bay temperatures",
+"Protect the repair with high-temperature adhesive-lined heat-shrink",
+"Verify the module reports live data on a scan tool"
+],
+"title": "Repair the LIN/CAN sub-bus wiring feeding the module"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.8,
+"parts_max": 650.0,
+"parts_min": 120.0,
+"steps": [
+"Confirm the module or smart sensor's internal transceiver has failed through isolation testing",
+"Remove and replace the component",
+"Program or configure the replacement using a factory-level scan tool where required",
+"Confirm stable communication and correct live data over a full drive cycle"
+],
+"title": "Replace and reprogram the powertrain module or sensor node"
+}
+],
+"make": "Dodge",
+"source": "MechanicDB"
+}
+],
+"P2002": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.6,
+"parts_max": 30.0,
+"parts_min": 10.0,
+"steps": [
+"Locate the two pressure sensor hoses running to ports ahead of and behind the DPF",
+"Check for melted, kinked, or disconnected hose sections along the exhaust heat shield",
+"Confirm the hoses are routed to the correct ports and not swapped",
+"Reseat the hoses, clear the code, and monitor for its return"
+],
+"title": "Inspect DPF differential pressure sensor hoses for cracks or swapped routing"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 60.0,
+"parts_min": 20.0,
+"steps": [
+"Connect a scan tool and check the current soot load percentage and DPF status PIDs",
+"Drive at sustained highway speed or command a parked regeneration per the platform procedure",
+"Confirm exhaust back-pressure and soot load fall to the normal range afterward",
+"Recheck efficiency monitor completion"
+],
+"title": "Perform a manual DPF regeneration and inspect soot loading"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.5,
+"parts_max": 600.0,
+"parts_min": 250.0,
+"steps": [
+"Remove the DPF assembly for inspection outside the vehicle",
+"Deliver it to a DPF cleaning service for pneumatic/thermal ash removal",
+"Weigh or pressure-test the cleaned filter against manufacturer specification before reinstalling",
+"Reinstall with new gaskets and clear the efficiency code"
+],
+"title": "Send the DPF out for professional cleaning (ash removal)"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 3.5,
+"parts_max": 3200.0,
+"parts_min": 1200.0,
+"steps": [
+"Confirm the filter substrate is physically cracked, melted, or missing via borescope or removal inspection",
+"Remove the DPF housing from the exhaust system, supporting adjacent flex joints",
+"Install the new filter with new gaskets and clamps, torquing to specification",
+"Clear codes and complete the DPF learn/reset procedure required by the platform"
+],
+"title": "Replace the diesel particulate filter assembly"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P2003": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": null,
+"parts_max": null,
+"parts_min": null,
+"steps": [
+"Read every stored and pending code, because an engine, boost or injector fault can cause this one",
+"Fix the other engine codes before spending money on the particulate filter",
+"Check whether a particulate filter warning light is on, and follow the owner's manual for what it asks"
+],
+"title": "Read the other codes and check the warning lights first"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": null,
+"parts_max": null,
+"parts_min": null,
+"steps": [
+"Let the exhaust cool completely before touching anything",
+"Inspect the pressure sensor hoses at the particulate filter for cracks, melted sections, blockage or loose ends",
+"Inspect the sensor connector for corrosion or a loose fit",
+"Repair what you find, clear the code and drive to see whether it returns"
+],
+"title": "Check the exhaust pressure sensor and its hoses"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": null,
+"parts_max": null,
+"parts_min": null,
+"steps": [
+"With the exhaust cold, inspect the pipes and joints before and after the particulate filter",
+"Look for soot marks around joints, which suggest a leak",
+"Check the filter housing for dents or impact damage"
+],
+"title": "Look for exhaust leaks and physical damage"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": null,
+"parts_max": null,
+"parts_min": null,
+"steps": [
+"Ask a diesel specialist to compare the exhaust pressure readings with the manufacturer's values",
+"Ask them to check the filter for a cracked or melted core, or for one that has been removed",
+"Replace or repair the filter only after the test confirms it has failed"
+],
+"title": "Have the particulate filter tested"
+}
+],
+"make": null,
+"source": "Fahis"
+}
+],
+"P2096": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.8,
+"parts_max": 40.0,
+"parts_min": 10.0,
+"steps": [
+"Connect a smoke machine to the intake at idle",
+"Watch for smoke escaping at intake gaskets, PCV hoses, or brake booster line",
+"Replace any leaking gasket or hose",
+"Clear codes and verify fuel trims return toward 0%"
+],
+"title": "Smoke-test intake for vacuum/air leaks"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 150.0,
+"parts_min": 30.0,
+"steps": [
+"Replace the fuel filter if serviceable",
+"Measure fuel pump pressure and volume against spec under load",
+"Replace a weak pump if it fails the test",
+"Clear codes and confirm rail pressure holds steady"
+],
+"title": "Replace fuel filter and test fuel pump output"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Inspect the exhaust manifold gasket and studs near the upstream O2 sensor for leaks",
+"Replace the gasket and any corroded studs",
+"Torque to spec in sequence",
+"Clear codes and re-verify trim correction"
+],
+"title": "Inspect and repair exhaust manifold gasket leak"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P2097": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 25.0,
+"parts_min": 8.0,
+"steps": [
+"Remove the MAF sensor and inspect the hot-wire element for contamination",
+"Clean with dedicated MAF cleaner (never touch the element)",
+"Reinstall and clear codes",
+"Compare live MAF g/s reading against expected values"
+],
+"title": "Clean MAF sensor and inspect for false-high airflow readings"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 220.0,
+"parts_min": 40.0,
+"steps": [
+"Perform a fuel injector leak-down/drip test",
+"Identify any injector leaking past its seat",
+"Replace the faulty injector(s) and seals",
+"Clear codes and verify trims return toward 0%"
+],
+"title": "Test fuel injectors for leakage and replace as needed"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Depressurize the fuel system",
+"Remove the regulator and inspect the diaphragm/valve for sticking",
+"Install the replacement regulator with new seals",
+"Clear codes and confirm rail pressure holds at commanded target"
+],
+"title": "Replace stuck-open fuel pressure regulator"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P2101": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.6,
+"parts_max": 25.0,
+"parts_min": 10.0,
+"steps": [
+"Remove the intake ducting to access the throttle body plate",
+"Spray dedicated throttle body cleaner on the plate and bore with the plate held slightly open",
+"Wipe away loosened carbon with a lint-free cloth, avoiding the throttle position sensor end",
+"Reinstall ducting and perform a throttle relearn if the platform requires one"
+],
+"title": "Clean throttle bore and plate of carbon buildup"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 380.0,
+"parts_min": 120.0,
+"steps": [
+"Disconnect the battery and unplug the throttle body electrical connector",
+"Remove the mounting bolts and lift off the throttle body with its gasket",
+"Install the replacement throttle body with a new gasket and torque bolts evenly",
+"Reconnect the battery and perform the required throttle/idle relearn procedure"
+],
+"title": "Replace electronic throttle body/actuator motor assembly"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 80.0,
+"parts_min": 25.0,
+"steps": [
+"Back-probe the throttle body connector and measure motor drive legs against the wiring diagram",
+"Trace the harness for a chafe point or corrosion between the throttle body and ECM",
+"Repair the damaged section with solder and heat-shrink",
+"Clear the code and confirm smooth throttle response through its full range"
+],
+"title": "Repair throttle motor control circuit wiring"
+},
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.3,
+"parts_max": 20.0,
+"parts_min": 8.0,
+"steps": [
+"Unplug the throttle body connector and inspect for corrosion or bent pins",
+"Clean contacts with electrical contact cleaner",
+"Apply dielectric grease and reseat the connector fully",
+"Clear the code and confirm it stays clear through a drive cycle"
+],
+"title": "Clean and reseat corroded throttle body connector"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P2135": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 20.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the throttle body or accelerator pedal assembly connector",
+"Unplug and inspect for corrosion or bent pins",
+"Clean contacts and reseat firmly",
+"Clear codes and verify smooth voltage sweep"
+],
+"title": "Inspect and clean throttle/pedal position sensor connector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.8,
+"parts_max": 280.0,
+"parts_min": 60.0,
+"steps": [
+"Unplug the connector and remove the mounting fasteners",
+"Install the replacement throttle body or pedal assembly",
+"Reconnect and perform a throttle relearn if required",
+"Clear codes and verify all channels track together"
+],
+"title": "Replace throttle body or pedal position sensor assembly"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.3,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the reference, signal, and ground circuits at the connector",
+"Voltage-drop test each leg back to the ECM",
+"Repair chafed conductors with heat-shrink splices",
+"Confirm all sensor channels agree throughout the pedal/throttle sweep"
+],
+"title": "Repair throttle/pedal position sensor wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P2138": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 20.0,
+"parts_min": 5.0,
+"steps": [
+"Locate the throttle body or accelerator pedal assembly connector",
+"Unplug and inspect for corrosion or bent pins",
+"Clean contacts and reseat firmly",
+"Clear codes and verify smooth voltage sweep"
+],
+"title": "Inspect and clean throttle/pedal position sensor connector"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.8,
+"parts_max": 280.0,
+"parts_min": 60.0,
+"steps": [
+"Unplug the connector and remove the mounting fasteners",
+"Install the replacement throttle body or pedal assembly",
+"Reconnect and perform a throttle relearn if required",
+"Clear codes and verify all channels track together"
+],
+"title": "Replace throttle body or pedal position sensor assembly"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.3,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the reference, signal, and ground circuits at the connector",
+"Voltage-drop test each leg back to the ECM",
+"Repair chafed conductors with heat-shrink splices",
+"Confirm all sensor channels agree throughout the pedal/throttle sweep"
+],
+"title": "Repair throttle/pedal position sensor wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P2181": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 40.0,
+"parts_min": 10.0,
+"steps": [
+"Check coolant level cold and top off to spec",
+"Inspect hoses, radiator, and water pump weep hole for leaks",
+"Repair any obvious external leak source",
+"Clear codes and monitor warm-up time"
+],
+"title": "Check coolant level and inspect for external leaks"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 90.0,
+"parts_min": 20.0,
+"steps": [
+"Drain coolant below the thermostat housing",
+"Remove the housing and replace the thermostat and gasket",
+"Refill coolant and bleed air from the system",
+"Confirm engine reaches operating temperature within expected time"
+],
+"title": "Replace stuck-open thermostat"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 2.0,
+"parts_max": 450.0,
+"parts_min": 120.0,
+"steps": [
+"Drain coolant and remove drive components to access the water pump",
+"Remove the worn pump and inspect the impeller and bearing",
+"Install the replacement pump with a new gasket",
+"Refill, bleed, and verify stable circulation and temperature"
+],
+"title": "Replace failing water pump"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P2187": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.8,
+"parts_max": 40.0,
+"parts_min": 10.0,
+"steps": [
+"Connect a smoke machine to the intake at idle",
+"Watch for smoke escaping at intake gaskets, PCV hoses, or brake booster line",
+"Replace any leaking gasket or hose",
+"Clear codes and verify fuel trims return toward 0%"
+],
+"title": "Smoke-test intake for vacuum/air leaks"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.0,
+"parts_max": 150.0,
+"parts_min": 30.0,
+"steps": [
+"Replace the fuel filter if serviceable",
+"Measure fuel pump pressure and volume against spec under load",
+"Replace a weak pump if it fails the test",
+"Clear codes and confirm rail pressure holds steady"
+],
+"title": "Replace fuel filter and test fuel pump output"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 180.0,
+"parts_min": 40.0,
+"steps": [
+"Inspect the exhaust manifold gasket and studs near the upstream O2 sensor for leaks",
+"Replace the gasket and any corroded studs",
+"Torque to spec in sequence",
+"Clear codes and re-verify trim correction"
+],
+"title": "Inspect and repair exhaust manifold gasket leak"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P2195": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.6,
+"parts_max": 40.0,
+"parts_min": 5.0,
+"steps": [
+"Inspect the exhaust manifold and pipe joints near the sensor bung for leaks",
+"Listen and smoke-test for exhaust leaks upstream of the sensor",
+"Replace gaskets or tighten fasteners as needed",
+"Clear codes and monitor sensor voltage trace"
+],
+"title": "Inspect for exhaust leaks near the O2 sensor"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 180.0,
+"parts_min": 50.0,
+"steps": [
+"Identify the affected bank/sensor position",
+"Remove the sensor with an O2 sensor socket",
+"Apply anti-seize to threads (avoid the tip) and install the new sensor",
+"Clear codes and confirm a normal switching voltage trace"
+],
+"title": "Replace oxygen sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the signal and ground at the connector with the engine running",
+"Voltage-drop test the circuit back to the ECM",
+"Repair chafed or corroded wiring near the exhaust with high-temp splices",
+"Confirm proper switching activity"
+],
+"title": "Repair O2 sensor signal circuit wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P2270": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.6,
+"parts_max": 40.0,
+"parts_min": 5.0,
+"steps": [
+"Inspect the exhaust manifold and pipe joints near the sensor bung for leaks",
+"Listen and smoke-test for exhaust leaks upstream of the sensor",
+"Replace gaskets or tighten fasteners as needed",
+"Clear codes and monitor sensor voltage trace"
+],
+"title": "Inspect for exhaust leaks near the O2 sensor"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 180.0,
+"parts_min": 50.0,
+"steps": [
+"Identify the affected bank/sensor position",
+"Remove the sensor with an O2 sensor socket",
+"Apply anti-seize to threads (avoid the tip) and install the new sensor",
+"Clear codes and confirm a normal switching voltage trace"
+],
+"title": "Replace oxygen sensor"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 60.0,
+"parts_min": 10.0,
+"steps": [
+"Back-probe the signal and ground at the connector with the engine running",
+"Voltage-drop test the circuit back to the ECM",
+"Repair chafed or corroded wiring near the exhaust with high-temp splices",
+"Confirm proper switching activity"
+],
+"title": "Repair O2 sensor signal circuit wiring"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"P3000": [
+{
+"fixes": [
+{
+"difficulty": "Professional Required",
+"labor_hours": 0.5,
+"parts_max": 40.0,
+"parts_min": 5.0,
+"steps": [
+"Verify the HV system is de-energized and locked out per the manufacturer's procedure before any inspection",
+"Read HV battery state of charge on a scan tool",
+"Charge the pack to a normal operating range if low",
+"Clear the code and recheck bus voltage at a normal state of charge"
+],
+"title": "Check HV battery state of charge"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.2,
+"parts_max": 180.0,
+"parts_min": 60.0,
+"steps": [
+"Verify the HV system is de-energized and locked out per the manufacturer's procedure, then confirm zero volts with a rated meter",
+"Inspect the main positive/negative contactors for feedback confirming full seating",
+"Test contactor operation per the manufacturer's procedure",
+"Repair or replace a contactor found not seating fully"
+],
+"title": "Inspect main HV contactors for full seating"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.4,
+"parts_max": 240.0,
+"parts_min": 80.0,
+"steps": [
+"Verify the HV system is de-energized and locked out per the manufacturer's procedure, then confirm zero volts with a rated meter",
+"Inspect the bus voltage-sense wiring and connectors for damage or corrosion",
+"Repair or replace the sense circuit as needed",
+"Restore the HV system per procedure and clear the code",
+"Confirm bus voltage reads correctly across a drive cycle"
+],
+"title": "Test HV bus voltage-sense circuit"
+}
+],
+"make": "Audi",
+"source": "MechanicDB"
+}
+],
+"U0100": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 25.0,
+"parts_min": 8.0,
+"steps": [
+"Identify the fuse feeding the specific powertrain module or sensor node named in the code",
+"Inspect the fuse and the engine-bay ground strap for corrosion",
+"Replace the fuse if blown and retest for communication"
+],
+"title": "Check the module's dedicated fuse and battery/ground connections"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 40.0,
+"parts_min": 12.0,
+"steps": [
+"Locate the connector for the module or sensor identified in the fault description",
+"Inspect for melted plastic, oil contamination, or backed-out terminals",
+"Clean contacts with electrical contact cleaner and apply dielectric grease on reassembly",
+"Clear codes and confirm the module rejoins the network"
+],
+"title": "Inspect and clean the engine-harness connector at the named module"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.3,
+"parts_max": 90.0,
+"parts_min": 20.0,
+"steps": [
+"Trace the sub-bus wire from the named module toward the gateway connection point",
+"Inspect for chafe against exhaust heat shields or engine mount brackets",
+"Cut out and splice in heat-resistant wire rated for engine-bay temperatures",
+"Protect the repair with high-temperature adhesive-lined heat-shrink",
+"Verify the module reports live data on a scan tool"
+],
+"title": "Repair the LIN/CAN sub-bus wiring feeding the module"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.8,
+"parts_max": 650.0,
+"parts_min": 120.0,
+"steps": [
+"Confirm the module or smart sensor's internal transceiver has failed through isolation testing",
+"Remove and replace the component",
+"Program or configure the replacement using a factory-level scan tool where required",
+"Confirm stable communication and correct live data over a full drive cycle"
+],
+"title": "Replace and reprogram the powertrain module or sensor node"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"U0101": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.4,
+"parts_max": 25.0,
+"parts_min": 8.0,
+"steps": [
+"Identify the fuse feeding the specific powertrain module or sensor node named in the code",
+"Inspect the fuse and the engine-bay ground strap for corrosion",
+"Replace the fuse if blown and retest for communication"
+],
+"title": "Check the module's dedicated fuse and battery/ground connections"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.6,
+"parts_max": 40.0,
+"parts_min": 12.0,
+"steps": [
+"Locate the connector for the module or sensor identified in the fault description",
+"Inspect for melted plastic, oil contamination, or backed-out terminals",
+"Clean contacts with electrical contact cleaner and apply dielectric grease on reassembly",
+"Clear codes and confirm the module rejoins the network"
+],
+"title": "Inspect and clean the engine-harness connector at the named module"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.3,
+"parts_max": 90.0,
+"parts_min": 20.0,
+"steps": [
+"Trace the sub-bus wire from the named module toward the gateway connection point",
+"Inspect for chafe against exhaust heat shields or engine mount brackets",
+"Cut out and splice in heat-resistant wire rated for engine-bay temperatures",
+"Protect the repair with high-temperature adhesive-lined heat-shrink",
+"Verify the module reports live data on a scan tool"
+],
+"title": "Repair the LIN/CAN sub-bus wiring feeding the module"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 1.8,
+"parts_max": 650.0,
+"parts_min": 120.0,
+"steps": [
+"Confirm the module or smart sensor's internal transceiver has failed through isolation testing",
+"Remove and replace the component",
+"Program or configure the replacement using a factory-level scan tool where required",
+"Confirm stable communication and correct live data over a full drive cycle"
+],
+"title": "Replace and reprogram the powertrain module or sensor node"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+],
+"U0121": [
+{
+"fixes": [
+{
+"difficulty": "Easy DIY",
+"labor_hours": 0.5,
+"parts_max": 30.0,
+"parts_min": 10.0,
+"steps": [
+"Locate the connector for the named chassis module near the wheel well, subframe, or under-floor tunnel",
+"Inspect the connector seal and pins for corrosion or water staining",
+"Clean, dry, and reseat the connector, then clear codes"
+],
+"title": "Inspect the low-mount connector for water intrusion and corrosion"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 0.8,
+"parts_max": 50.0,
+"parts_min": 15.0,
+"steps": [
+"Backprobe the power and ground pins at the module connector",
+"Perform a voltage-drop test under load with the ignition on",
+"Compare readings to the 0.1V maximum drop specification",
+"Repair any high-resistance ground point found near the subframe"
+],
+"title": "Voltage-drop test the chassis module's power and ground circuits"
+},
+{
+"difficulty": "Moderate DIY",
+"labor_hours": 1.5,
+"parts_max": 100.0,
+"parts_min": 20.0,
+"steps": [
+"Inspect the harness run beneath the vehicle for abrasion from road debris or a dragging heat shield",
+"Locate the specific cut, pinched, or corroded wire section",
+"Splice in new wire rated for under-body exposure and seal with adhesive-lined heat-shrink",
+"Re-secure the harness with new clips away from moving suspension components",
+"Verify the module communicates normally through a full steering and suspension travel cycle"
+],
+"title": "Repair under-vehicle harness damage from road debris"
+},
+{
+"difficulty": "Professional Required",
+"labor_hours": 2.0,
+"parts_max": 650.0,
+"parts_min": 220.0,
+"steps": [
+"Confirm the module's internal circuitry has failed rather than the harness",
+"Remove and replace the module",
+"Program the replacement and perform any required steering-angle or ride-height relearn",
+"Road test to confirm stable communication and correct sensor data"
+],
+"title": "Replace and calibrate the chassis control module"
+}
+],
+"make": null,
+"source": "MechanicDB"
+}
+]
+}

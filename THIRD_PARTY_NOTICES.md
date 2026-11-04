@@ -10,6 +10,8 @@ The Fahis license does not apply to these components. Each remains under its own
 | Test recordings in `test_obd_tool.py` | Offline tests | [OBDb](https://github.com/OBDb) editors and contributors | CC BY-SA 4.0 |
 | Standard value definitions (`data/standard-pids.json`) | Decoding extra standard values | [OBDb](https://github.com/OBDb) editors and contributors | CC BY-SA 4.0, full text in [profiles/LICENSE](profiles/LICENSE) |
 | Fault code titles and details (`data/dtc_generic.json`, `data/dtc_details.json.gz`) | Describing fault codes, causes and symptoms | [OBDex](https://github.com/foerbsnavi/OBDex) contributors | CC0 1.0, full text in [data/LICENSE-OBDex](data/LICENSE-OBDex) |
+| Manufacturer fault code names (`data/dtc_oem.json`) | Naming codes for the connected car's make | [Wal33D/dtc-database](https://github.com/Wal33D/dtc-database) contributors | MIT, full text in [data/LICENSE-dtc-database](data/LICENSE-dtc-database) |
+| Repair plans (`data/repair_plans.json`, `data/repair_plans_ar.json`) | Repair steps with difficulty and estimates | [MechanicDB](https://github.com/MechanicDB/MechanicDB-public) free sample, with an Arabic translation and a few plans added for Fahis | ODbL 1.0, see [data/LICENSE-MechanicDB](data/LICENSE-MechanicDB) |
 
 ## Downloaded when you use Fahis
 

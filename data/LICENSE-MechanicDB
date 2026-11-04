@@ -1,0 +1,19 @@
+data/repair_plans.json and data/repair_plans_ar.json contain information from the
+MechanicDB free developer sample, which is made available under the Open Database
+License (ODbL) v1.0:
+
+  https://opendatacommons.org/licenses/odbl/1-0/
+
+Source: MechanicDB, https://github.com/MechanicDB/MechanicDB-public
+
+Changes made for Fahis: the repair procedures were reshaped to one file per use,
+numbering was removed from the steps, the Arabic text was translated, and entries
+marked with the source "Fahis" were written for Fahis and added.
+
+These two files are an adapted database. They are offered under ODbL v1.0, not under
+the Fahis license, and you may reuse them under its terms.
+
+Parts costs (in US dollars) and labor hours are editorial estimates, not quotes. The
+order of the procedures is the order to consider them in, not how likely each cause is.
+Repair steps are educational reference material, not a substitute for the vehicle
+manufacturer's service manual.

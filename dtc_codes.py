@@ -6,6 +6,78 @@ from pathlib import Path
 
 GENERIC_CODES_FILE = Path(__file__).parent / "data" / "dtc_generic.json"
 DETAILS_FILE = Path(__file__).parent / "data" / "dtc_details.json.gz"
+OEM_CODES_FILE = Path(__file__).parent / "data" / "dtc_oem.json"
+PLANS_FILE = Path(__file__).parent / "data" / "repair_plans.json"
+PLANS_ARABIC_FILE = Path(__file__).parent / "data" / "repair_plans_ar.json"
+
+# The first characters of a VIN name the maker. Only makes with a code list are here, longest prefix first.
+VIN_MAKERS = {
+    "KNA": "Kia", "KNC": "Kia", "KND": "Kia", "KNE": "Kia", "U5Y": "Kia", "U6Y": "Kia", "3KP": "Kia",
+    "JTH": "Lexus", "JTJ": "Lexus", "JT": "Toyota", "4T": "Toyota", "5T": "Toyota", "2T": "Toyota",
+    "JH4": "Acura", "19U": "Acura", "JHM": "Honda", "1HG": "Honda", "2HG": "Honda", "5FN": "Honda", "5J6": "Honda",
+    "JNK": "Infiniti", "JN1": "Nissan", "JN8": "Nissan", "1N4": "Nissan", "1N6": "Nissan", "3N1": "Nissan", "5N1": "Nissan",
+    "1FA": "Ford", "1FM": "Ford", "1FT": "Ford", "2FM": "Ford", "3FA": "Ford", "WF0": "Ford",
+    "1G1": "Chevrolet", "1GC": "Chevrolet", "1GN": "Chevrolet", "2G1": "Chevrolet", "3G1": "Chevrolet",
+    "1GT": "GMC", "1GK": "GMC", "2GT": "GMC", "3GT": "GMC",
+    "JM1": "Mazda", "JM3": "Mazda", "4F2": "Mazda", "JA3": "Mitsubishi", "JA4": "Mitsubishi", "ML3": "Mitsubishi",
+    "JF1": "Subaru", "JF2": "Subaru", "4S3": "Subaru", "4S4": "Subaru", "JS2": "Suzuki", "JS3": "Suzuki",
+    "WVW": "Volkswagen", "WVG": "Volkswagen", "1VW": "Volkswagen", "3VW": "Volkswagen", "WAU": "Audi", "WA1": "Audi",
+    "WBA": "BMW", "WBS": "BMW", "WBX": "BMW", "5UX": "BMW", "5YM": "BMW",
+    "WDB": "Mercedes", "WDD": "Mercedes", "WDC": "Mercedes", "4JG": "Mercedes", "W1K": "Mercedes", "SAJ": "Jaguar",
+    "1J4": "Jeep", "1J8": "Jeep", "1C4": "Jeep", "1B3": "Dodge", "1D3": "Dodge", "2B3": "Dodge", "3D3": "Dodge",
+    "1C3": "Chrysler", "2C3": "Chrysler",
+}
+_car_make = None
+
+
+def make_from_vin(vin):
+    """Return the maker named by a VIN, or None if it isn't one Fahis has a code list for."""
+    vin = (vin or "").upper()
+    return VIN_MAKERS.get(vin[:3]) or VIN_MAKERS.get(vin[:2])
+
+
+def set_car_make(make):
+    """Remember which maker's codes apply to the connected car."""
+    global _car_make
+    _car_make = make
+
+
+def car_make():
+    return _car_make
+
+
+@lru_cache(maxsize=1)
+def oem_codes():
+    return json.loads(OEM_CODES_FILE.read_text(encoding="utf-8"))
+
+
+def oem_meanings(code):
+    """Return {make: meaning}. The same code can mean different things, so only the connected car's maker counts."""
+    meanings = {make: codes[code] for make, codes in oem_codes().items() if code in codes}
+    return {_car_make: meanings[_car_make]} if _car_make in meanings else meanings
+
+
+def oem_meaning(code):
+    """Return the meaning for the connected car's maker, or None."""
+    return oem_codes().get(_car_make, {}).get(code)
+
+
+@lru_cache(maxsize=1)
+def _plans():
+    return json.loads(PLANS_FILE.read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=1)
+def _plans_arabic():
+    return json.loads(PLANS_ARABIC_FILE.read_text(encoding="utf-8"))
+
+
+def repair_plans(code, lang="en"):
+    """Return the repair plans for a code. A maker's own plan is left out when another maker's car is connected."""
+    words = _plans_arabic() if lang == "ar" else {}
+    return [{**plan, "fixes": [{**fix, "title": words.get(fix["title"], fix["title"]),
+                                "steps": [words.get(step, step) for step in fix["steps"]]} for fix in plan["fixes"]]}
+            for plan in _plans().get(code, []) if not (plan["make"] and _car_make and plan["make"] != _car_make)]
 
 
 def dtc_name(a, b):

@@ -103,7 +103,10 @@
   #lookup-form input { flex: 0 1 180px; text-transform: uppercase; }
   #lookup-result h3 { margin: 0 0 6px; font-size: 18px; }
   #lookup-result h4 { margin: 12px 0 4px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-  #lookup-result ul { margin: 0; padding-inline-start: 20px; }
+  #lookup-result ul, #lookup-result ol { margin: 0; padding-inline-start: 20px; }
+  #lookup-result details.repair { border-top: 1px solid var(--line); padding: 8px 0; }
+  #lookup-result details.repair summary { cursor: pointer; font-weight: 600; }
+  #lookup-result details.repair .dim { margin: 4px 0; }
   .tag { display: inline-block; font-size: 13px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; margin: 4px 0 0; margin-inline-end: 6px; }
   .report-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
   #action-error { color: var(--bad); font-weight: 600; margin: 8px 0 0; }
@@ -618,6 +621,30 @@ function openLookup(code) {
   runLookup(code);
 }
 
+function planNodes(plans) {
+  if (!plans.length) return [];
+  const nodes = [el("h4", tr("Repair plan")),
+                 el("p", tr("Go through these in order. The order is what to check first, not how likely each cause is."), "dim")];
+  for (const plan of plans) {
+    if (plan.make) nodes.push(el("p", tr("Plan for {make}", {make: plan.make}), "good"));
+    plan.fixes.forEach((fix, index) => {
+      const details = el("details", undefined, "repair");
+      details.dir = "auto";
+      const summary = el("summary", `${index + 1}. ${fix.title}`);
+      const facts = el("div", [fix.difficulty, fix.estimate].filter(Boolean).join(" | "), "dim");
+      const steps = el("ol");
+      for (const step of fix.steps) steps.append(el("li", step));
+      details.append(summary, facts, steps);
+      nodes.push(details);
+    });
+  }
+  nodes.push(el("p", tr("For reference only, this doesn't replace the manufacturer's service manual. Hybrid or electric high-voltage work and airbag work need the manufacturer's safety procedure, so leave them to a qualified technician if you can't follow it."), "needs"));
+  const sources = new Set(plans.map(plan => plan.source));
+  if (sources.has("MechanicDB")) nodes.push(el("p", tr("Contains information from MechanicDB, made available under the Open Database License (ODbL) v1.0."), "needs"));
+  if (sources.has("Fahis")) nodes.push(el("p", tr("Written for Fahis, with no cost estimate."), "needs"));
+  return nodes;
+}
+
 async function runLookup(code) {
   const error = document.getElementById("lookup-error");
   const result = document.getElementById("lookup-result");
@@ -626,8 +653,17 @@ async function runLookup(code) {
     const data = await api("GET", "/api/dtc", {code, lang: language});
     const nodes = [el("h3", `${data.code}: ${data.title}`)];
     nodes[0].dir = "auto";
+    if (data.oem.length) {
+      nodes.push(el("h4", tr("Manufacturer meaning")));
+      const list = el("ul");
+      list.dir = "ltr";
+      for (const item of data.oem) list.append(el("li", `${item.make}: ${item.meaning}`));
+      nodes.push(list, el("p", tr("The same code can mean different things on other makes, and can vary by model and year."), "dim"));
+    }
     if (!data.found) {
-      nodes.push(el("p", tr("No extra details for this code. Manufacturer-specific codes depend on the carmaker."), "dim"));
+      if (!data.oem.length && !data.plans.length) {
+        nodes.push(el("p", tr("No extra details for this code. Manufacturer-specific codes depend on the carmaker."), "dim"));
+      }
     } else {
       const description = el("p", data.description);
       description.dir = "ltr";
@@ -657,6 +693,7 @@ async function runLookup(code) {
       }
       if (data.reviewed) nodes.push(el("p", tr("Checked by OBDex reviewers on {date}", {date: data.reviewed}), "needs"));
     }
+    nodes.push(...planNodes(data.plans));
     fill(result, nodes);
   } catch (problem) {
     fill(result, []);

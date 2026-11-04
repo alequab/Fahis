@@ -72,7 +72,7 @@
 <td valign="top"><b>مسح محميّ</b><br>لا يعمل مسح الرموز إلا والمحرك متوقف، وبعد أن تكتب <code>CLEAR</code>.</td>
 </tr>
 <tr>
-<td valign="top"><b>البحث عن رمز</b><br>الأسباب الشائعة والأعراض لأي رمز عام، دون الحاجة إلى سيارة. التفاصيل بالإنجليزية.</td>
+<td valign="top"><b>البحث عن رمز</b><br>الأسباب الشائعة والأعراض لأي رمز عام، وخطط إصلاح بالعربية والإنجليزية لنحو 90 رمزًا، دون الحاجة إلى سيارة. الأسباب والأعراض بالإنجليزية.</td>
 <td valign="top"><b>رسوم بيانية</b><br>تابع حتى أربع قيم مباشرة في رسوم بيانية داخل التطبيق.</td>
 </tr>
 <tr>
@@ -178,7 +178,8 @@ flowchart LR
 - قيم ملفات السيارات مصدرها بيانات المجتمع، وقد لا تطابق سنة سيارتك بالضبط، وقد لا ينطبق بعضها على سيارتك أصلًا.
 - يتخطى `profile` الأوامر التي لا يستطيع إرسالها بأمان أو لا يدعمها: وهي التي تفتح جلسة تشخيص خاصة، والتي تستخدم عناوين 29 بت أو العناوين الموسّعة.
 - يدعم CAN بعناوين 11 بت فقط، ولا يدعم المحوّلات التي تعمل بتقنية Bluetooth التقليدية أو USB أو Wi-Fi.
-- تغطي أوصاف رموز الأعطال نحو 9,500 رمز عام. أما الرموز الخاصة بالشركات المصنّعة فيظهر تصنيفها فقط.
+- تغطي أوصاف رموز الأعطال نحو 9,500 رمز عام. وتغطي أسماء الرموز الخاصة بالشركات نحو 6,600 رمز لـ 32 شركة بالإنجليزية، وتتفاوت التغطية كثيرًا، فلكيا 76 رمزًا فقط ولا توجد قائمة لهيونداي. ويظهر التصنيف فقط لما عدا ذلك.
+- تعرض خطط الإصلاح خطوات عامة وتقديرات أمريكية للتكلفة، وهي للاطلاع ولا تغني عن دليل الخدمة.
 - في العربية تُرجم نحو 80 رمز عطل شائعًا، وتبقى الرموز الأخرى وأسماء قيم ملفات السيارات بالإنجليزية.
 - قد تظهر العربية بشكل سيئ في طرفية Windows. التطبيق وملفات التقارير أفضل لقراءتها.
 - قد تكون قراءة الجهد من المحوّل غير دقيقة: ففي الإعداد الذي جرى اختباره كانت أعلى بنحو 1 فولت من قراءة وحدة السيارة.
@@ -211,7 +212,7 @@ flowchart LR
 | `demo.py` | محوّل محاكاة للوضع التجريبي |
 | `dtc_codes.py` | البحث عن أوصاف رموز الأعطال |
 | `profiles\` | قائمة السيارات وملف Kia Picanto، من OBDb |
-| `data\` | أوصاف رموز الأعطال العامة، من OBDex |
+| `data\` | أوصاف رموز الأعطال من OBDex، وأسماء رموز الشركات من dtc-database، وخطط الإصلاح من MechanicDB |
 | `test_obd_tool.py` | الاختبارات |
 
 </details>
@@ -263,7 +264,7 @@ Many ELM327 adapters are Bluetooth LE. Windows gives them no COM port, so most O
 <td valign="top"><b>Protected clearing</b><br>Clearing codes only works with the engine off, and after you type <code>CLEAR</code>.</td>
 </tr>
 <tr>
-<td valign="top"><b>Code lookup</b><br>Common causes and symptoms for any generic code, with no car needed. Details are in English.</td>
+<td valign="top"><b>Code lookup</b><br>Common causes and symptoms for any generic code, and repair plans in Arabic and English for about 90 codes, with no car needed. Causes and symptoms are in English.</td>
 <td valign="top"><b>Live graphs</b><br>Follow up to four live values on graphs inside the app.</td>
 </tr>
 <tr>
@@ -361,7 +362,8 @@ Close the app before running a command in a terminal, because the adapter serves
 - Profile values come from community data and may not match your car's exact year, and some may not apply to your car at all.
 - `profile` skips commands it can't send safely or doesn't support: those that open a special diagnostic session, and those using 29-bit or extended addressing.
 - Only 11-bit CAN is supported. Classic Bluetooth, USB and Wi-Fi adapters aren't.
-- Fault code descriptions cover about 9,500 generic codes. Manufacturer-specific codes only show a category.
+- Fault code descriptions cover about 9,500 generic codes. Manufacturer code names cover about 6,600 codes for 32 makes, in English. Coverage varies widely: Kia has only 76 codes, and there's no Hyundai list. Anything else only shows a category.
+- Repair plans give general steps and US cost estimates. They're for reference and don't replace a service manual.
 - In Arabic, about 80 common fault codes are translated. Others, and profile value names, stay in English.
 - Arabic may display poorly in the Windows terminal. The app and saved report files are better for reading it.
 - The adapter's own voltage reading can be off: on the tested setup it read about 1 V above the car's module.
@@ -390,7 +392,7 @@ Run the offline tests, which don't need a car or adapter:
 | `demo.py` | Simulated adapter for demo mode |
 | `dtc_codes.py` | Fault code lookups |
 | `profiles\` | Car catalog and the Kia Picanto profile, from OBDb |
-| `data\` | Generic fault code descriptions, from OBDex |
+| `data\` | Fault code descriptions from OBDex, manufacturer code names from dtc-database and repair plans from MechanicDB |
 | `test_obd_tool.py` | Offline tests |
 
 </details>
