@@ -322,6 +322,8 @@ ARABIC = {
     "May limit engine power": "قد يحدّ من قدرة المحرك",
     "Checked by OBDex reviewers on {date}": "راجعه مراجعو OBDex بتاريخ {date}",
     "No extra details for this code. Manufacturer-specific codes depend on the carmaker.": "لا توجد تفاصيل إضافية لهذا الرمز. الرموز الخاصة بالشركات تختلف من شركة إلى أخرى.",
+    "Self-tests this drive": "الاختبارات الذاتية في هذه الرحلة",
+    "SELF-TESTS THIS DRIVE": "الاختبارات الذاتية في هذه الرحلة",
     "More standard values": "قيم قياسية إضافية",
     "From community definitions, read once when connecting. Treat any value that looks wrong as unreliable.": "من تعريفات المجتمع، وتُقرأ مرة واحدة عند الاتصال. اعتبر أي قيمة تبدو خاطئة غير موثوقة.",
     "MORE STANDARD VALUES (from community definitions, read once)": "قيم قياسية إضافية (من تعريفات المجتمع، تُقرأ مرة واحدة)",

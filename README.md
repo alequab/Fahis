@@ -135,7 +135,7 @@ flowchart LR
 
 - اختُبر مع محوّل BLE واحد يعرّف نفسه بأنه `ELM327 v2.1` على سيارتين من Kia، إحداهما بنزين والأخرى ديزل. ومعظم السيارات في القائمة لم تُختبر.
 - اختُبرت الأوامر التي تُشغَّل من صفحة الأوامر على سيارة حقيقية واحدة، وهي سيارة البنزين. أما `clear` فلم يُشغَّل على أي سيارة حتى الآن.
-- لم تُختبر الرسوم البيانية والتسجيل من التطبيق والتنبيهات والقراءات السابقة والقيم الإضافية حتى الآن إلا في الوضع التجريبي. وحدود التنبيهات إرشادات عامة، وليست حدودًا لسيارة بعينها.
+- اختُبرت الرسوم البيانية والتسجيل من التطبيق والقراءات السابقة على سيارة البنزين. أما ظهور عطل أثناء الجلسة والتنبيه المؤجل لمشكلات الشحن فلم يُختبرا حتى الآن إلا دون سيارة. وحدود التنبيهات إرشادات عامة، وليست حدودًا لسيارة بعينها.
 - قد لا تستجيب إحدى الوحدات أحيانًا رغم تكرار الطلب، وعندها يوضّح التطبيق ذلك، فأعد المحاولة قبل أن تعتبرها خالية من الأعطال.
 - في السيارتين المختبرتين لم يستجب إلا وحدتا المحرك وناقل الحركة، فلم تُقرأ أعطال ABS والوسائد الهوائية والهيكل. وتختلف النتائج من سيارة إلى أخرى.
 
@@ -318,7 +318,7 @@ flowchart LR
 
 - It's been tested with one BLE adapter reporting `ELM327 v2.1` on two Kia cars, one gasoline and one diesel. Most cars in the catalog are untested.
 - Commands run from the Commands page have been tested on one real car, the gasoline one. `clear` hasn't been run on any car yet.
-- Live graphs, recording from the app, alerts, past readings and the extra decoded values have only been tested in demo mode so far. Alert limits are general guides, not limits for a specific car.
+- Live graphs, recording from the app and past readings have been tested on the gasoline car. A fault appearing during a session and the delayed charging alert have only been tested offline so far. Alert limits are general guides, not limits for a specific car.
 - A module sometimes doesn't answer even after repeated requests. The app says when this happens, so try again before assuming it has no faults.
 - On both tested cars, only the engine and transmission modules answered, so ABS, airbag and body faults weren't readable. Results depend on the car.
 

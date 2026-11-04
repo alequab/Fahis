@@ -7,6 +7,7 @@ import argparse
 import asyncio
 import contextlib
 import csv
+import json
 import os
 import re
 import sys
@@ -131,6 +132,14 @@ FAST_PIDS = (0x0C, 0x0D, 0x11, 0x04)
 SLOW_PER_STEP = 2
 # PIDs that list other PIDs rather than holding a measurement.
 INDEX_PIDS = set(range(0x00, 0x100, 0x20))
+# Self-tests for this drive. The community definition reads these flags the opposite way round.
+THIS_DRIVE_PID = 0x41
+# How often a long session rereads the check engine light and fault codes.
+REFRESH_SECONDS = 60
+# Alternators on many modern cars dip for short periods, so only a lasting problem gets an alert.
+CHARGING_ALERT_SECONDS = 60
+CHARGING_LOW_VOLTS = 12.8
+CHARGING_HIGH_VOLTS = 15.5
 
 COMMON_MONITORS = ["Misfire", "Fuel system", "Components"]
 SPARK_MONITORS = ["Catalyst", "Heated catalyst", "Evaporative system", "Secondary air",
@@ -474,12 +483,20 @@ async def read_identity(elm):
     """Read what identifies this car: VIN, calibration IDs and module names."""
     vehicle = {}
     for pid, label in ((0x02, "VIN"), (0x04, "Calibration ID"), (0x06, "Calibration check"), (0x0A, "Module name")):
-        replies = await elm.request(0x09, pid)
+        replies = await elm.request_all(0x09, pid)  # a module missed here would be forgotten for the session
         if pid == 0x06:
             vehicle[label] = {h: p[3:].hex().upper() for h, p in replies.items()}
         else:
             vehicle[label] = {h: decode_text(p) for h, p in replies.items()}
     return vehicle
+
+
+async def read_this_drive(elm):
+    """Read which self-tests have finished this drive. In this data a set bit means not finished."""
+    for payload in (await elm.request(0x01, THIS_DRIVE_PID)).values():
+        if len(payload) >= 6:
+            return decode_monitors(payload)["tests"]
+    return None
 
 
 async def read_snapshot(elm):
@@ -491,9 +508,12 @@ async def read_snapshot(elm):
     supported = await elm.supported_pids()
 
     values, raw, more = {}, {}, []
+    this_drive = None
     for pid in sorted(supported - INDEX_PIDS - {0x01}):
         if pid in LIVE_PIDS:
             values[pid] = await elm.read_pid(pid)
+        elif pid == THIS_DRIVE_PID:
+            this_drive = await read_this_drive(elm)
         else:
             replies = await elm.request(0x01, pid)
             payload = next(iter(replies.values()), None)
@@ -503,6 +523,7 @@ async def read_snapshot(elm):
             else:
                 raw[pid] = payload[2:].hex(" ").upper() if payload else None
     return {
+        "this_drive": this_drive,
         "more": more,
         "adapter": elm.version,
         "protocol": elm.protocol,
@@ -547,6 +568,9 @@ def format_report(snapshot):
     for pid, value in snapshot["values"].items():
         name, unit, _ = LIVE_PIDS[pid]
         lines.append(f"  {pid:02X}  {t(name):24} {shown_value(value):>20} {t(unit)}")
+    if snapshot["this_drive"]:
+        lines += ["", t("SELF-TESTS THIS DRIVE")]
+        lines += [f"  {t(name):22} {t('finished') if done else t('NOT finished')}" for name, done in snapshot["this_drive"]]
     if snapshot["more"]:
         lines += ["", t("MORE STANDARD VALUES (from community definitions, read once)")]
         lines += [f"  {item['name']:60} {item['text']:>16}" for item in snapshot["more"]]
@@ -698,6 +722,7 @@ def dashboard_state(snapshot, reader, demo=False, lang=None, cars=()):
                     "value": value if isinstance(value, (int, float)) else None,
                     "text": "-" if value is None else t(format_value(value), lang)}
                    for pid, value in reader.values.items()],
+        "this_drive": [[t(name, lang), done] for name, done in snapshot["this_drive"] or []],
         "more": snapshot["more"],
         "raw": [{"pid": f"{pid:02X}", "text": text or t("no reply", lang)} for pid, text in snapshot["raw"].items()],
     }
@@ -707,7 +732,13 @@ def number(value):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
-def car_alerts(snapshot, values, lang=None):
+def charging_out_of_range(values):
+    """True if the engine is running and the voltage suggests a charging problem."""
+    volts, rpm = number(values.get(0x42)), number(values.get(0x0C))
+    return volts is not None and rpm is not None and rpm > 0 and not CHARGING_LOW_VOLTS <= volts <= CHARGING_HIGH_VOLTS
+
+
+def car_alerts(snapshot, values, lang=None, charging_lasting=True):
     """Warnings worth interrupting for. These are guides, not a diagnosis."""
     alerts = []
     if any(status["mil"] for status in snapshot["monitors"].values()):
@@ -716,10 +747,11 @@ def car_alerts(snapshot, values, lang=None):
     if coolant is not None and coolant >= 110:
         alerts.append(t("Coolant is at {value} C, which may mean overheating. If the car's temperature gauge agrees, stop safely and let the engine cool.", lang, value=round(coolant)))
     if volts is not None and rpm is not None:
-        if rpm > 0 and volts < 13.2:
-            alerts.append(t("Voltage is {value} V with the engine running. The alternator may not be charging.", lang, value=f"{volts:.1f}"))
-        elif rpm > 0 and volts > 15.5:
-            alerts.append(t("Voltage is {value} V with the engine running. The charging system may be overcharging.", lang, value=f"{volts:.1f}"))
+        if charging_out_of_range(values) and charging_lasting:
+            if volts < CHARGING_LOW_VOLTS:
+                alerts.append(t("Voltage is {value} V with the engine running. The alternator may not be charging.", lang, value=f"{volts:.1f}"))
+            else:
+                alerts.append(t("Voltage is {value} V with the engine running. The charging system may be overcharging.", lang, value=f"{volts:.1f}"))
         elif rpm == 0 and volts < 11.8:
             alerts.append(t("Voltage is {value} V with the engine off. The battery is low, so start the engine or turn off the ignition soon.", lang, value=f"{volts:.1f}"))
     return alerts
@@ -776,6 +808,32 @@ class DashboardApp:
         self.connections = 0
         self.recording = None
         self.last_summary = None
+        self.charging_since = None
+
+    def track_charging(self):
+        if not charging_out_of_range(self.reader.values):
+            self.charging_since = None
+        elif self.charging_since is None:
+            self.charging_since = time.monotonic()
+
+    async def refresh_status(self, elm):
+        """Reread the light and fault codes, so a fault during a long session gets noticed.
+
+        A module missing from one reread keeps its last known answer rather than looking clear.
+        """
+        snapshot = self.snapshot
+        before = json.dumps([snapshot["monitors"], snapshot["codes"]], sort_keys=True, default=str)
+        for header, payload in (await elm.request_all(0x01, 0x01)).items():
+            snapshot["monitors"][header] = decode_monitors(payload)
+        codes = await read_codes(elm)
+        for label, modules in codes.items():
+            snapshot["codes"].setdefault(label, {}).update(modules)
+        if 0x41 in snapshot["supported"]:
+            snapshot["this_drive"] = await read_this_drive(elm) or snapshot["this_drive"]
+        if json.dumps([snapshot["monitors"], snapshot["codes"]], sort_keys=True, default=str) != before:
+            if any(snapshot["codes"]["Stored"].values()) and not snapshot["freeze"]:
+                snapshot["freeze"] = await read_freeze_frame(elm)
+            remember_snapshot(elm, snapshot)
 
     def device_status(self, lang=None):
         """Describe the adapter itself as rows of label, text and tone for the page."""
@@ -954,7 +1012,8 @@ class DashboardApp:
                     "device": self.device_status(lang)}
         state = dashboard_state(self.snapshot, self.reader, self.args.demo, lang, self.cars)
         state["device"] = self.device_status(lang)
-        state["alerts"] = car_alerts(self.snapshot, self.reader.values, lang)
+        lasting = self.charging_since is not None and time.monotonic() - self.charging_since >= CHARGING_ALERT_SECONDS
+        state["alerts"] = car_alerts(self.snapshot, self.reader.values, lang, lasting)
         state["recording"] = self.recording_status(lang)
         return state
 
@@ -1039,11 +1098,16 @@ class DashboardApp:
         self.snapshot = snapshot
         self.elm = elm
         count = 0
+        last_refresh = time.monotonic()
         try:
             while self.args.samples is None or count < self.args.samples:
                 await self.run_waiting_jobs(elm)
                 await self.reader.step()
+                self.track_charging()
                 self.record_row()
+                if time.monotonic() - last_refresh >= REFRESH_SECONDS:
+                    await self.refresh_status(elm)
+                    last_refresh = time.monotonic()
                 count += 1
                 await asyncio.sleep(self.args.interval)
         finally:
@@ -1086,7 +1150,7 @@ def run_backend(args):
 def battery_advice(volts, running):
     """Explain a battery voltage. Engine-off bands assume a rested 12 V lead-acid battery."""
     if running:
-        if volts < 13.2:
+        if volts < CHARGING_LOW_VOLTS:
             return t("Low for a running engine: the alternator may not be charging.")
         if volts > 15.0:
             return t("High for a running engine: the charging system may be overcharging.")
@@ -1281,6 +1345,9 @@ async def connect_and_run(args, handler):
             await elm.setup()
             elm.vehicle = await read_identity(elm)
             try:
+                # Keep modules seen on earlier visits, so one that's silent today still gets reported.
+                saved = garage.load_car(garage.car_key(elm.vehicle)).get("vehicle", {}).get("Module name", {})
+                elm.vehicle["Module name"] = {**saved, **elm.vehicle.get("Module name", {})}
                 garage.remember_connection(elm.vehicle, elm.version, elm.protocol)
             except OSError as error:
                 print(t("Could not save this car's info: {error}", error=error))

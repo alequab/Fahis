@@ -207,7 +207,13 @@
           <section><h2 data-i18n="Fault codes">Fault codes</h2><div id="codes"></div>
             <p><button id="scan-button" type="button" data-i18n="Scan for other modules">Scan for other modules</button></p>
           </section>
-          <section><h2 data-i18n="Emissions self-tests">Emissions self-tests</h2><div id="monitors"></div></section>
+          <section>
+            <h2 data-i18n="Emissions self-tests">Emissions self-tests</h2><div id="monitors"></div>
+            <div id="this-drive-section" hidden>
+              <br>
+              <h2 data-i18n="Self-tests this drive">Self-tests this drive</h2><div id="this-drive"></div>
+            </div>
+          </section>
         </div>
         <section id="freeze-section" hidden><h2 id="freeze-title" data-i18n="Freeze frame">Freeze frame</h2><div class="values" id="freeze"></div></section>
       </div>
@@ -676,6 +682,9 @@ function render(state) {
   fill(document.getElementById("values"), state.values.map(v => row(v.name, `${v.text} ${v.unit}`.trim())));
   renderGraphs(state.values);
   renderRecording(state.recording);
+  document.getElementById("this-drive-section").hidden = !state.this_drive.length;
+  fill(document.getElementById("this-drive"), state.this_drive.map(([name, done]) =>
+    row(name, tr(done ? "Finished" : "Not finished"), done ? "good" : "bad")));
   document.getElementById("more-section").hidden = !state.more.length;
   fill(document.getElementById("more"), state.more.map(item => row(item.name, item.text)));
   document.getElementById("raw-section").hidden = !state.raw.length;

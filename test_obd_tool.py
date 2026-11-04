@@ -939,6 +939,66 @@ class FaultDetailTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("P0420", data["error"])
 
 
+class LongSessionTests(unittest.IsolatedAsyncioTestCase):
+    """Problems found in a real logged session."""
+
+    async def asyncSetUp(self):
+        self.app = obd_tool.DashboardApp(SimpleNamespace(demo=True, samples=1, interval=0))
+        self.transport = FakeTransport({"0101": ["7E8 06 41 01 00 07 E5 00", "7E9 06 41 01 00 04 00 00"],
+                                        "03": ["7E8 02 43 00", "7E9 02 43 00"], "07": ["7E8 02 47 00"], "0A": ["7E8 02 4A 00"],
+                                        "ATZ": ["ELM327"]})
+        self.elm = ELM(self.transport)
+        self.elm.demo = True
+        self.app.snapshot = {"monitors": {"7E8": {"mil": False, "count": 0, "tests": []}}, "supported": set(), "this_drive": None,
+                             "codes": {"Stored": {"7E8": [], "7E9": []}, "Pending": {}, "Permanent": {}}, "freeze": None,
+                             "voltage": "14V", "vehicle": {}, "values": {}, "raw": {}, "more": []}
+
+    async def test_new_fault_is_noticed_during_a_session(self):
+        self.transport.replies["0101"] = ["7E8 06 41 01 81 07 E5 00"]
+        self.transport.replies["03"] = ["7E8 04 43 01 01 71", "7E9 02 43 00"]
+        self.transport.replies["020200"] = ["7E8 05 42 02 00 01 71"]
+        await self.app.refresh_status(self.elm)
+        self.assertTrue(self.app.snapshot["monitors"]["7E8"]["mil"])
+        self.assertEqual(self.app.snapshot["codes"]["Stored"]["7E8"], ["P0171"])
+        self.assertEqual(self.app.snapshot["freeze"]["code"], "P0171")
+        self.assertIn("check engine", obd_tool.car_alerts(self.app.snapshot, {}, "en")[0])
+
+    async def test_silent_module_keeps_its_last_answer(self):
+        self.app.snapshot["codes"]["Stored"]["7E9"] = ["P0741"]
+        self.transport.replies["03"] = ["7E8 02 43 00"]
+        await self.app.refresh_status(self.elm)
+        self.assertEqual(self.app.snapshot["codes"]["Stored"]["7E9"], ["P0741"])
+
+    async def test_module_missed_once_is_still_found(self):
+        self.transport.replies["090A"] = Sequence([["7E8 05 49 0A 01 45 43"], ["7E8 05 49 0A 01 45 43", "7E9 05 49 0A 01 54 43"],
+                                                   ["7E8 05 49 0A 01 45 43"]])
+        vehicle = await obd_tool.read_identity(ELM(self.transport))
+        self.assertEqual(obd_tool.known_modules(vehicle), ["7E8", "7E9"])
+
+    def test_short_voltage_dip_gives_no_alert(self):
+        values = {0x42: 12.0, 0x0C: 900.0}
+        self.app.reader = SimpleNamespace(values=values, voltage="12V")
+        self.app.track_charging()
+        self.assertEqual(obd_tool.car_alerts({"monitors": {}}, values, "en", charging_lasting=False), [])
+        self.app.charging_since = obd_tool.time.monotonic() - 61
+        self.assertLess(self.app.charging_since + obd_tool.CHARGING_ALERT_SECONDS, obd_tool.time.monotonic())
+        self.assertIn("alternator", obd_tool.car_alerts({"monitors": {}}, values, "en", charging_lasting=True)[0])
+        self.app.reader.values = {0x42: 14.1, 0x0C: 900.0}
+        self.app.track_charging()
+        self.assertIsNone(self.app.charging_since)
+
+    def test_real_dip_from_the_log_is_not_a_fault(self):
+        self.assertFalse(obd_tool.charging_out_of_range({0x42: 13.0, 0x0C: 900.0}))
+        self.assertNotIn("not be charging", obd_tool.battery_advice(13.0, True))
+
+    async def test_this_drive_follows_the_standard_meaning(self):
+        self.transport.replies["0141"] = ["7E8 06 41 41 00 07 21 01"]
+        tests = dict(await obd_tool.read_this_drive(ELM(self.transport)))
+        self.assertTrue(tests["Misfire"])
+        self.assertFalse(tests["Catalyst"])
+        self.assertTrue(tests["Oxygen sensor"])
+
+
 class AlertTests(unittest.TestCase):
     QUIET = {"monitors": {"7E8": {"mil": False}}}
 
@@ -1132,7 +1192,8 @@ class DemoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(snapshot["codes"]["Stored"]["7E8"], ["P0171"])
         self.assertEqual(snapshot["freeze"]["code"], "P0171")
         self.assertEqual(sorted(snapshot["monitors"]), ["7E8", "7E9"])
-        self.assertTrue(snapshot["more"])
+        self.assertEqual(dict(snapshot["this_drive"])["Catalyst"], True)
+        self.assertEqual(dict(snapshot["this_drive"])["Evaporative system"], False)
         self.assertNotIn(None, snapshot["values"].values())
 
         reader = obd_tool.LiveReader(elm, snapshot["values"], snapshot["values"], snapshot["voltage"])
