@@ -130,20 +130,11 @@ Run the offline tests, which don't need a car or adapter:
 | `data\` | Generic fault code descriptions, from OBDex |
 | `test_obd_tool.py` | Offline tests |
 
-### Licence
+### License
 
-The elmlens code is under the elmlens Individual Use License, see [LICENSE](LICENSE). In short:
+elmlens is free for **individuals** to use, modify and share for personal purposes. **Companies and organizations may not use it** without written permission, including freelancers and one-person businesses using it for their work. It may not be sold. See [LICENSE](LICENSE) for the full terms.
 
-- **Individuals** can use, copy, modify and share it with other individuals, keeping the licence and marking any changes.
-- **Companies and organizations** can't use it without written permission from the copyright holder.
-- **Selling it,** or a modified version, isn't allowed.
-- **There's no warranty,** including for the accuracy of readings, fault code descriptions or diagnoses.
-
-This summary is for convenience, and the [LICENSE](LICENSE) file is what applies.
-
-Car profiles in `profiles\` come from [OBDb](https://github.com/OBDb) and are under CC BY-SA 4.0, see [profiles/README.md](profiles/README.md). Some test recordings in `test_obd_tool.py` also come from OBDb under that licence.
-
-Fault code descriptions in `data\` come from [OBDex](https://github.com/foerbsnavi/OBDex) under CC0 1.0, see [data/README.md](data/README.md).
+Because of these limits, elmlens is source-available rather than open source. The third-party components it includes keep their own licenses, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ---
 
@@ -285,17 +276,8 @@ python -m venv .venv
 
 ### الترخيص
 
-شيفرة elmlens مرخّصة بموجب رخصة الاستخدام الفردي الخاصة بها، انظر [LICENSE](LICENSE). باختصار:
+يمكن **للأفراد** استخدام elmlens وتعديله ومشاركته مجانًا للأغراض الشخصية. **ولا يحق للشركات والمؤسسات استخدامه** بدون إذن كتابي، ويشمل ذلك العاملين لحسابهم الخاص والأعمال الفردية عند استخدامه في عملهم. ولا يجوز بيعه. راجع ملف [LICENSE](LICENSE) للاطلاع على الشروط كاملة، والنص الإنجليزي هو المعتمد.
 
-- **الأفراد** يمكنهم استخدامها ونسخها وتعديلها ومشاركتها مع أفراد آخرين، مع إبقاء الرخصة وتوضيح أي تغييرات.
-- **الشركات والمؤسسات** لا يمكنها استخدامها دون إذن كتابي من صاحب حقوق النشر.
-- **بيعها** أو بيع نسخة معدّلة منها غير مسموح.
-- **لا يوجد أي ضمان،** ويشمل ذلك دقة القراءات وأوصاف رموز الأعطال والتشخيص.
-
-هذا الملخص للتسهيل فقط، والنص الملزم هو ملف [LICENSE](LICENSE) باللغة الإنجليزية.
-
-ملفات السيارات في مجلد `profiles\` مصدرها [OBDb](https://github.com/OBDb) وهي مرخّصة بموجب CC BY-SA 4.0، انظر [profiles/README.md](profiles/README.md). وبعض تسجيلات الاختبار في `test_obd_tool.py` مصدرها OBDb أيضًا بالرخصة نفسها.
-
-أوصاف رموز الأعطال في مجلد `data\` مصدرها [OBDex](https://github.com/foerbsnavi/OBDex) بموجب CC0 1.0، انظر [data/README.md](data/README.md).
+بسبب هذه القيود، يُعد elmlens مشروعًا متاح الشيفرة للاطلاع (source-available) وليس مفتوح المصدر بالمعنى المعروف. وتبقى المكونات الخارجية المضمنة فيه خاضعة لرخصها الخاصة، وهي مذكورة في [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 </div>

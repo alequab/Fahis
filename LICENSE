@@ -27,4 +27,4 @@ Copyright (c) 2026 alequab. All rights reserved except as stated below.
 6. Third-party material. This license does not cover material that others own,
    which stays under its own license: the car profile data in the profiles
    folder and the test recordings from OBDb (CC BY-SA 4.0), and the fault code
-   data in the data folder from OBDex (CC0 1.0). See the README in each folder.
+   data in the data folder from OBDex (CC0 1.0). See THIRD_PARTY_NOTICES.md.
