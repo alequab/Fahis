@@ -1,0 +1,393 @@
+"""English and Arabic text. English strings are the keys, so a missing translation still reads well."""
+import json
+from pathlib import Path
+
+SETTINGS_FILE = Path(__file__).parent / "settings.json"
+LANGUAGES = ("en", "ar")
+
+ARABIC = {
+    # Commands and help
+    "Read fault codes and live data from a car through a Bluetooth LE ELM327 adapter. Only the clear command changes anything in the car, and it asks first.": "قراءة رموز الأعطال والبيانات المباشرة من السيارة عبر محوّل ELM327 يعمل بتقنية Bluetooth LE. أمر المسح clear هو الوحيد الذي يغيّر شيئًا في السيارة، ويطلب التأكيد أولًا.",
+    "adapter's Bluetooth address (default: find one named OBD or ELM)": "عنوان Bluetooth للمحوّل (الافتراضي: البحث عن جهاز اسمه يحتوي OBD أو ELM)",
+    "language: en or ar, remembered for next time": "اللغة: en أو ar، وتُحفظ للمرات القادمة",
+    "adapter, voltage, check engine light, self-tests": "المحوّل والجهد ولمبة فحص المحرك والاختبارات الذاتية",
+    "check battery voltage": "فحص جهد البطارية",
+    "read fault codes": "قراءة رموز الأعطال",
+    "read everything once and save it to a file": "قراءة كل البيانات مرة واحدة وحفظها في ملف",
+    "find other modules and read their fault codes": "البحث عن وحدات أخرى وقراءة رموز أعطالها",
+    "read extra values using a community car profile": "قراءة قيم إضافية باستخدام ملف سيارة من المجتمع",
+    "car from `profiles`, such as kia-picanto": "سيارة من قائمة profiles، مثل kia-picanto",
+    "model year, to skip commands for other years": "سنة الطراز، لتخطي أوامر السنوات الأخرى",
+    "search the car catalog, no adapter needed": "البحث في قائمة السيارات، دون الحاجة إلى المحوّل",
+    "words to search for, such as toyota camry": "كلمات البحث، مثل toyota camry",
+    "download a car's profile now": "تنزيل ملف السيارة الآن",
+    "list cars saved on this laptop": "عرض السيارات المحفوظة على هذا الجهاز",
+    "clear fault codes (asks first)": "مسح رموز الأعطال (يطلب التأكيد أولًا)",
+    "live values in this window": "القيم المباشرة في هذه النافذة",
+    "live values, saved to CSV": "القيم المباشرة مع حفظها في ملف CSV",
+    "everything on one page in your browser": "كل البيانات في صفحة واحدة في المتصفح",
+    "seconds between readings": "عدد الثواني بين القراءات",
+    "stop after this many readings": "التوقف بعد هذا العدد من القراءات",
+    "local port for the page": "المنفذ المحلي للصفحة",
+    "don't open the browser": "عدم فتح المتصفح",
+    "show simulated data, no adapter or car needed": "عرض بيانات تجريبية دون محوّل أو سيارة",
+
+    # Connection and errors
+    "Looking for the adapter ...": "جارٍ البحث عن المحوّل ...",
+    "Adapter not found. Check it is plugged in, the ignition is ON, and no phone is connected to it.": "لم يُعثر على المحوّل. تأكد من توصيله، ومن تشغيل الإشعال، ومن عدم اتصال أي هاتف به.",
+    "This adapter does not have the expected BLE serial service (FFF0).": "هذا المحوّل لا يحتوي على خدمة BLE التسلسلية المتوقعة (FFF0).",
+    "Adapter did not identify itself (reply: {reply})": "لم يعرّف المحوّل عن نفسه (الرد: {reply})",
+    "The car did not answer. Check the ignition is ON and the adapter is seated.": "لم تستجب السيارة. تأكد من تشغيل الإشعال ومن تثبيت المحوّل جيدًا.",
+    "This tool handles 11-bit CAN only; the car uses protocol '{number}'.": "هذه الأداة تدعم CAN بعناوين 11 بت فقط، وهذه السيارة تستخدم البروتوكول '{number}'.",
+    "Refusing to send '{request}': only read requests are allowed.": "رُفض إرسال '{request}': يُسمح بطلبات القراءة فقط.",
+    "The car reported no live values this tool can read.": "لم تُبلغ السيارة عن قيم مباشرة تستطيع هذه الأداة قراءتها.",
+    "Error: {error}": "خطأ: {error}",
+    "Stopped.": "تم الإيقاف.",
+    "Not connected: {error}": "غير متصل: {error}",
+    "Could not save this car's info: {error}": "تعذّر حفظ بيانات هذه السيارة: {error}",
+    "Dashboard running at {url} (on this laptop only). Press Ctrl+C to stop.": "لوحة المعلومات تعمل على {url} (على هذا الجهاز فقط). اضغط Ctrl+C للإيقاف.",
+    "Connected. Reading everything from the car, this takes about 20 seconds ...": "تم الاتصال. جارٍ قراءة كل البيانات من السيارة، ويستغرق ذلك نحو 20 ثانية ...",
+    "Reading everything, this takes about 20 seconds ...": "جارٍ قراءة كل البيانات، ويستغرق ذلك نحو 20 ثانية ...",
+
+    # Report and status
+    "Adapter": "المحوّل",
+    "Protocol": "البروتوكول",
+    "Voltage at adapter (approximate)": "الجهد عند المحوّل (تقريبي)",
+    "Module {header}: check engine light {light}, {count} code(s)": "الوحدة {header}: لمبة فحص المحرك {light}، عدد الرموز {count}",
+    "ON": "مضاءة",
+    "off": "مطفأة",
+    "finished": "اكتمل",
+    "NOT finished": "لم يكتمل",
+    "Live values available": "القيم المباشرة المتاحة",
+    "All supported PIDs": "كل المعرّفات المدعومة (PID)",
+    "Stored": "مخزّنة",
+    "Pending": "معلّقة",
+    "Permanent": "دائمة",
+    "{label}: {count} code(s), {modules} module(s) answered": "{label}: عدد الرموز {count}، وعدد الوحدات التي استجابت {modules}",
+    "module {header}": "الوحدة {header}",
+    "This covers engine and emissions codes; ABS, airbag and body faults usually need other tools.": "يشمل هذا رموز المحرك والانبعاثات. أعطال ABS والوسائد الهوائية والهيكل تحتاج عادةً إلى أدوات أخرى.",
+    "Car report, {time}": "تقرير السيارة، {time}",
+    "VEHICLE": "السيارة",
+    "STATUS": "الحالة",
+    "FAULT CODES": "رموز الأعطال",
+    "FREEZE FRAME for {code} ({description})": "لقطة العطل للرمز {code} ({description})",
+    "ALL VALUES": "كل القيم",
+    "OTHER DATA (not decoded by this tool, raw bytes)": "بيانات أخرى (لم تفسّرها هذه الأداة، بايتات خام)",
+    "not reported": "غير متوفر",
+    "no reply": "لا يوجد رد",
+    "Standard OBD-II only: ABS, airbag and body modules usually need other tools.": "بيانات OBD-II القياسية فقط: وحدات ABS والوسائد الهوائية والهيكل تحتاج عادةً إلى أدوات أخرى.",
+    "Saved report: {path}": "حُفظ التقرير في: {path}",
+    "Saved log: {path}": "حُفظ السجل في: {path}",
+    "logging to {name}": "يجري التسجيل في {name}",
+    "Press Ctrl+C to stop.": "اضغط Ctrl+C للإيقاف.",
+    "time": "الوقت",
+    "unknown": "غير معروف",
+    "VIN": "رقم الهيكل (VIN)",
+    "Calibration ID": "معرّف المعايرة",
+    "Calibration check": "رمز فحص المعايرة",
+    "Module name": "اسم الوحدة",
+
+    # Fault code fallbacks
+    "Powertrain": "نظام الدفع",
+    "Chassis": "الشاسيه",
+    "Body": "الهيكل",
+    "Network": "الشبكة",
+    "{system}: manufacturer-specific code, look it up for your car's make": "{system}: رمز خاص بالشركة المصنّعة، ابحث عنه حسب نوع سيارتك",
+    "{system}: generic code not in this tool's table, look it up online": "{system}: رمز عام غير موجود في جدول هذه الأداة، ابحث عنه عبر الإنترنت",
+
+    # Battery
+    "Voltage at adapter: {average} V (lowest {low}, highest {high})": "الجهد عند المحوّل: {average} فولت (الأدنى {low}، والأعلى {high})",
+    "Voltage at car's module: {volts} V": "الجهد عند وحدة السيارة: {volts} فولت",
+    "Voltage at car's module: not available": "الجهد عند وحدة السيارة: غير متوفر",
+    "Engine: unknown, car did not answer": "المحرك: غير معروف، لم تستجب السيارة",
+    "Engine: running": "المحرك: يعمل",
+    "Engine: off": "المحرك: متوقف",
+    "This advice uses the car's module reading, which is usually more accurate than the adapter's.": "تعتمد هذه النصيحة على قراءة وحدة السيارة، وهي عادةً أدق من قراءة المحوّل.",
+    "Low for a running engine: the alternator may not be charging.": "منخفض والمحرك يعمل: قد لا يقوم الدينامو بالشحن.",
+    "High for a running engine: the charging system may be overcharging.": "مرتفع والمحرك يعمل: قد يكون نظام الشحن يشحن أكثر من اللازم.",
+    "Normal for a running engine: the battery is being charged.": "طبيعي والمحرك يعمل: البطارية تُشحن.",
+    "About full. Starting should be fine if the battery is healthy.": "مشحونة تقريبًا بالكامل. يُفترض أن يعمل المحرك إذا كانت البطارية سليمة.",
+    "About 75% charged. It will probably start, but charge it soon.": "مشحونة بنحو 75%. سيعمل المحرك غالبًا، لكن اشحنها قريبًا.",
+    "About 50% charged. Starting may be weak, so charge it first.": "مشحونة بنحو 50%. قد يكون التشغيل ضعيفًا، فاشحنها أولًا.",
+    "About 25% charged. It may not start, so charge it first.": "مشحونة بنحو 25%. قد لا يعمل المحرك، فاشحنها أولًا.",
+    "Very low. It probably won't start, so charge it or use a jump starter.": "منخفض جدًا. لن يعمل المحرك غالبًا، فاشحنها أو استخدم جهاز تشغيل مساعد.",
+    "Ignition-on loads and recent charging can shift this reading.": "قد تتأثر هذه القراءة بأحمال الإشعال وبالشحن الحديث.",
+    "This doesn't test starting power: a weak battery can read normal and still fail to crank.": "هذا لا يقيس قدرة التشغيل: قد تبدو البطارية الضعيفة طبيعية ومع ذلك لا تدير المحرك.",
+    "The adapter did not report a voltage.": "لم يُبلغ المحوّل عن قيمة الجهد.",
+    "Battery is at {volts} V. Charge it or start the engine before this long read.": "جهد البطارية {volts} فولت. اشحنها أو شغّل المحرك قبل هذه القراءة الطويلة.",
+
+    # Scan and profiles
+    "{done} of {total} ...": "{done} من {total} ...",
+    "Asking each possible module, this takes about a minute ...": "جارٍ سؤال كل وحدة محتملة، ويستغرق ذلك نحو دقيقة ...",
+    "Modules that answered: {count}": "الوحدات التي استجابت: {count}",
+    "Answered, but refused to share fault codes with these commands": "استجابت، لكنها رفضت مشاركة رموز الأعطال بهذه الأوامر",
+    "No fault codes": "لا توجد رموز أعطال",
+    "active": "نشط",
+    "stored": "مخزّن",
+    "pending": "معلّق",
+    "history": "سجل سابق",
+    "None. The car may block these requests, or the adapter may not support them.": "لا شيء. قد تحجب السيارة هذه الطلبات، أو قد لا يدعمها المحوّل.",
+    "\"history\" means the code failed at some point since codes were last cleared, and isn't active or confirmed now.": "«سجل سابق» يعني أن الرمز ظهر في وقت ما منذ آخر مسح للرموز، وليس نشطًا أو مؤكدًا الآن.",
+    "Module names are likely roles based on a Kia Picanto profile, not confirmed for your car.": "أسماء الوحدات هي أدوار مرجّحة بناءً على ملف Kia Picanto، وليست مؤكدة لسيارتك.",
+    "Modules can also exist without answering here, so this list may be incomplete.": "قد توجد وحدات لا تستجيب هنا، لذلك قد تكون هذه القائمة غير كاملة.",
+    "Body control (doors, belts, lights)": "وحدة التحكم بالهيكل (الأبواب والأحزمة والأضواء)",
+    "Climate control": "التحكم بالتكييف",
+    "Instrument cluster": "لوحة العدادات",
+    "ABS/stability control (wheel speeds)": "ABS والتحكم بالثبات (سرعات العجلات)",
+    "Power steering": "التوجيه الكهربائي",
+    "Engine": "المحرك",
+    "Transmission": "ناقل الحركة",
+    "Unknown module": "وحدة غير معروفة",
+    "Reading profile {name}, this can take a few minutes ...": "جارٍ قراءة الملف {name}، وقد يستغرق ذلك بضع دقائق ...",
+    "Profile requests answered: {answered} of {total} usable": "الطلبات التي أُجيبت: {answered} من أصل {total} صالحة للإرسال",
+    "These decoding rules come from community data that may not match your car's exact year.": "قواعد التفسير هذه مصدرها بيانات المجتمع، وقد لا تطابق سنة سيارتك بالضبط.",
+    "Treat any value that looks wrong as unreliable, not as a fault in the car.": "اعتبر أي قيمة تبدو خاطئة غير موثوقة، وليست عطلًا في السيارة.",
+    "Value names in this report come from the community data and are in English.": "أسماء القيم في هذا التقرير مصدرها بيانات المجتمع وهي باللغة الإنجليزية.",
+    "No values were decoded.": "لم تُفسَّر أي قيم.",
+    "No profile '{name}' on this laptop. Search for your car with: .\\obd profiles": "لا يوجد ملف '{name}' على هذا الجهاز. ابحث عن سيارتك بالأمر: .\\obd profiles",
+    "Profile '{name}' has nothing for {year}. It has: {files}": "الملف '{name}' لا يحتوي بيانات لسنة {year}. المتوفر: {files}",
+    "'{name}' isn't in the catalog. Search for your car with: .\\obd profiles {search}": "'{name}' غير موجود في القائمة. ابحث عن سيارتك بالأمر: .\\obd profiles {search}",
+    "{repo}/{file} doesn't look like a car profile.": "{repo}/{file} لا يبدو ملف سيارة.",
+    "Downloading profile {name} from OBDb ...": "جارٍ تنزيل الملف {name} من OBDb ...",
+    "Downloaded {name}: {files}": "تم تنزيل {name}: {files}",
+    "Data from OBDb contributors (https://github.com/OBDb), licensed CC BY-SA 4.0.": "البيانات من مساهمي OBDb (https://github.com/OBDb)، بترخيص CC BY-SA 4.0.",
+    "(on this laptop)": "(على هذا الجهاز)",
+    "{count} of {total} profiles. Read one with: .\\obd profile --name NAME --year YEAR": "{count} من {total} ملفات. لقراءة ملف: .\\obd profile --name NAME --year YEAR",
+
+    # Saved cars
+    "No cars saved yet. A car is saved the first time it connects.": "لا توجد سيارات محفوظة بعد. تُحفظ السيارة عند أول اتصال بها.",
+    "Saved cars: {count}, in {folder}": "السيارات المحفوظة: {count}، في {folder}",
+    "First seen": "أول اتصال",
+    "Last seen": "آخر اتصال",
+    "Connections": "عدد مرات الاتصال",
+    "Modules": "الوحدات",
+    "Check engine light": "لمبة فحص المحرك",
+    "Stored and pending codes": "الرموز المخزّنة والمعلّقة",
+    "none": "لا يوجد",
+    "VIN not reported": "لم يُبلغ عن رقم الهيكل",
+
+    # Clear
+    "Not clearing: the engine must be off with the ignition ON.": "لم يتم المسح: يجب أن يكون المحرك متوقفًا والإشعال يعمل.",
+    "Clearing erases these codes and their saved fault data, and resets the emissions self-tests, which then need driving to finish. It does not fix the fault.": "يمحو المسح هذه الرموز وبيانات الأعطال المحفوظة، ويعيد ضبط اختبارات الانبعاثات الذاتية التي ستحتاج بعدها إلى قيادة لتكتمل. وهو لا يصلح العطل.",
+    "Type CLEAR to continue, anything else to cancel: ": "اكتب CLEAR للمتابعة، أو أي شيء آخر للإلغاء: ",
+    "Cancelled, nothing was changed.": "أُلغي الأمر ولم يتغير شيء.",
+    "Codes cleared.": "تم مسح الرموز.",
+    "The car did not confirm the clear. Run `codes` to check.": "لم تؤكد السيارة المسح. شغّل الأمر codes للتحقق.",
+
+    # Live value names
+    "Engine RPM": "دورات المحرك",
+    "Speed": "السرعة",
+    "Coolant temp": "حرارة سائل التبريد",
+    "Intake air temp": "حرارة هواء السحب",
+    "Engine load": "حمل المحرك",
+    "Throttle": "صمام الخانق",
+    "Ignition timing": "توقيت الإشعال",
+    "Intake pressure": "ضغط السحب",
+    "Air flow": "تدفق الهواء",
+    "Short fuel trim": "تصحيح الوقود القصير",
+    "Long fuel trim": "تصحيح الوقود الطويل",
+    "Run time": "مدة التشغيل",
+    "Fuel level": "مستوى الوقود",
+    "Barometric pressure": "الضغط الجوي",
+    "Module voltage": "جهد الوحدة",
+    "Ambient temp": "حرارة الجو",
+    "Oil temp": "حرارة الزيت",
+    "Fuel rate": "معدل استهلاك الوقود",
+    "Fuel system": "نظام الوقود",
+    "Fuel pressure": "ضغط الوقود",
+    "O2 sensors fitted": "حساسات الأكسجين المركّبة",
+    "OBD standard": "معيار OBD",
+    "Distance with light on": "المسافة واللمبة مضاءة",
+    "Fuel rail pressure": "ضغط سكة الوقود",
+    "Commanded EGR": "إعادة تدوير العادم المطلوبة",
+    "EGR error": "خطأ إعادة تدوير العادم",
+    "Commanded evap purge": "تطهير البخار المطلوب",
+    "Warm-ups since clear": "مرات الإحماء منذ المسح",
+    "Distance since clear": "المسافة منذ المسح",
+    "Evap vapour pressure": "ضغط بخار الوقود",
+    "Catalyst temp B1S1": "حرارة المحفّز B1S1",
+    "Catalyst temp B2S1": "حرارة المحفّز B2S1",
+    "Catalyst temp B1S2": "حرارة المحفّز B1S2",
+    "Catalyst temp B2S2": "حرارة المحفّز B2S2",
+    "Absolute load": "الحمل المطلق",
+    "Commanded lambda": "نسبة لامدا المطلوبة",
+    "Relative throttle": "الخانق النسبي",
+    "Absolute throttle B": "الخانق المطلق B",
+    "Absolute throttle C": "الخانق المطلق C",
+    "Accelerator pedal D": "دواسة الوقود D",
+    "Accelerator pedal E": "دواسة الوقود E",
+    "Accelerator pedal F": "دواسة الوقود F",
+    "Commanded throttle": "الخانق المطلوب",
+    "Time with light on": "الوقت واللمبة مضاءة",
+    "Time since clear": "الوقت منذ المسح",
+    "Fuel type": "نوع الوقود",
+    "Ethanol content": "نسبة الإيثانول",
+    "Short O2 trim B1": "تصحيح O2 القصير B1",
+    "Long O2 trim B1": "تصحيح O2 الطويل B1",
+    "Short O2 trim B2": "تصحيح O2 القصير B2",
+    "Long O2 trim B2": "تصحيح O2 الطويل B2",
+
+    # Live value text
+    "Off (engine not running)": "متوقف (المحرك لا يعمل)",
+    "Open loop (cold)": "حلقة مفتوحة (بارد)",
+    "Closed loop": "حلقة مغلقة",
+    "Open loop (load)": "حلقة مفتوحة (حمل)",
+    "Open loop (fault)": "حلقة مفتوحة (عطل)",
+    "Closed loop (fault)": "حلقة مغلقة (عطل)",
+    "Gasoline": "بنزين",
+    "Methanol": "ميثانول",
+    "Ethanol": "إيثانول",
+    "Diesel": "ديزل",
+    "LPG": "غاز مسال",
+    "CNG": "غاز طبيعي مضغوط",
+    "Propane": "بروبان",
+    "Electric": "كهربائي",
+    "Bifuel gasoline": "بنزين ثنائي الوقود",
+    "Hybrid gasoline": "هجين بنزين",
+    "Hybrid ethanol": "هجين إيثانول",
+    "Hybrid diesel": "هجين ديزل",
+    "Not OBD compliant": "غير متوافق مع OBD",
+    "KOBD (Korea)": "KOBD (كوريا)",
+    "IOBD I (India)": "IOBD I (الهند)",
+    "IOBD II (India)": "IOBD II (الهند)",
+    "None": "لا يوجد",
+    "Yes": "نعم",
+    "No": "لا",
+    "On": "يعمل",
+    "Off": "متوقف",
+
+    # Units
+    "rpm": "دورة/د",
+    "km/h": "كم/س",
+    "C": "°م",
+    "F": "°ف",
+    "deg": "درجة",
+    "kPa": "ك.باسكال",
+    "Pa": "باسكال",
+    "g/s": "غ/ث",
+    "s": "ث",
+    "min": "د",
+    "V": "فولت",
+    "L/h": "لتر/س",
+    "km": "كم",
+    "L": "لتر",
+
+    # Self-tests
+    "Misfire": "اختلال الإشعال",
+    "Components": "المكوّنات",
+    "Catalyst": "المحفّز",
+    "Heated catalyst": "المحفّز المسخّن",
+    "Evaporative system": "نظام تبخر الوقود",
+    "Secondary air": "الهواء الثانوي",
+    "A/C refrigerant": "غاز التكييف",
+    "Oxygen sensor": "حساس الأكسجين",
+    "Oxygen sensor heater": "سخان حساس الأكسجين",
+    "EGR": "إعادة تدوير العادم",
+    "NMHC catalyst": "محفّز NMHC",
+    "NOx aftertreatment": "معالجة أكاسيد النيتروجين",
+    "Boost pressure": "ضغط الشحن",
+    "Exhaust gas sensor": "حساس غاز العادم",
+    "Particulate filter": "فلتر الجسيمات",
+
+    # Commands page
+    "Commands": "الأوامر",
+    "Commands for a connected car": "أوامر السيارة المتصلة",
+    "Back to dashboard": "العودة إلى لوحة المعلومات",
+    "Run these in a terminal from the elmlens folder, with the adapter plugged in.": "شغّل هذه الأوامر في الطرفية من مجلد elmlens، والمحوّل موصول بالسيارة.",
+    "The adapter serves one program at a time. Stop the dashboard with Ctrl+C before running another command, or the adapter won't be found.": "يخدم المحوّل برنامجًا واحدًا في كل مرة. أوقف لوحة المعلومات بالضغط على Ctrl+C قبل تشغيل أمر آخر، وإلا فلن يُعثر على المحوّل.",
+    "See everything": "عرض كل البيانات",
+    "Check the car": "فحص السيارة",
+    "Live data": "البيانات المباشرة",
+    "Other modules and extra values": "وحدات أخرى وقيم إضافية",
+    "Changes the car": "يغيّر شيئًا في السيارة",
+    "Copy": "نسخ",
+    "Copied": "تم النسخ",
+    "Copy failed": "تعذّر النسخ",
+    "Live values, fault codes, self-tests and vehicle details on one page.": "القيم المباشرة ورموز الأعطال والاختبارات الذاتية وبيانات السيارة في صفحة واحدة.",
+    "Reads everything once and saves it to a text file in the reports folder.": "يقرأ كل البيانات مرة واحدة ويحفظها في ملف نصي داخل مجلد reports.",
+    "Explains the battery voltage. With the engine running, it also checks charging.": "يشرح جهد البطارية. وإذا كان المحرك يعمل، يفحص الشحن أيضًا.",
+    "Shows stored, pending and permanent fault codes with descriptions.": "يعرض رموز الأعطال المخزّنة والمعلّقة والدائمة مع أوصافها.",
+    "Shows the adapter, voltage, check engine light, self-tests and available values.": "يعرض المحوّل والجهد ولمبة فحص المحرك والاختبارات الذاتية والقيم المتاحة.",
+    "Shows live values in the terminal. Press Ctrl+C to stop.": "يعرض القيم المباشرة في الطرفية. اضغط Ctrl+C للإيقاف.",
+    "Records live values to a CSV file in the logs folder. Press Ctrl+C to stop.": "يسجّل القيم المباشرة في ملف CSV داخل مجلد logs. اضغط Ctrl+C للإيقاف.",
+    "Looks for other modules and reads their fault codes where the car allows it. Takes about a minute.": "يبحث عن وحدات أخرى ويقرأ رموز أعطالها إذا سمحت السيارة بذلك. يستغرق نحو دقيقة.",
+    "Reads extra values using a community profile. Replace the name and year with your car's. Some values may not apply to your car.": "يقرأ قيمًا إضافية باستخدام ملف من المجتمع. ضع اسم سيارتك وسنتها مكان المثال. قد لا تنطبق بعض القيم على سيارتك.",
+    "Clears fault codes after you type CLEAR. This doesn't fix the fault, and it resets the emissions self-tests.": "يمسح رموز الأعطال بعد أن تكتب CLEAR. هذا لا يصلح العطل، ويعيد ضبط اختبارات الانبعاثات الذاتية.",
+    "Needs: ignition ON or engine running.": "يتطلب: تشغيل الإشعال أو المحرك.",
+    "Needs: adapter powered by the car. Works even if the car's computer doesn't answer.": "يتطلب: أن يحصل المحوّل على الكهرباء من السيارة. ويعمل حتى لو لم يستجب حاسوب السيارة.",
+    "Needs: at least 11.8 V. Running the engine is best.": "يتطلب: 11.8 فولت على الأقل. والأفضل أن يكون المحرك يعمل.",
+    "Needs: engine off and ignition ON.": "يتطلب: محركًا متوقفًا وإشعالًا يعمل.",
+    "To use Arabic in any command, add --lang ar before it, such as: .\\obd --lang ar report": "لاستخدام العربية في أي أمر، أضف --lang ar قبله، مثل: .\\obd --lang ar report",
+
+    # Dashboard page
+    "Car Dashboard": "لوحة معلومات السيارة",
+    "Connecting ...": "جارٍ الاتصال ...",
+    "Not connected to a car": "غير متصل بسيارة",
+    "Not connected": "غير متصل",
+    "Plug the adapter into the car's OBD-II port.": "وصّل المحوّل بمنفذ OBD-II في السيارة.",
+    "Start the engine, or turn the ignition ON.": "شغّل المحرك أو أدر مفتاح الإشعال.",
+    "Turn off Bluetooth on any phone that has connected to the adapter.": "أوقف Bluetooth في أي هاتف اتصل بالمحوّل من قبل.",
+    "This page keeps trying and fills in by itself once the car answers.": "تواصل هذه الصفحة المحاولة وتمتلئ تلقائيًا عند استجابة السيارة.",
+    "Demo mode: this is simulated data, not your car.": "الوضع التجريبي: هذه بيانات محاكاة وليست من سيارتك.",
+    "Fault codes": "رموز الأعطال",
+    "Emissions self-tests": "اختبارات الانبعاثات الذاتية",
+    "Vehicle and adapter": "السيارة والمحوّل",
+    "Freeze frame": "لقطة العطل",
+    "All live values": "كل القيم المباشرة",
+    "Other data, not decoded (raw bytes)": "بيانات أخرى غير مفسَّرة (بايتات خام)",
+    "Saved cars": "السيارات المحفوظة",
+    "Standard OBD-II data only: ABS, airbag and body modules usually need other tools. Don't watch this page while driving.": "بيانات OBD-II القياسية فقط: وحدات ABS والوسائد الهوائية والهيكل تحتاج عادةً إلى أدوات أخرى. لا تنظر إلى هذه الصفحة أثناء القيادة.",
+    "Some fault code descriptions are only available in English.": "بعض أوصاف رموز الأعطال متوفرة باللغة الإنجليزية فقط.",
+    "Connected, updated {time}": "متصل، آخر تحديث {time}",
+    "Connection lost. Restart with: .\\obd dashboard": "انقطع الاتصال. أعد التشغيل بالأمر: .\\obd dashboard",
+    "Check engine light is ON": "لمبة فحص المحرك مضاءة",
+    "Check engine light is off": "لمبة فحص المحرك مطفأة",
+    "{count} code(s), {modules} module(s) answered": "عدد الرموز {count}، وعدد الوحدات التي استجابت {modules}",
+    "Module {header}": "الوحدة {header}",
+    "Finished": "اكتمل",
+    "Not finished": "لم يكتمل",
+    "Empty": "فارغ",
+    "Not reported": "غير متوفر",
+    "Freeze frame for {code}: {description}": "لقطة العطل للرمز {code}: {description}",
+}
+for _bank in (1, 2):
+    for _sensor in (1, 2, 3, 4):
+        ARABIC[f"O2 voltage B{_bank}S{_sensor}"] = f"جهد حساس الأكسجين B{_bank}S{_sensor}"
+
+_current = "en"
+
+
+def normalize(language):
+    return language if language in LANGUAGES else "en"
+
+
+def set_language(language):
+    global _current
+    _current = normalize(language)
+
+
+def current_language():
+    return _current
+
+
+def t(text, lang=None, **values):
+    """Translate English text. Values are filled in after translating, for both languages."""
+    chosen = normalize(lang) if lang else _current
+    result = ARABIC.get(text, text) if chosen == "ar" else text
+    return result.format(**values) if values else result
+
+
+def page_text(lang):
+    """Return the translations the dashboard page needs."""
+    return ARABIC if normalize(lang) == "ar" else {}
+
+
+def saved_language():
+    try:
+        return normalize(json.loads(SETTINGS_FILE.read_text(encoding="utf-8")).get("language"))
+    except (OSError, ValueError, AttributeError):
+        return "en"
+
+
+def save_language(language):
+    SETTINGS_FILE.write_text(json.dumps({"language": normalize(language)}), encoding="utf-8")

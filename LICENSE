@@ -1,0 +1,30 @@
+elmlens Individual Use License
+
+Copyright (c) 2026 alequab. All rights reserved except as stated below.
+
+1. Individuals. If you are a natural person acting on your own behalf, you may
+   use, copy, and modify this software, and share it or your modified versions
+   with other individuals, as long as you keep this license and the copyright
+   notice with every copy and clearly mark any changes you made.
+
+2. Companies and organizations. Companies, organizations, institutions, and
+   other legal entities may not use, copy, modify, or distribute this software,
+   in whole or in part. The same applies to any individual acting for or on
+   behalf of one. This restriction can only be lifted by written permission from
+   the copyright holder.
+
+3. No sale. You may not sell this software or a modified version of it.
+
+4. Termination. Your rights under this license end automatically if you break
+   its terms.
+
+5. No warranty. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING ACCURACY OF ANY VEHICLE READING, FAULT CODE
+   DESCRIPTION, OR DIAGNOSIS. THE COPYRIGHT HOLDER IS NOT LIABLE FOR ANY CLAIM,
+   DAMAGE, OR OTHER LIABILITY ARISING FROM THE SOFTWARE OR ITS USE, INCLUDING
+   DAMAGE TO A VEHICLE.
+
+6. Third-party material. This license does not cover material that others own,
+   which stays under its own license: the car profile data in the profiles
+   folder and the test recordings from OBDb (CC BY-SA 4.0), and the fault code
+   data in the data folder from OBDex (CC0 1.0). See the README in each folder.

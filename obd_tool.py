@@ -1,0 +1,960 @@
+"""Read fault codes and live data from a car through a Bluetooth LE ELM327 adapter.
+
+Only the `clear` command changes anything in the car, and it asks first.
+"""
+# Wrapped in t(), the text in this file is shown in the user's language; see i18n.py.
+import argparse
+import asyncio
+import csv
+import json
+import os
+import re
+import sys
+import webbrowser
+from datetime import datetime
+from pathlib import Path
+
+import car_modules
+import dashboard
+import garage
+import i18n
+from demo import DemoTransport
+from dtc_codes import dtc_name, lookup_dtc
+from i18n import t
+
+ADAPTER_NAME_HINTS = ("OBD", "ELM")
+SERVICE_PREFIX = "0000fff0"
+LOG_DIR = Path(__file__).parent / "logs"
+REPORT_DIR = Path(__file__).parent / "reports"
+
+# CAN with 11-bit headers. Replies are parsed as "7E8 06 41 ..." so others are refused.
+SUPPORTED_PROTOCOLS = {"6": "ISO 15765-4 CAN 11-bit 500 kbps", "8": "ISO 15765-4 CAN 11-bit 250 kbps"}
+
+CAN_LINE = re.compile(r"^[0-9A-F]{3}( [0-9A-F]{2})+$")
+
+FUEL_STATUS = {0: "Off (engine not running)", 1: "Open loop (cold)", 2: "Closed loop", 4: "Open loop (load)",
+               8: "Open loop (fault)", 16: "Closed loop (fault)"}
+OBD_STANDARDS = {1: "OBD-II (CARB)", 2: "OBD (EPA)", 3: "OBD and OBD-II", 4: "OBD-I", 5: "Not OBD compliant",
+                 6: "EOBD", 7: "EOBD and OBD-II", 8: "EOBD and OBD", 9: "EOBD, OBD and OBD-II",
+                 10: "JOBD", 11: "JOBD and OBD-II", 12: "JOBD and EOBD", 13: "JOBD, EOBD and OBD-II",
+                 17: "EMD", 18: "EMD+", 19: "HD OBD-C", 20: "HD OBD", 21: "WWH OBD", 23: "HD EOBD-I",
+                 24: "HD EOBD-I N", 25: "HD EOBD-II", 26: "HD EOBD-II N", 28: "OBDBr-1", 29: "OBDBr-2",
+                 30: "KOBD (Korea)", 31: "IOBD I (India)", 32: "IOBD II (India)", 33: "HD EOBD-IV"}
+FUEL_TYPES = {1: "Gasoline", 2: "Methanol", 3: "Ethanol", 4: "Diesel", 5: "LPG", 6: "CNG", 7: "Propane",
+              8: "Electric", 9: "Bifuel gasoline", 17: "Hybrid gasoline", 18: "Hybrid ethanol", 19: "Hybrid diesel"}
+
+
+def percent(d):
+    return d[0] * 100 / 255
+
+
+def trim(d):
+    return (d[0] - 128) * 100 / 128
+
+
+def word(d):
+    return 256 * d[0] + d[1]
+
+
+def o2_sensors(d):
+    found = [f"B{bank + 1}S{sensor + 1}" for bank in range(2) for sensor in range(4)
+             if d[0] & (1 << (bank * 4 + sensor))]
+    return ", ".join(found) or "None"
+
+
+# pid: (name, unit, formula taking the data bytes)
+LIVE_PIDS = {
+    0x0C: ("Engine RPM", "rpm", lambda d: (256 * d[0] + d[1]) / 4),
+    0x0D: ("Speed", "km/h", lambda d: d[0]),
+    0x05: ("Coolant temp", "C", lambda d: d[0] - 40),
+    0x0F: ("Intake air temp", "C", lambda d: d[0] - 40),
+    0x04: ("Engine load", "%", lambda d: d[0] * 100 / 255),
+    0x11: ("Throttle", "%", lambda d: d[0] * 100 / 255),
+    0x0E: ("Ignition timing", "deg", lambda d: d[0] / 2 - 64),
+    0x0B: ("Intake pressure", "kPa", lambda d: d[0]),
+    0x10: ("Air flow", "g/s", lambda d: (256 * d[0] + d[1]) / 100),
+    0x06: ("Short fuel trim", "%", lambda d: (d[0] - 128) * 100 / 128),
+    0x07: ("Long fuel trim", "%", lambda d: (d[0] - 128) * 100 / 128),
+    0x1F: ("Run time", "s", lambda d: 256 * d[0] + d[1]),
+    0x2F: ("Fuel level", "%", lambda d: d[0] * 100 / 255),
+    0x33: ("Barometric pressure", "kPa", lambda d: d[0]),
+    0x42: ("Module voltage", "V", lambda d: (256 * d[0] + d[1]) / 1000),
+    0x46: ("Ambient temp", "C", lambda d: d[0] - 40),
+    0x5C: ("Oil temp", "C", lambda d: d[0] - 40),
+    0x5E: ("Fuel rate", "L/h", lambda d: (256 * d[0] + d[1]) / 20),
+    0x03: ("Fuel system", "", lambda d: FUEL_STATUS.get(d[0], f"Code {d[0]}")),
+    0x0A: ("Fuel pressure", "kPa", lambda d: d[0] * 3),
+    0x13: ("O2 sensors fitted", "", o2_sensors),
+    0x1C: ("OBD standard", "", lambda d: OBD_STANDARDS.get(d[0], f"Code {d[0]}")),
+    0x21: ("Distance with light on", "km", word),
+    0x23: ("Fuel rail pressure", "kPa", lambda d: word(d) * 10),
+    0x2C: ("Commanded EGR", "%", percent),
+    0x2D: ("EGR error", "%", trim),
+    0x2E: ("Commanded evap purge", "%", percent),
+    0x30: ("Warm-ups since clear", "", lambda d: "255+" if d[0] == 255 else d[0]),
+    0x31: ("Distance since clear", "km", lambda d: "65535+" if word(d) == 65535 else word(d)),
+    0x32: ("Evap vapour pressure", "Pa", lambda d: int.from_bytes(d[:2], "big", signed=True) / 4),
+    0x3C: ("Catalyst temp B1S1", "C", lambda d: word(d) / 10 - 40),
+    0x3D: ("Catalyst temp B2S1", "C", lambda d: word(d) / 10 - 40),
+    0x3E: ("Catalyst temp B1S2", "C", lambda d: word(d) / 10 - 40),
+    0x3F: ("Catalyst temp B2S2", "C", lambda d: word(d) / 10 - 40),
+    0x43: ("Absolute load", "%", lambda d: word(d) * 100 / 255),
+    0x44: ("Commanded lambda", "", lambda d: word(d) / 32768),
+    0x45: ("Relative throttle", "%", percent),
+    0x47: ("Absolute throttle B", "%", percent),
+    0x48: ("Absolute throttle C", "%", percent),
+    0x49: ("Accelerator pedal D", "%", percent),
+    0x4A: ("Accelerator pedal E", "%", percent),
+    0x4B: ("Accelerator pedal F", "%", percent),
+    0x4C: ("Commanded throttle", "%", percent),
+    0x4D: ("Time with light on", "min", word),
+    0x4E: ("Time since clear", "min", word),
+    0x51: ("Fuel type", "", lambda d: FUEL_TYPES.get(d[0], f"Code {d[0]}")),
+    0x52: ("Ethanol content", "%", percent),
+    0x55: ("Short O2 trim B1", "%", trim),
+    0x56: ("Long O2 trim B1", "%", trim),
+    0x57: ("Short O2 trim B2", "%", trim),
+    0x58: ("Long O2 trim B2", "%", trim),
+}
+for _index, _pid in enumerate(range(0x14, 0x1C)):
+    LIVE_PIDS[_pid] = (f"O2 voltage B{_index // 4 + 1}S{_index % 4 + 1}", "V", lambda d: d[0] / 200)
+
+# Read on every update; everything else takes turns so the fast values stay responsive.
+FAST_PIDS = (0x0C, 0x0D, 0x11, 0x04)
+SLOW_PER_STEP = 2
+# PIDs that list other PIDs rather than holding a measurement.
+INDEX_PIDS = set(range(0x00, 0x100, 0x20))
+
+COMMON_MONITORS = ["Misfire", "Fuel system", "Components"]
+SPARK_MONITORS = ["Catalyst", "Heated catalyst", "Evaporative system", "Secondary air",
+                  "A/C refrigerant", "Oxygen sensor", "Oxygen sensor heater", "EGR"]
+DIESEL_MONITORS = ["NMHC catalyst", "NOx aftertreatment", None, "Boost pressure",
+                   None, "Exhaust gas sensor", "Particulate filter", "EGR"]
+
+
+class OBDError(Exception):
+    """An error for the user. Keeps its English text so the page can show it in either language."""
+
+    def __init__(self, text, **values):
+        self.text = text
+        self.values = values
+        super().__init__(t(text, **values))
+
+
+def parse_can(lines):
+    """Rebuild each module's reply from CAN lines, joining multi-frame messages."""
+    frames = {}
+    for line in lines:
+        line = line.strip().upper()
+        if CAN_LINE.match(line):
+            header, *data = line.split()
+            frames.setdefault(header, []).append(bytes(int(b, 16) for b in data))
+
+    replies = {}
+    for header in sorted(frames):
+        payload, length = bytearray(), None
+        for frame in frames[header]:
+            kind = frame[0] >> 4
+            if kind == 0:
+                # A later single frame replaces an earlier one, such as "please wait" before the answer.
+                length = frame[0] & 0x0F
+                payload = bytearray(frame[1:])
+            elif kind == 1 and len(frame) > 1:
+                length = ((frame[0] & 0x0F) << 8) | frame[1]
+                payload.extend(frame[2:])
+            elif kind == 2:
+                payload.extend(frame[1:])
+        replies[header] = bytes(payload[:length])
+    return replies
+
+
+def decode_dtcs(payload):
+    """Decode a mode 03/07/0A reply: response byte, count byte, then 2 bytes per code."""
+    codes = []
+    body = payload[2:]
+    for i in range(0, len(body) - 1, 2):
+        a, b = body[i], body[i + 1]
+        if a or b:
+            codes.append(dtc_name(a, b))
+    return codes
+
+
+def describe_dtc(code, lang=None):
+    lang = lang or i18n.current_language()
+    description = lookup_dtc(code, lang)
+    if description:
+        return description
+    system = t({"P": "Powertrain", "C": "Chassis", "B": "Body", "U": "Network"}[code[0]], lang)
+    if code[:2] in ("P1", "B1", "B2", "C1", "C2", "U1", "U2") or code[:3] in ("P30", "P31", "P32", "P33"):
+        return t("{system}: manufacturer-specific code, look it up for your car's make", lang, system=system)
+    return t("{system}: generic code not in this tool's table, look it up online", lang, system=system)
+
+
+def decode_monitors(payload):
+    """Decode a mode 01 PID 01 reply into light state, code count and self-tests."""
+    a, b, c, d = payload[2:6]
+    tests = []
+    for bit, name in enumerate(COMMON_MONITORS):
+        if b & (1 << bit):
+            tests.append((name, not b & (1 << (bit + 4))))
+    for bit, name in enumerate(DIESEL_MONITORS if b & 0x08 else SPARK_MONITORS):
+        if name and c & (1 << bit):
+            tests.append((name, not d & (1 << bit)))
+    return {"mil": bool(a & 0x80), "count": a & 0x7F, "tests": tests}
+
+
+def format_value(value):
+    return f"{value:.1f}" if isinstance(value, float) else str(value)
+
+
+def decode_text(payload):
+    """Decode a mode 09 reply: response byte, PID byte, item count, then ASCII."""
+    return "".join(chr(b) for b in payload[3:] if 32 < b < 127)
+
+
+def bits_to_pids(data, base):
+    bits = int.from_bytes(data[:4], "big")
+    return {base + i + 1 for i in range(32) if bits & (1 << (31 - i))}
+
+
+class BleTransport:
+    """Sends a text command over BLE and collects the reply up to the '>' prompt."""
+
+    def __init__(self, client, write_char, notify_char):
+        self.client = client
+        self.write_char = write_char
+        self.notify_char = notify_char
+        self.with_response = "write-without-response" not in write_char.properties
+        self.buffer = bytearray()
+        self.prompt = asyncio.Event()
+
+    def on_data(self, _, data):
+        self.buffer.extend(data)
+        if b">" in data:
+            self.prompt.set()
+
+    async def send(self, command, wait=5):
+        """Return the reply lines, or None if the prompt never came."""
+        self.buffer.clear()
+        self.prompt.clear()
+        await self.client.write_gatt_char(self.write_char, (command + "\r").encode(), response=self.with_response)
+        try:
+            await asyncio.wait_for(self.prompt.wait(), wait)
+        except asyncio.TimeoutError:
+            return None
+        text = self.buffer.decode("ascii", "replace").replace(">", "")
+        return [line.strip() for line in re.split(r"[\r\n]+", text) if line.strip()]
+
+
+class ELM:
+    def __init__(self, transport):
+        self.transport = transport
+        self.version = self.protocol = ""
+        self.vehicle = None
+
+    async def setup(self):
+        reply = await self.transport.send("ATZ", 5)
+        if not reply or not any("ELM" in line for line in reply):
+            raise OBDError("Adapter did not identify itself (reply: {reply})", reply=reply)
+        self.version = next(line for line in reply if "ELM" in line)
+        for command in ("ATE0", "ATL0", "ATS1", "ATH1", "ATSP0"):
+            await self.transport.send(command, 2)
+
+        if not await self.request(0x01, 0x00, wait=25):
+            raise OBDError("The car did not answer. Check the ignition is ON and the adapter is seated.")
+
+        number = "".join(await self.transport.send("ATDPN", 2) or []).lstrip("A")
+        if number not in SUPPORTED_PROTOCOLS:
+            raise OBDError("This tool handles 11-bit CAN only; the car uses protocol '{number}'.", number=number)
+        self.protocol = SUPPORTED_PROTOCOLS[number]
+
+    async def request(self, mode, pid=None, wait=5, frame=None):
+        """Return {module header: payload}, retrying once if a reply is lost or stale."""
+        command = f"{mode:02X}" + ("" if pid is None else f"{pid:02X}") + ("" if frame is None else f"{frame:02X}")
+        expected = bytes([mode + 0x40] + ([] if pid is None else [pid]))
+        for _ in range(2):
+            lines = await self.transport.send(command, wait)
+            if lines is None:
+                continue
+            good = {h: p for h, p in parse_can(lines).items() if p.startswith(expected)}
+            if good:
+                return good
+            if any("NO DATA" in line for line in lines):
+                return {}
+        return {}
+
+    async def request_all(self, mode, pid=None, attempts=3):
+        """Ask several times and combine the replies, since a module occasionally misses a request."""
+        replies = {}
+        for _ in range(attempts):
+            replies.update(await self.request(mode, pid))
+        return dict(sorted(replies.items()))
+
+    async def module_request(self, hdr, rax, request, fc=False, wait=2):
+        """Send a read request to one module. Returns its reply or refusal, or None if silent."""
+        if request[:2] not in car_modules.READ_ONLY_SERVICES:
+            raise OBDError("Refusing to send '{request}': only read requests are allowed.", request=request)
+        for command in (f"ATSH{hdr}", f"ATCRA{rax}"):
+            await self.transport.send(command, 2)
+        if fc:
+            for command in (f"ATFCSH{hdr}", "ATFCSD300000", "ATFCSM1"):
+                await self.transport.send(command, 2)
+        lines = await self.transport.send(request, wait)
+        if fc:
+            await self.transport.send("ATFCSM0", 2)
+        reply = parse_can(lines or []).get(rax)
+        service = int(request[:2], 16)
+        if not reply or (reply[0] != service + 0x40 and reply[:2] != bytes([0x7F, service])):
+            return None
+        return reply
+
+    async def restore_addressing(self):
+        """Go back to asking all modules, so standard requests work again."""
+        for command in ("ATCRA", "ATFCSM0", "ATSH7DF"):
+            await self.transport.send(command, 2)
+
+    async def voltage(self):
+        reply = await self.transport.send("ATRV", 2)
+        return reply[0] if reply else "unknown"
+
+    async def supported_pids(self):
+        """Walk the 'supported PIDs' ranges and return the set across all modules."""
+        supported = set()
+        base = 0x00
+        while base <= 0xE0:
+            replies = await self.request(0x01, base)
+            if not replies:
+                break
+            for payload in replies.values():
+                supported |= bits_to_pids(payload[2:6], base)
+            if base + 0x20 not in supported:
+                break
+            base += 0x20
+        return supported
+
+    async def read_pid(self, pid):
+        """Read a live value from the first module that answers, or None."""
+        replies = await self.request(0x01, pid)
+        for payload in replies.values():
+            try:
+                return LIVE_PIDS[pid][2](payload[2:])
+            except IndexError:
+                continue
+        return None
+
+
+def monitor_lines(status, header, indent="  "):
+    light = t("ON") if status["mil"] else t("off")
+    lines = [t("Module {header}: check engine light {light}, {count} code(s)",
+               header=header, light=light, count=status["count"])]
+    lines += [f"{indent}{t(name):22} {t('finished') if done else t('NOT finished')}" for name, done in status["tests"]]
+    return lines
+
+
+async def run_info(elm, _):
+    print(f"{t('Adapter')}: {elm.version}")
+    print(f"{t('Protocol')}: {elm.protocol}")
+    print(f"{t('Voltage at adapter (approximate)')}: {await elm.voltage()}")
+    for header, payload in (await elm.request_all(0x01, 0x01)).items():
+        print()
+        print("\n".join(monitor_lines(decode_monitors(payload), header)))
+    supported = await elm.supported_pids()
+    print(f"\n{t('Live values available')}: {', '.join(t(LIVE_PIDS[p][0]) for p in LIVE_PIDS if p in supported)}")
+    print(f"{t('All supported PIDs')}: {' '.join(f'{p:02X}' for p in sorted(supported))}")
+
+
+async def read_codes(elm):
+    """Return {label: {module: [codes]}} for stored, pending and permanent codes."""
+    result = {}
+    for label, mode in (("Stored", 0x03), ("Pending", 0x07), ("Permanent", 0x0A)):
+        result[label] = {h: decode_dtcs(p) for h, p in (await elm.request_all(mode)).items()}
+    return result
+
+
+def code_lines(codes, indent=""):
+    lines = []
+    for label, modules in codes.items():
+        found = [(h, c) for h, module_codes in modules.items() for c in module_codes]
+        lines.append(indent + t("{label}: {count} code(s), {modules} module(s) answered",
+                                label=t(label), count=len(found), modules=len(modules)))
+        lines += [f"{indent}  {code}  {describe_dtc(code)}  [{t('module {header}', header=header)}]"
+                  for header, code in found]
+    return lines
+
+
+def print_codes(codes):
+    print("\n".join(code_lines(codes)))
+
+
+async def run_codes(elm, _):
+    codes = await read_codes(elm)
+    print_codes(codes)
+    garage.remember(elm.vehicle, "codes", {"codes": codes})
+    print("\n" + t("This covers engine and emissions codes; ABS, airbag and body faults usually need other tools."))
+
+
+async def read_freeze_frame(elm):
+    """Return what the car saved when a stored code was set, or None if nothing was saved."""
+    replies = await elm.request(0x02, 0x02, frame=0)
+    code = next((c for p in replies.values() for c in decode_dtcs(bytes(2) + p[3:5])), None)
+    if code is None:
+        return None
+    supported = set()
+    for payload in (await elm.request(0x02, 0x00, frame=0)).values():
+        supported |= bits_to_pids(payload[3:7], 0x00)
+    values = []
+    for pid in (p for p in LIVE_PIDS if p in supported):
+        for payload in (await elm.request(0x02, pid, frame=0)).values():
+            name, unit, formula = LIVE_PIDS[pid]
+            values.append({"name": name, "unit": unit, "text": format_value(formula(payload[3:]))})
+            break
+    return {"code": code, "values": values}
+
+
+async def read_identity(elm):
+    """Read what identifies this car: VIN, calibration IDs and module names."""
+    vehicle = {}
+    for pid, label in ((0x02, "VIN"), (0x04, "Calibration ID"), (0x06, "Calibration check"), (0x0A, "Module name")):
+        replies = await elm.request(0x09, pid)
+        if pid == 0x06:
+            vehicle[label] = {h: p[3:].hex().upper() for h, p in replies.items()}
+        else:
+            vehicle[label] = {h: decode_text(p) for h, p in replies.items()}
+    return vehicle
+
+
+async def read_snapshot(elm):
+    """Read everything the car offers through standard OBD-II, once."""
+    vehicle = elm.vehicle or await read_identity(elm)
+    monitors = {h: decode_monitors(p) for h, p in (await elm.request_all(0x01, 0x01)).items()}
+    codes = await read_codes(elm)
+    has_stored = any(codes["Stored"].values())
+    supported = await elm.supported_pids()
+
+    values, raw = {}, {}
+    for pid in sorted(supported - INDEX_PIDS - {0x01}):
+        if pid in LIVE_PIDS:
+            values[pid] = await elm.read_pid(pid)
+        else:
+            replies = await elm.request(0x01, pid)
+            raw[pid] = next((p[2:].hex(" ").upper() for p in replies.values()), None)
+    return {
+        "adapter": elm.version,
+        "protocol": elm.protocol,
+        "voltage": await elm.voltage(),
+        "vehicle": vehicle,
+        "monitors": monitors,
+        "codes": codes,
+        "freeze": await read_freeze_frame(elm) if has_stored else None,
+        "supported": supported,
+        "values": values,
+        "raw": raw,
+    }
+
+
+def shown_value(value):
+    return "-" if value is None else t(format_value(value))
+
+
+def format_report(snapshot):
+    lines = [t("Car report, {time}", time=f"{datetime.now():%Y-%m-%d %H:%M}"), "",
+             f"{t('Adapter')}: {snapshot['adapter']}", f"{t('Protocol')}: {snapshot['protocol']}",
+             f"{t('Voltage at adapter (approximate)')}: {snapshot['voltage']}", "", t("VEHICLE")]
+    for label, modules in snapshot["vehicle"].items():
+        for header, text in modules.items():
+            lines.append(f"  {t(label):18} {text}  [{t('module {header}', header=header)}]")
+        if not modules:
+            lines.append(f"  {t(label):18} {t('not reported')}")
+
+    lines += ["", t("STATUS")]
+    for header, status in snapshot["monitors"].items():
+        lines += ["  " + line for line in monitor_lines(status, header)]
+
+    lines += ["", t("FAULT CODES")] + code_lines(snapshot["codes"], "  ")
+
+    if snapshot["freeze"]:
+        freeze = snapshot["freeze"]
+        lines += ["", t("FREEZE FRAME for {code} ({description})", code=freeze["code"],
+                        description=describe_dtc(freeze["code"]))]
+        lines += [f"  {t(v['name']):24} {t(v['text']):>10} {t(v['unit'])}" for v in freeze["values"]]
+
+    lines += ["", t("ALL VALUES")]
+    for pid, value in snapshot["values"].items():
+        name, unit, _ = LIVE_PIDS[pid]
+        lines.append(f"  {pid:02X}  {t(name):24} {shown_value(value):>20} {t(unit)}")
+    if snapshot["raw"]:
+        lines += ["", t("OTHER DATA (not decoded by this tool, raw bytes)")]
+        lines += [f"  {pid:02X}  {text or t('no reply')}" for pid, text in snapshot["raw"].items()]
+    lines += ["", t("Standard OBD-II only: ABS, airbag and body modules usually need other tools.")]
+    return "\n".join(lines)
+
+
+def remember_snapshot(elm, snapshot):
+    """Save the latest full reading to this car's record on this laptop."""
+    codes = snapshot["codes"]
+    active = sorted({c for label in ("Stored", "Pending") for found in codes[label].values() for c in found})
+    garage.remember(elm.vehicle or snapshot["vehicle"], "status", {
+        "light": any(status["mil"] for status in snapshot["monitors"].values()),
+        "active_codes": active,
+        "adapter_voltage": snapshot["voltage"],
+        "codes": codes,
+        "monitors": snapshot["monitors"],
+        "freeze": snapshot["freeze"],
+        "supported_pids": sorted(f"{pid:02X}" for pid in snapshot["supported"]),
+        "values": {LIVE_PIDS[pid][0]: f"{'-' if value is None else format_value(value)} {LIVE_PIDS[pid][1]}".strip()
+                   for pid, value in snapshot["values"].items()},
+    })
+
+
+async def run_report(elm, _):
+    print(t("Reading everything, this takes about 20 seconds ..."), flush=True)
+    snapshot = await read_snapshot(elm)
+    remember_snapshot(elm, snapshot)
+    report = format_report(snapshot)
+    print(report)
+    save_report("report", report)
+
+
+class LiveReader:
+    """Keeps the latest values, reading the fast ones every step and the rest in turn."""
+
+    def __init__(self, elm, pids, values=None, voltage="unknown"):
+        self.elm = elm
+        self.pids = list(pids)
+        self.fast = [p for p in FAST_PIDS if p in self.pids]
+        self.slow = [p for p in self.pids if p not in self.fast]
+        self.values = dict(values or {})
+        self.voltage = voltage
+        self.next_slow = 0
+
+    async def fill(self):
+        for pid in self.pids:
+            self.values[pid] = await self.elm.read_pid(pid)
+        self.voltage = await self.elm.voltage()
+
+    async def step(self):
+        for pid in self.fast:
+            self.values[pid] = await self.elm.read_pid(pid)
+        for _ in range(min(SLOW_PER_STEP, len(self.slow))):
+            pid = self.slow[self.next_slow]
+            self.values[pid] = await self.elm.read_pid(pid)
+            self.next_slow = (self.next_slow + 1) % len(self.slow)
+            if self.next_slow == 0:
+                self.voltage = await self.elm.voltage()
+
+
+async def poll(elm, args, pids, writer=None, log_file=None):
+    interactive = sys.stdout.isatty()
+    reader = LiveReader(elm, pids)
+    await reader.fill()
+    count = 0
+    while args.samples is None or count < args.samples:
+        if count:
+            await reader.step()
+        values = reader.values
+        if interactive:
+            sys.stdout.write("\x1b[H\x1b[J")
+        print(datetime.now().strftime("%H:%M:%S") + ("  " + t("logging to {name}", name=log_file.name) if log_file else ""))
+        for pid, value in values.items():
+            name, unit, _ = LIVE_PIDS[pid]
+            print(f"  {t(name):22} {shown_value(value):>8} {t(unit)}")
+        print(f"  {t('Voltage at adapter (approximate)'):22} {t(reader.voltage):>8}")
+        if interactive:
+            print("\n" + t("Press Ctrl+C to stop."))
+        if writer:
+            writer.writerow([datetime.now().isoformat(timespec="milliseconds")]
+                            + ["" if values[p] is None else format_value(values[p]) for p in pids])
+            log_file.flush()
+        count += 1
+        await asyncio.sleep(args.interval)
+
+
+async def live_pids(elm):
+    supported = await elm.supported_pids()
+    pids = [p for p in LIVE_PIDS if p in supported]
+    if not pids:
+        raise OBDError("The car reported no live values this tool can read.")
+    return pids
+
+
+async def run_live(elm, args):
+    os.system("")  # turns on ANSI screen clearing in older Windows consoles
+    await poll(elm, args, await live_pids(elm))
+
+
+async def run_log(elm, args):
+    os.system("")
+    pids = await live_pids(elm)
+    LOG_DIR.mkdir(exist_ok=True)
+    path = LOG_DIR / f"drive_{datetime.now():%Y%m%d_%H%M%S}.csv"
+    # utf-8-sig lets Excel read Arabic headers correctly.
+    with path.open("w", newline="", encoding="utf-8-sig") as log_file:
+        writer = csv.writer(log_file)
+        writer.writerow([t("time")] + [f"{t(LIVE_PIDS[p][0])} ({t(LIVE_PIDS[p][1])})" for p in pids])
+        try:
+            await poll(elm, args, pids, writer, log_file)
+        finally:
+            print(t("Saved log: {path}", path=path))
+
+
+def dashboard_state(snapshot, reader, demo=False, lang=None, cars=()):
+    """Build what the page shows, with every label and name in the requested language."""
+    freeze = snapshot["freeze"]
+    return {
+        "connected": True,
+        "demo": demo,
+        "cars": list(cars),
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "adapter": snapshot["adapter"],
+        "protocol": snapshot["protocol"],
+        "voltage": t(reader.voltage, lang),
+        "vehicle": {t(label, lang): modules for label, modules in snapshot["vehicle"].items()},
+        "monitors": {h: {**status, "tests": [[t(name, lang), done] for name, done in status["tests"]]}
+                     for h, status in snapshot["monitors"].items()},
+        "codes": {t(label, lang): {h: [{"code": c, "description": describe_dtc(c, lang)} for c in module_codes]
+                                   for h, module_codes in modules.items()}
+                  for label, modules in snapshot["codes"].items()},
+        "freeze": freeze and {
+            "code": freeze["code"], "description": describe_dtc(freeze["code"], lang),
+            "values": [{"name": t(v["name"], lang), "unit": t(v["unit"], lang), "text": t(v["text"], lang)}
+                       for v in freeze["values"]]},
+        "values": [{"pid": f"{pid:02X}", "name": t(LIVE_PIDS[pid][0], lang), "unit": t(LIVE_PIDS[pid][1], lang),
+                    "value": value if isinstance(value, (int, float)) else None,
+                    "text": "-" if value is None else t(format_value(value), lang)}
+                   for pid, value in reader.values.items()],
+        "raw": [{"pid": f"{pid:02X}", "text": text or t("no reply", lang)} for pid, text in snapshot["raw"].items()],
+    }
+
+
+class DashboardApp:
+    """Serves the page straight away, then keeps trying to reach the car until it answers."""
+
+    RETRY_SECONDS = 5
+
+    def __init__(self, args):
+        self.args = args
+        self.message = ("Looking for the adapter ...", {})
+        self.snapshot = self.reader = None
+        # Demo pages get shared and screenshotted, so they never list real saved cars.
+        self.cars = [] if args.demo else garage.summaries()
+
+    def state(self, lang=None):
+        if self.snapshot is None:
+            text, values = self.message
+            return {"connected": False, "message": t(text, lang, **values), "cars": self.cars}
+        return dashboard_state(self.snapshot, self.reader, self.args.demo, lang, self.cars)
+
+    async def session(self, elm, _):
+        self.message = ("Connected. Reading everything from the car, this takes about 20 seconds ...", {})
+        snapshot = await read_snapshot(elm)
+        if not self.args.demo:
+            remember_snapshot(elm, snapshot)
+            self.cars = garage.summaries()
+        self.reader = LiveReader(elm, snapshot["values"], snapshot["values"], snapshot["voltage"])
+        self.snapshot = snapshot
+        count = 0
+        while self.args.samples is None or count < self.args.samples:
+            await self.reader.step()
+            count += 1
+            await asyncio.sleep(self.args.interval)
+
+    async def connect(self):
+        if self.args.demo:
+            elm = ELM(DemoTransport())
+            await elm.setup()
+            await self.session(elm, self.args)
+        else:
+            await connect_and_run(self.args, self.session)
+
+    async def run(self):
+        server = await dashboard.start(lambda lang: json.dumps(self.state(lang)), self.args.port)
+        url = f"http://127.0.0.1:{self.args.port}"
+        print(t("Dashboard running at {url} (on this laptop only). Press Ctrl+C to stop.", url=url), flush=True)
+        if not self.args.no_browser:
+            webbrowser.open(url)
+        async with server:
+            while True:
+                try:
+                    await self.connect()
+                    return
+                except Exception as error:
+                    self.snapshot = self.reader = None
+                    if isinstance(error, OBDError):
+                        self.message = (error.text, error.values)
+                    else:
+                        self.message = (str(error), {})
+                    print(t("Not connected: {error}", error=error), flush=True)
+                await asyncio.sleep(self.RETRY_SECONDS)
+
+
+def battery_advice(volts, running):
+    """Explain a battery voltage. Engine-off bands assume a rested 12 V lead-acid battery."""
+    if running:
+        if volts < 13.2:
+            return t("Low for a running engine: the alternator may not be charging.")
+        if volts > 15.0:
+            return t("High for a running engine: the charging system may be overcharging.")
+        return t("Normal for a running engine: the battery is being charged.")
+    if volts >= 12.6:
+        return t("About full. Starting should be fine if the battery is healthy.")
+    if volts >= 12.4:
+        return t("About 75% charged. It will probably start, but charge it soon.")
+    if volts >= 12.2:
+        return t("About 50% charged. Starting may be weak, so charge it first.")
+    if volts >= 12.0:
+        return t("About 25% charged. It may not start, so charge it first.")
+    return t("Very low. It probably won't start, so charge it or use a jump starter.")
+
+
+async def run_battery(elm, _):
+    """Read voltage without setup(), so it still works when the car's computer won't answer."""
+    await elm.transport.send("ATZ", 5)
+    for command in ("ATE0", "ATL0", "ATS1", "ATH1", "ATSP0"):
+        await elm.transport.send(command, 2)
+
+    readings = []
+    for _ in range(5):
+        match = re.search(r"\d+(\.\d+)?", await elm.voltage())
+        if match:
+            readings.append(float(match.group()))
+        await asyncio.sleep(1)
+    if not readings:
+        raise OBDError("The adapter did not report a voltage.")
+
+    module_volts, rpm = None, None
+    if await elm.request(0x01, 0x00, wait=25):
+        module_volts = await elm.read_pid(0x42)
+        rpm = await elm.read_pid(0x0C)
+    average = sum(readings) / len(readings)
+    running = bool(rpm)
+
+    print(t("Voltage at adapter: {average} V (lowest {low}, highest {high})",
+            average=f"{average:.1f}", low=f"{min(readings):.1f}", high=f"{max(readings):.1f}"))
+    if module_volts is None:
+        print(t("Voltage at car's module: not available"))
+    else:
+        print(t("Voltage at car's module: {volts} V", volts=f"{module_volts:.1f}"))
+    if rpm is None:
+        print(t("Engine: unknown, car did not answer"))
+    else:
+        print(t("Engine: running") if running else t("Engine: off"))
+    # On a tested car the adapter read about 0.8 V higher than the car's own module.
+    print("\n" + battery_advice(average if module_volts is None else module_volts, running))
+    if module_volts is not None:
+        print(t("This advice uses the car's module reading, which is usually more accurate than the adapter's."))
+    if not running:
+        print(t("Ignition-on loads and recent charging can shift this reading."))
+        print(t("This doesn't test starting power: a weak battery can read normal and still fail to crank."))
+
+
+MINIMUM_VOLTS = 11.8
+
+
+async def check_battery(elm):
+    """Long reads drain the battery, so refuse to start them when it's already low."""
+    volts = await elm.read_pid(0x42)
+    if volts is None:
+        match = re.search(r"\d+(\.\d+)?", await elm.voltage())
+        volts = float(match.group()) if match else None
+    if volts is not None and volts < MINIMUM_VOLTS:
+        raise OBDError("Battery is at {volts} V. Charge it or start the engine before this long read.",
+                       volts=f"{volts:.1f}")
+
+
+def show_progress(done, total):
+    print("\r  " + t("{done} of {total} ...", done=done, total=total), end="" if done < total else "\n", flush=True)
+
+
+def save_report(prefix, text):
+    REPORT_DIR.mkdir(exist_ok=True)
+    path = REPORT_DIR / f"{prefix}_{datetime.now():%Y%m%d_%H%M%S}.txt"
+    path.write_text(text + "\n", encoding="utf-8")
+    print("\n" + t("Saved report: {path}", path=path))
+
+
+async def run_scan(elm, _):
+    await check_battery(elm)
+    print(t("Asking each possible module, this takes about a minute ..."), flush=True)
+    modules = await car_modules.scan_modules(elm, on_progress=show_progress)
+    garage.remember(elm.vehicle, "modules", {"modules": modules})
+    report = car_modules.format_scan(modules, describe_dtc)
+    print(report)
+    save_report("modules", report)
+
+
+async def run_profile(elm, args):
+    await check_battery(elm)
+    profile = car_modules.load_profile(args.name, args.year)
+    print(t("Reading profile {name}, this can take a few minutes ...", name=args.name), flush=True)
+    values, answered, tried = await car_modules.read_profile(elm, profile, args.year, show_progress)
+    garage.remember(elm.vehicle, "profile", {"name": args.name, "year": args.year, "values": values})
+    report = car_modules.format_profile(values, answered, tried)
+    print(report)
+    save_report("profile", report)
+
+
+def run_profiles(args):
+    """Search the car catalog or download a profile. This doesn't need the adapter."""
+    if args.get:
+        files = car_modules.download_profile(args.get)
+        print(t("Downloaded {name}: {files}", name=args.get, files=", ".join(files)))
+        print(t("Data from OBDb contributors (https://github.com/OBDb), licensed CC BY-SA 4.0."))
+        return
+    matches = car_modules.search_catalog(" ".join(args.search))
+    for name in matches:
+        print(name + ("  " + t("(on this laptop)") if car_modules.local_profile_files(name) else ""))
+    print("\n" + t("{count} of {total} profiles. Read one with: .\\obd profile --name NAME --year YEAR",
+                   count=len(matches), total=len(car_modules.catalog())))
+
+
+def run_cars():
+    """List the cars saved on this laptop. This doesn't need the adapter."""
+    cars = garage.summaries()
+    if not cars:
+        print(t("No cars saved yet. A car is saved the first time it connects."))
+        return
+    print(t("Saved cars: {count}, in {folder}", count=len(cars), folder=garage.CARS_DIR))
+    for car in cars:
+        print(f"\n{car['vin'] or t('VIN not reported')}")
+        print(f"  {t('First seen')}: {car['first_seen']}")
+        print(f"  {t('Last seen')}: {car['last_seen']}")
+        print(f"  {t('Connections')}: {car['connections']}")
+        if car["modules"]:
+            print(f"  {t('Modules')}: {', '.join(car['modules'])}")
+        if car["light"] is not None:
+            print(f"  {t('Check engine light')}: {t('ON') if car['light'] else t('off')}")
+            print(f"  {t('Stored and pending codes')}: {', '.join(car['codes']) or t('none')}")
+
+
+async def run_clear(elm, _):
+    rpm = await elm.read_pid(0x0C)
+    if rpm is None or rpm > 0:
+        raise OBDError("Not clearing: the engine must be off with the ignition ON.")
+    codes = await read_codes(elm)
+    print_codes(codes)
+    print("\n" + t("Clearing erases these codes and their saved fault data, and resets the emissions self-tests, which then need driving to finish. It does not fix the fault."))
+    answer = await asyncio.to_thread(input, t("Type CLEAR to continue, anything else to cancel: "))
+    if answer.strip() != "CLEAR":
+        print(t("Cancelled, nothing was changed."))
+        return
+    if await elm.request(0x04):
+        print(t("Codes cleared."))
+    else:
+        raise OBDError("The car did not confirm the clear. Run `codes` to check.")
+
+
+async def connect_and_run(args, handler):
+    from bleak import BleakClient, BleakScanner
+
+    print(t("Looking for the adapter ..."), flush=True)
+    if args.address:
+        device = await BleakScanner.find_device_by_address(args.address, timeout=20)
+    else:
+        device = await BleakScanner.find_device_by_filter(
+            lambda d, ad: any(hint in (d.name or ad.local_name or "").upper() for hint in ADAPTER_NAME_HINTS),
+            timeout=20)
+    if device is None:
+        raise OBDError("Adapter not found. Check it is plugged in, the ignition is ON, and no phone is connected to it.")
+    async with BleakClient(device, timeout=30) as client:
+        write_char = notify_char = None
+        for service in client.services:
+            if service.uuid.startswith(SERVICE_PREFIX):
+                for char in service.characteristics:
+                    if "notify" in char.properties and notify_char is None:
+                        notify_char = char
+                    if {"write", "write-without-response"} & set(char.properties) and write_char is None:
+                        write_char = char
+        if write_char is None or notify_char is None:
+            raise OBDError("This adapter does not have the expected BLE serial service (FFF0).")
+
+        transport = BleTransport(client, write_char, notify_char)
+        await client.start_notify(notify_char, transport.on_data)
+        elm = ELM(transport)
+        if handler is not run_battery:
+            await elm.setup()
+            elm.vehicle = await read_identity(elm)
+            try:
+                garage.remember_connection(elm.vehicle, elm.version, elm.protocol)
+            except OSError as error:
+                print(t("Could not save this car's info: {error}", error=error))
+        await handler(elm, args)
+
+
+def language_from_arguments(arguments):
+    """Find --lang before the parser is built, so its help text can be translated."""
+    for index, argument in enumerate(arguments):
+        if argument == "--lang" and index + 1 < len(arguments):
+            return arguments[index + 1]
+        if argument.startswith("--lang="):
+            return argument.split("=", 1)[1]
+    return None
+
+
+def main():
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
+    chosen = language_from_arguments(sys.argv[1:])
+    i18n.set_language(chosen or i18n.saved_language())
+    if chosen in i18n.LANGUAGES:
+        i18n.save_language(chosen)
+
+    parser = argparse.ArgumentParser(description=t("Read fault codes and live data from a car through a Bluetooth LE ELM327 adapter. Only the clear command changes anything in the car, and it asks first."))
+    parser.add_argument("--address", help=t("adapter's Bluetooth address (default: find one named OBD or ELM)"))
+    parser.add_argument("--lang", choices=i18n.LANGUAGES, help=t("language: en or ar, remembered for next time"))
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("info", help=t("adapter, voltage, check engine light, self-tests")).set_defaults(handler=run_info)
+    commands.add_parser("battery", help=t("check battery voltage")).set_defaults(handler=run_battery)
+    commands.add_parser("codes", help=t("read fault codes")).set_defaults(handler=run_codes)
+    commands.add_parser("report", help=t("read everything once and save it to a file")).set_defaults(handler=run_report)
+    commands.add_parser("scan", help=t("find other modules and read their fault codes")).set_defaults(handler=run_scan)
+    commands.add_parser("cars", help=t("list cars saved on this laptop")).set_defaults(handler=None)
+    profile_command = commands.add_parser("profile", help=t("read extra values using a community car profile"))
+    profile_command.add_argument("--name", required=True, help=t("car from `profiles`, such as kia-picanto"))
+    profile_command.add_argument("--year", type=int, help=t("model year, to skip commands for other years"))
+    profile_command.set_defaults(handler=run_profile)
+    profiles_command = commands.add_parser("profiles", help=t("search the car catalog, no adapter needed"))
+    profiles_command.add_argument("search", nargs="*", help=t("words to search for, such as toyota camry"))
+    profiles_command.add_argument("--get", metavar="NAME", help=t("download a car's profile now"))
+    profiles_command.set_defaults(handler=None)
+    commands.add_parser("clear", help=t("clear fault codes (asks first)")).set_defaults(handler=run_clear)
+    for name, handler, text in (("live", run_live, t("live values in this window")),
+                                ("log", run_log, t("live values, saved to CSV")),
+                                ("dashboard", None, t("everything on one page in your browser"))):
+        command = commands.add_parser(name, help=text)
+        command.add_argument("--interval", type=float, default=0.1, help=t("seconds between readings"))
+        command.add_argument("--samples", type=int, help=t("stop after this many readings"))
+        command.set_defaults(handler=handler)
+        if name == "dashboard":
+            command.add_argument("--port", type=int, default=8765, help=t("local port for the page"))
+            command.add_argument("--no-browser", action="store_true", help=t("don't open the browser"))
+            command.add_argument("--demo", action="store_true", help=t("show simulated data, no adapter or car needed"))
+    args = parser.parse_args()
+
+    try:
+        if args.command == "profiles":
+            run_profiles(args)
+            return 0
+        if args.command == "cars":
+            run_cars()
+            return 0
+        if args.command == "dashboard":
+            asyncio.run(DashboardApp(args).run())
+            return 0
+        if args.command == "profile":
+            # Fetch and check the profile first, so a mistake doesn't use up battery connecting.
+            if not car_modules.local_profile_files(args.name):
+                print(t("Downloading profile {name} from OBDb ...", name=args.name), flush=True)
+                car_modules.download_profile(args.name)
+            car_modules.load_profile(args.name, args.year)
+        asyncio.run(connect_and_run(args, args.handler))
+    except KeyboardInterrupt:
+        print("\n" + t("Stopped."))
+    except Exception as error:
+        print(t("Error: {error}", error=error), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

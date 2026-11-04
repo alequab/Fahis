@@ -1,0 +1,13 @@
+# Environment
+.venv/
+__pycache__/
+*.pyc
+
+# Car data: reports and saved cars contain the VIN
+logs/
+reports/
+cars/
+settings.json
+
+# Profiles fetched on demand
+profiles/downloaded/
