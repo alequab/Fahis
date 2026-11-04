@@ -193,6 +193,43 @@ class EverythingTests(unittest.IsolatedAsyncioTestCase):
         for pid in ("0105", "010F", "0110"):
             self.assertIn(pid, sent)
 
+    def test_values_are_marked_only_once_they_are_old(self):
+        reader = obd_tool.LiveReader(ELM(FakeTransport({})), [0x0C, 0x05], {0x0C: 800.0, 0x05: 90})
+        self.assertIsNone(reader.age_note(0x0C))
+        self.assertIsNone(reader.age_note(0x05))
+        reader.read_at[0x05] -= obd_tool.FAST_STALE_SECONDS + 1  # normal for a slow value
+        self.assertIsNone(reader.age_note(0x05))
+        reader.read_at[0x05] -= obd_tool.SLOW_STALE_SECONDS
+        self.assertIn("seconds ago", reader.age_note(0x05))
+        reader.read_at[0x0C] -= obd_tool.FAST_STALE_SECONDS + 1
+        self.assertIn("seconds ago", reader.age_note(0x0C))
+        self.assertIn("قبل", reader.age_note(0x0C, "ar"))
+
+    async def test_values_from_before_the_engine_stopped_are_marked(self):
+        transport = FakeTransport({"010C": ["7E8 04 41 0C 00 00"], "ATRV": ["13.9V"]})
+        pids = [0x0C, 0x05, 0x0F, 0x10]
+        reader = obd_tool.LiveReader(ELM(transport), pids, {0x0C: 800.0, 0x05: 90, 0x0F: 58, 0x10: 6.75})
+        for pid in pids:
+            reader.read_at[pid] -= 1
+        await reader.step()  # reads RPM, then only two of the three slow values
+        self.assertFalse(reader.engine_running)
+        self.assertIsNone(reader.age_note(0x0C))
+        self.assertEqual(reader.age_note(0x10), "Read before the engine stopped")
+        reader.store(0x10, 0.0)  # the mark goes once the value is read again
+        self.assertIsNone(reader.age_note(0x10))
+        reader.read_at[0x10] -= 1
+        reader.store(0x0C, 800.0)
+        self.assertEqual(reader.age_note(0x10), "Read before the engine started")
+
+    async def test_page_state_carries_the_mark(self):
+        elm = ELM(FakeTransport({}))
+        reader = obd_tool.LiveReader(elm, [0x05], {0x05: 90})
+        reader.read_at[0x05] -= obd_tool.SLOW_STALE_SECONDS + 1
+        snapshot = {"freeze": None, "adapter": "ELM327", "protocol": "CAN", "vehicle": {}, "monitors": {}, "codes": {},
+                    "this_drive": [], "more": [], "raw": {}}
+        value = obd_tool.dashboard_state(snapshot, reader, lang="en")["values"][0]
+        self.assertIn("seconds ago", value["note"])
+
 
 class BatteryTests(unittest.IsolatedAsyncioTestCase):
     def test_advice_bands(self):

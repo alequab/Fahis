@@ -56,6 +56,8 @@
   td { padding-block: 4px; padding-inline-end: 8px; border-top: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
   tr:first-child td { border-top: 0; }
   td.dim, .dim { color: var(--muted); }
+  .val.stale, .tile.stale .number { color: var(--muted); }
+  .tile .note { color: var(--muted); font-size: 12px; }
   .values { columns: 2 300px; column-gap: 24px; }
   .row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-top: 1px solid var(--line); break-inside: avoid; }
   .val { font-variant-numeric: tabular-nums; text-align: end; }
@@ -191,7 +193,7 @@
           <div class="catalog-tools"><select id="graph-add" aria-label="Add a graph"></select></div>
           <div id="graphs"></div>
         </section>
-        <section><h2 data-i18n="All live values">All live values</h2><div class="values" id="values"></div></section>
+        <section><h2 data-i18n="All live values">All live values</h2><p class="dim" data-i18n="Engine RPM, speed, throttle and load update most often. Other values take turns, so they can be a little older.">Engine RPM, speed, throttle and load update most often. Other values take turns, so they can be a little older.</p><div class="values" id="values"></div></section>
         <section id="more-section" hidden>
           <h2 data-i18n="More standard values">More standard values</h2>
           <p class="needs" data-i18n="From community definitions, read once when connecting. Treat any value that looks wrong as unreliable.">From community definitions, read once when connecting. Treat any value that looks wrong as unreliable.</p>
@@ -419,17 +421,24 @@ function sparkline(values) {
   return svg;
 }
 
+function valueText(v) {
+  const text = `${v.text} ${v.unit}`.trim();
+  return v.note ? `${text} (${v.note})` : text;
+}
+
 function renderTiles(values) {
   const byPid = Object.fromEntries(values.map(v => [v.pid, v]));
   fill(document.getElementById("tiles"), TILES.filter(pid => byPid[pid]).map(pid => {
     const v = byPid[pid];
     const past = history[pid] = history[pid] || [];
-    if (v.value !== null) past.push(v.value);
+    if (v.value !== null && !v.note) past.push(v.value);
     if (past.length > HISTORY) past.shift();
-    const tile = el("div", undefined, "tile");
+    const tile = el("div", undefined, v.note ? "tile stale" : "tile");
     const number = el("div", v.value === null ? "-" : String(Math.round(v.value)), "number");
     number.append(el("span", v.unit, "unit"));
-    tile.append(el("div", v.name, "label"), number, sparkline(past));
+    tile.append(el("div", v.name, "label"), number);
+    if (v.note) tile.append(el("div", v.note, "note"));
+    tile.append(sparkline(past));
     return tile;
   }));
 }
@@ -550,7 +559,7 @@ function renderGraphs(values) {
   const numeric = values.filter(v => v.value !== null);
   for (const v of numeric) {
     const past = graphData[v.pid] = graphData[v.pid] || [];
-    past.push(v.value);
+    if (!v.note) past.push(v.value);
     if (past.length > GRAPH_HISTORY) past.shift();
   }
   const select = document.getElementById("graph-add");
@@ -568,7 +577,7 @@ function renderGraphs(values) {
     const remove = el("button", tr("Remove"), "small");
     remove.type = "button";
     remove.addEventListener("click", () => { setGraphs(chosenGraphs.filter(item => item !== pid)); renderGraphs([]); });
-    head.append(el("strong", `${v.name}: ${v.text} ${v.unit}`.trim()), remove);
+    head.append(el("strong", `${v.name}: ${valueText(v)}`), remove);
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", "0 0 100 40");
     svg.setAttribute("preserveAspectRatio", "none");
@@ -679,7 +688,7 @@ function render(state) {
   fill(document.getElementById("codes-summary"), codeNodes(state));
   renderMonitors(state.monitors);
   renderVehicle(state);
-  fill(document.getElementById("values"), state.values.map(v => row(v.name, `${v.text} ${v.unit}`.trim())));
+  fill(document.getElementById("values"), state.values.map(v => row(v.name, valueText(v), v.note ? "stale" : "")));
   renderGraphs(state.values);
   renderRecording(state.recording);
   document.getElementById("this-drive-section").hidden = !state.this_drive.length;

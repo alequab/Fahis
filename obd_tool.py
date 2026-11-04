@@ -130,6 +130,9 @@ for _index, _pid in enumerate(range(0x14, 0x1C)):
 # Read on every update; everything else takes turns so the fast values stay responsive.
 FAST_PIDS = (0x0C, 0x0D, 0x11, 0x04)
 SLOW_PER_STEP = 2
+# A value older than this is marked as old. Slow values normally come round about every 20 seconds.
+FAST_STALE_SECONDS = 5
+SLOW_STALE_SECONDS = 30
 # PIDs that list other PIDs rather than holding a measurement.
 INDEX_PIDS = set(range(0x00, 0x100, 0x20))
 # Self-tests for this drive. The community definition reads these flags the opposite way round.
@@ -620,18 +623,44 @@ class LiveReader:
         self.values = dict(values or {})
         self.voltage = voltage
         self.next_slow = 0
+        self.interval = 0
+        now = time.monotonic()
+        self.read_at = {pid: now for pid in self.values}
+        rpm = number(self.values.get(0x0C))
+        self.engine_running = None if rpm is None else rpm > 0
+        self.engine_changed_at = float("-inf")
+
+    def store(self, pid, value):
+        self.values[pid] = value
+        self.read_at[pid] = time.monotonic()
+        rpm = number(value) if pid == 0x0C else None
+        if rpm is not None:
+            if self.engine_running is not None and self.engine_running != (rpm > 0):
+                self.engine_changed_at = self.read_at[pid]
+            self.engine_running = rpm > 0
+
+    def age_note(self, pid, lang=None):
+        """Say why a shown value may no longer be true, or return None if it's current."""
+        read_at = self.read_at.get(pid)
+        if read_at is None or self.values.get(pid) is None:
+            return None
+        if read_at < self.engine_changed_at:
+            return t("Read before the engine started" if self.engine_running else "Read before the engine stopped", lang)
+        limit = FAST_STALE_SECONDS + self.interval if pid in self.fast else SLOW_STALE_SECONDS
+        age = time.monotonic() - read_at
+        return t("{seconds} seconds ago", lang, seconds=int(age)) if age > limit else None
 
     async def fill(self):
         for pid in self.pids:
-            self.values[pid] = await self.elm.read_pid(pid)
+            self.store(pid, await self.elm.read_pid(pid))
         self.voltage = await self.elm.voltage()
 
     async def step(self):
         for pid in self.fast:
-            self.values[pid] = await self.elm.read_pid(pid)
+            self.store(pid, await self.elm.read_pid(pid))
         for _ in range(min(SLOW_PER_STEP, len(self.slow))):
             pid = self.slow[self.next_slow]
-            self.values[pid] = await self.elm.read_pid(pid)
+            self.store(pid, await self.elm.read_pid(pid))
             self.next_slow = (self.next_slow + 1) % len(self.slow)
             if self.next_slow == 0:
                 self.voltage = await self.elm.voltage()
@@ -720,7 +749,8 @@ def dashboard_state(snapshot, reader, demo=False, lang=None, cars=()):
                        for v in freeze["values"]]},
         "values": [{"pid": f"{pid:02X}", "name": t(LIVE_PIDS[pid][0], lang), "unit": t(LIVE_PIDS[pid][1], lang),
                     "value": value if isinstance(value, (int, float)) else None,
-                    "text": "-" if value is None else t(format_value(value), lang)}
+                    "text": "-" if value is None else t(format_value(value), lang),
+                    "note": reader.age_note(pid, lang)}
                    for pid, value in reader.values.items()],
         "this_drive": [[t(name, lang), done] for name, done in snapshot["this_drive"] or []],
         "more": snapshot["more"],
@@ -915,7 +945,8 @@ class DashboardApp:
             job.status = "done"
             if job.action == "clear":
                 self.snapshot = await read_snapshot(elm)
-                self.reader.values.update(self.snapshot["values"])
+                for pid, value in self.snapshot["values"].items():
+                    self.reader.store(pid, value)
             elif job.action == "battery":
                 await elm.setup()  # the battery check resets the adapter
         except (OBDError, ValueError) as error:
@@ -1095,6 +1126,7 @@ class DashboardApp:
             remember_snapshot(elm, snapshot)
             self.cars = garage.summaries()
         self.reader = LiveReader(elm, snapshot["values"], snapshot["values"], snapshot["voltage"])
+        self.reader.interval = self.args.interval
         self.snapshot = snapshot
         self.elm = elm
         count = 0
