@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Fahis">
+  <!-- Simplified for 16 and 24 pixels: heavier lines, flat colours and a larger letter. -->
+  <title>Fahis</title>
+  <rect x="0" y="0" width="512" height="512" rx="96" fill="#14202b"/>
+  <path d="M372 372 L462 462" fill="none" stroke="#5cb8ff" stroke-width="76" stroke-linecap="round"/>
+  <circle cx="232" cy="232" r="174" fill="none" stroke="#5cb8ff" stroke-width="62"/>
+  <g fill="none" stroke="#ffffff" stroke-width="46" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="262" cy="214" r="34"/>
+    <path d="M296 220 C 300 282 262 304 208 304 C 170 304 142 286 134 244"/>
+  </g>
+  <circle cx="258" cy="128" r="27" fill="#4cc38a"/>
+</svg>

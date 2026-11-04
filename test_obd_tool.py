@@ -1,6 +1,8 @@
 """Offline tests using replies recorded from the car, so no adapter is needed."""
 import asyncio
 import html
+import io
+import json
 import re
 import tempfile
 import unittest
@@ -8,8 +10,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+import bridge
 import car_modules
-import dashboard
 import demo
 import dtc_codes
 import garage
@@ -130,7 +132,7 @@ class ElmTests(unittest.IsolatedAsyncioTestCase):
 class EverythingTests(unittest.IsolatedAsyncioTestCase):
     def test_new_formulas(self):
         self.assertEqual(LIVE_PIDS[0x03][2](bytes([2, 0])), "Closed loop")
-        self.assertIn("not running", LIVE_PIDS[0x03][2](bytes([0, 0])))
+        self.assertEqual(LIVE_PIDS[0x03][2](bytes([0, 0])), "Not active")
         self.assertIn("KOBD", LIVE_PIDS[0x1C][2](bytes([30])))
         self.assertEqual(LIVE_PIDS[0x31][2](bytes([0xFF, 0xFF])), "65535+")
         self.assertEqual(LIVE_PIDS[0x31][2](bytes([0x01, 0x00])), 256)
@@ -190,25 +192,6 @@ class EverythingTests(unittest.IsolatedAsyncioTestCase):
         for pid in ("0105", "010F", "0110"):
             self.assertIn(pid, sent)
 
-    async def test_server_serves_page_and_data(self):
-        server = await dashboard.start(lambda lang: '{"ok": true}', 0)
-        port = server.sockets[0].getsockname()[1]
-        self.assertEqual(server.sockets[0].getsockname()[0], "127.0.0.1")
-
-        async def get(path):
-            reader, writer = await asyncio.open_connection("127.0.0.1", port)
-            writer.write(f"GET {path} HTTP/1.1\r\nHost: x\r\n\r\n".encode())
-            await writer.drain()
-            reply = await reader.read()
-            writer.close()
-            return reply
-
-        async with server:
-            self.assertIn(b'{"ok": true}', await get("/data"))
-            self.assertIn(b"Car Dashboard", await get("/"))
-            self.assertIn(b"Commands for a connected car", await get("/commands"))
-            self.assertIn(b"404", await get("/secret"))
-
 
 class BatteryTests(unittest.IsolatedAsyncioTestCase):
     def test_advice_bands(self):
@@ -230,7 +213,7 @@ class BatteryTests(unittest.IsolatedAsyncioTestCase):
 
 
 class AddressedTransport(FakeTransport):
-    """Answers by module: replies are keyed like '7D1:1902FF'."""
+    """Answers by module: replies are keyed like '7D1:1902AF'."""
 
     def __init__(self, replies):
         super().__init__(replies)
@@ -391,11 +374,11 @@ class ModuleTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_scan_finds_modules_codes_and_refusals(self):
         transport = AddressedTransport({
-            "7D1:1902FF": ["7D9 07 59 02 FF C1 23 01 09"],
-            "7E0:1902FF": ["7E8 03 59 02 FF"],
-            "770:1902FF": ["778 03 7F 19 11"],
+            "7D1:1902AF": ["7D9 07 59 02 FF C1 23 01 09"],
+            "7E0:1902AF": ["7E8 03 59 02 FF"],
+            "770:1902AF": ["778 03 7F 19 11"],
             "770:1800FF00": ["778 03 7F 18 11"],
-            "7C6:1902FF": ["7CE 03 7F 19 11"],
+            "7C6:1902AF": ["7CE 03 7F 19 11"],
             "7C6:1800FF00": ["7CE 05 58 01 C1 55 60"],
         })
         modules = await car_modules.scan_modules(ELM(transport))
@@ -554,20 +537,20 @@ class LocalizationTests(unittest.TestCase):
             missing |= {text for text in found if text not in i18n.ARABIC}
         self.assertEqual(missing, set())
 
-    def test_commands_page_is_translated_and_lists_real_commands(self):
-        page = dashboard.COMMANDS_PAGE.read_text(encoding="utf-8")
-        found = set(re.findall(r'data-i18n="([^"]+)"', page)) | set(re.findall(r'\btr\("([^"]+)"', page))
-        self.assertEqual({html.unescape(text).replace("\\\\", "\\") for text in found} - set(i18n.ARABIC), set())
-        listed = set(re.findall(r'<code dir="ltr">\.\\obd (\w+)', page))
+    def test_page_lists_only_real_commands(self):
+        page = bridge.PAGE.read_text(encoding="utf-8")
+        listed = set(re.findall(r'\.\\\\obd (\w+)', page)) | set(re.findall(r'<code dir="ltr">\.\\obd (\w+)', page))
         real = set(re.findall(r'add_parser\("(\w+)"', (ROOT / "obd_tool.py").read_text(encoding="utf-8")))
-        real |= {"live", "log", "dashboard"}
-        self.assertTrue(listed)
+        real |= {"live", "log"}
         self.assertEqual(listed - real, set())
-        self.assertEqual(listed, {"dashboard", "report", "battery", "codes", "info", "live", "log", "scan", "profile", "clear"})
+        for action in obd_tool.WEB_ACTIONS:
+            self.assertIn(f'id: "{action}"', page)
 
     def test_every_page_string_has_arabic(self):
-        page = dashboard.PAGE.read_text(encoding="utf-8")
-        found = set(re.findall(r'data-i18n="([^"]+)"', page))
+        page = bridge.PAGE.read_text(encoding="utf-8")
+        found = {html.unescape(text) for text in re.findall(r'data-i18n(?:-placeholder)?="([^"]+)"', page)}
+        found |= {text for text in re.findall(r'\b(?:title|what|needs): "([^"]+)"', page)}
+        found |= set(re.findall(r'\b(?:overview|live|faults|commands|cars|saved|reports|queued|running|done|failed): "([^"]+)"', page))
         found |= {text.replace("\\\\", "\\") for text in re.findall(r'\btr\("((?:[^"\\]|\\.)+)"', page)}
         for pair in re.findall(r'\btr\(\w+(?:\.\w+)? \? "([^"]+)" : "([^"]+)"\)', page):
             found |= set(pair)
@@ -652,22 +635,226 @@ class DashboardLanguageTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("السرعة", [v["name"] for v in arabic["values"]])
         self.assertIn("خليط", arabic["freeze"]["description"])
 
-        server = await dashboard.start(lambda lang: f'{{"lang": "{lang}"}}', 0)
-        port = server.sockets[0].getsockname()[1]
 
-        async def get(path):
-            reader, writer = await asyncio.open_connection("127.0.0.1", port)
-            writer.write(f"GET {path} HTTP/1.1\r\nHost: x\r\n\r\n".encode())
-            await writer.drain()
-            reply = await reader.read()
-            writer.close()
-            return reply
+class RecordedDieselTests(unittest.TestCase):
+    """Replies recorded from a real diesel car."""
 
-        async with server:
-            self.assertIn(b'{"lang": "ar"}', await get("/data?lang=ar"))
-            self.assertIn(b'{"lang": "en"}', await get("/data?lang=xx"))
-            self.assertIn("السرعة".encode().decode("utf-8").encode("unicode_escape").decode().lower().encode(),
-                          (await get("/i18n?lang=ar")).lower())
+    def test_cut_off_reply_is_detected(self):
+        reply = parse_can(["7E8 11 67 59 02 FF 25 04 00"])["7E8"]
+        self.assertFalse(reply.complete)
+        self.assertEqual(car_modules.decode_uds_codes(reply), [])
+        report = car_modules.format_scan([{"hdr": "7E0", "name": "Engine", "read_codes": True, "codes": [],
+                                           "complete": False}], obd_tool.describe_dtc)
+        self.assertIn("cut off", report)
+        self.assertNotIn("No fault codes", report)
+
+    def test_complete_reply_with_confirmed_codes(self):
+        reply = parse_can(["7E8 10 0B 59 02 FF 20 03 00", "7E8 21 EC 07 00 00 AF 55 55"])["7E8"]
+        self.assertTrue(reply.complete)
+        self.assertEqual(car_modules.decode_uds_codes(reply),
+                         [{"code": "P2003-00", "state": "stored"}, {"code": "P0700-00", "state": "active"}])
+
+    def test_diesel_values(self):
+        self.assertEqual(LIVE_PIDS[0x59][2](bytes.fromhex("0B68")), 29200)
+        self.assertAlmostEqual(LIVE_PIDS[0x5D][2](bytes.fromhex("6981")), 1.0, places=0)
+        self.assertEqual(LIVE_PIDS[0x61][2](bytes.fromhex("77")), -6)
+        self.assertEqual(LIVE_PIDS[0x62][2](bytes.fromhex("80")), 3)
+        self.assertEqual(LIVE_PIDS[0x63][2](bytes.fromhex("01B8")), 440)
+
+
+class BridgeTests(unittest.IsolatedAsyncioTestCase):
+    def app(self):
+        return obd_tool.DashboardApp(SimpleNamespace(demo=True, samples=1, interval=0))
+
+    async def test_state_and_translations(self):
+        reply = await bridge.answer(self.app(), '{"id": 7, "kind": "state", "payload": {"lang": "ar"}}')
+        self.assertEqual((reply["id"], reply["status"]), (7, 200))
+        self.assertFalse(reply["data"]["connected"])
+        self.assertIn("البحث", reply["data"]["message"])
+        reply = await bridge.answer(self.app(), '{"id": 8, "kind": "i18n", "payload": {"lang": "ar"}}')
+        self.assertEqual(reply["data"]["text"]["Speed"], "السرعة")
+        reply = await bridge.answer(self.app(), '{"id": 9, "kind": "i18n", "payload": {"lang": "xx"}}')
+        self.assertEqual(reply["data"]["text"], {})
+
+    async def test_api_requests_reach_the_app(self):
+        line = json.dumps({"id": 1, "kind": "api", "payload": {"method": "GET", "path": "/api/catalog"}})
+        reply = await bridge.answer(self.app(), line)
+        self.assertEqual(reply["status"], 200)
+        self.assertGreater(len(reply["data"]), 800)
+        line = json.dumps({"id": 2, "kind": "api", "payload": {"method": "POST", "path": "/api/run",
+                                                               "body": {"action": "exec"}}})
+        self.assertEqual((await bridge.answer(self.app(), line))["status"], 400)
+
+    async def test_bad_requests_are_refused(self):
+        for line in ("not json", "[1, 2]", "{}", '{"id": 1}', '{"id": 1, "kind": "state", "payload": 5}'):
+            self.assertEqual((await bridge.answer(self.app(), line))["status"], 400)
+        reply = await bridge.answer(self.app(), '{"id": 1, "kind": "shell"}')
+        self.assertEqual(reply["status"], 404)
+
+    async def test_serve_answers_and_stops_when_pipe_closes(self):
+        replies = io.BytesIO()
+        requests = io.BytesIO(b'{"id": 1, "kind": "i18n", "payload": {"lang": "en"}}\n')
+        app = self.app()
+        app.RETRY_SECONDS = 0
+        await asyncio.wait_for(bridge.serve(app, requests, replies), 20)
+        self.assertEqual(json.loads(replies.getvalue())["id"], 1)
+
+    def test_readme_opens_with_basmala_then_arabic_then_english(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        basmala = readme.index("بسم الله الرحمن الرحيم")
+        salawat = readme.index("والصلاة والسلام على نبينا محمد")
+        arabic = readme.index("## العربية")
+        english = readme.index("## English")
+        self.assertLess(basmala, 60)
+        self.assertLess(basmala, salawat)
+        self.assertLess(salawat, arabic)
+        self.assertLess(arabic, english)
+
+    def test_icon_file_has_every_windows_size(self):
+        data = (ROOT / "electron" / "icon.ico").read_bytes()
+        self.assertEqual(data[:4], b"\x00\x00\x01\x00")
+        count = int.from_bytes(data[4:6], "little")
+        sizes = {data[6 + 16 * i] or 256 for i in range(count)}
+        self.assertEqual(sizes, {16, 24, 32, 48, 64, 128, 256})
+        for i in range(count):
+            offset = int.from_bytes(data[6 + 16 * i + 12:6 + 16 * i + 16], "little")
+            self.assertEqual(data[offset:offset + 4], b"\x89PNG")
+
+    def test_page_only_loads_its_own_content(self):
+        page = bridge.PAGE.read_text(encoding="utf-8")
+        self.assertIn("default-src 'none'", page)
+        self.assertNotIn("fetch(", page)
+        main_file = (ROOT / "electron" / "main.js").read_text(encoding="utf-8")
+        self.assertIn("contextIsolation: true", main_file)
+        self.assertIn("nodeIntegration: false", main_file)
+        self.assertIn("sandbox: true", main_file)
+        self.assertNotIn("createServer", main_file)
+
+
+class SpyTransport(demo.DemoTransport):
+    """The demo car, recording every command it receives."""
+
+    def __init__(self):
+        self.sent = []
+
+    async def send(self, command, wait=5):
+        self.sent.append(command)
+        return await super().send(command, wait)
+
+
+class WebJobTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.args = SimpleNamespace(demo=True, port=0, no_browser=True, samples=1, interval=0)
+        self.app = obd_tool.DashboardApp(self.args)
+        self.transport = SpyTransport()
+        self.elm = ELM(self.transport)
+        self.elm.demo = True
+        await self.elm.setup()
+        snapshot = await obd_tool.read_snapshot(self.elm)
+        self.app.snapshot = snapshot
+        self.app.reader = obd_tool.LiveReader(self.elm, snapshot["values"], snapshot["values"], snapshot["voltage"])
+        self.app.elm = self.elm
+
+    async def run_one(self, action, params=None, lang="en"):
+        job, refusal = self.app.submit(action, params or {}, lang)
+        self.assertIsNone(refusal)
+        await self.app.run_waiting_jobs(self.elm)
+        return job
+
+    async def test_command_runs_and_shows_result(self):
+        job = await self.run_one("codes")
+        self.assertEqual(job.status, "done")
+        self.assertIn("P0171", job.output)
+        self.assertEqual(self.app.jobs[-1], job)
+
+    async def test_result_uses_requested_language_and_restores(self):
+        job = await self.run_one("codes", lang="ar")
+        self.assertIn("خليط الوقود", job.output)
+        self.assertEqual(i18n.current_language(), "en")
+
+    async def test_refused_when_not_connected(self):
+        self.app.elm = None
+        job, refusal = self.app.submit("codes", {}, "en")
+        self.assertIsNone(job)
+        self.assertIn("Not connected", refusal)
+
+    async def test_unknown_command_refused(self):
+        for action in ("exec", "live", None, "../clear"):
+            job, refusal = self.app.submit(action, {}, "en")
+            self.assertIsNone(job)
+            self.assertTrue(refusal)
+
+    async def test_clear_needs_typed_confirmation(self):
+        for params in ({}, {"answer": "clear"}, {"answer": "yes"}):
+            job, refusal = self.app.submit("clear", params, "en")
+            self.assertIsNone(job)
+            self.assertIn("CLEAR", refusal)
+        self.assertNotIn("04", self.transport.sent)
+
+    async def test_clear_refused_with_engine_running(self):
+        job = await self.run_one("clear", {"answer": "CLEAR"})
+        self.assertEqual(job.status, "failed")
+        self.assertIn("engine must be off", job.output)
+        self.assertNotIn("04", self.transport.sent)
+
+    async def test_profile_name_must_be_in_catalog(self):
+        for name in ("../../secrets", "not-a-car", ""):
+            job, refusal = self.app.submit("profile", {"name": name}, "en")
+            self.assertIsNone(job)
+            self.assertTrue(refusal)
+
+    async def test_profile_year_is_validated(self):
+        for year in ("abc", "1900", "-1"):
+            job, refusal = self.app.submit("profile", {"name": "Kia-Picanto", "year": year}, "en")
+            self.assertIsNone(job)
+            self.assertIn("year", refusal)
+
+    async def test_profile_runs_on_page(self):
+        job = await self.run_one("profile", {"name": "Kia-Picanto", "year": "2017"})
+        self.assertEqual(job.status, "done")
+        self.assertIn("Profile requests answered", job.output)
+        self.assertEqual(self.transport.sent[-1], "ATSH7DF")
+
+    async def test_scan_restores_standard_requests_and_saves_nothing_in_demo(self):
+        job = await self.run_one("scan")
+        self.assertEqual(job.status, "done")
+        self.assertEqual(self.transport.sent[-1], "ATSH7DF")
+
+    async def test_waiting_jobs_fail_when_connection_ends(self):
+        job, _ = self.app.submit("codes", {}, "en")
+        self.app.fail_waiting_jobs()
+        self.assertEqual(job.status, "failed")
+        self.assertEqual(self.app.waiting, [])
+
+    async def test_queue_is_limited(self):
+        for _ in range(obd_tool.MAX_JOBS_WAITING):
+            self.app.submit("codes", {}, "en")
+        job, refusal = self.app.submit("codes", {}, "en")
+        self.assertIsNone(job)
+        self.assertTrue(refusal)
+
+    async def test_api_catalog_and_report_paths(self):
+        code, cars = await self.app.api("GET", "/api/catalog", {}, {})
+        self.assertEqual(code, 200)
+        self.assertGreater(len(cars), 800)
+        self.assertTrue(next(c for c in cars if c["name"] == "Kia-Picanto")["local"])
+        for name in ("../LICENSE", "..\\LICENSE", "a/b.txt", "x.json", ""):
+            code, _ = await self.app.api("GET", "/api/report", {"name": name}, {})
+            self.assertEqual(code, 404)
+        code, _ = await self.app.api("GET", "/api/car", {"key": "../settings"}, {})
+        self.assertEqual(code, 404)
+
+    async def test_demo_hides_and_saves_no_reports(self):
+        self.assertEqual(await self.app.api("GET", "/api/reports", {}, {}), (200, []))
+        with mock.patch.object(obd_tool, "REPORT_DIR", ROOT / "does-not-exist"):
+            job = await self.run_one("report")
+            self.assertEqual(job.status, "done")
+            self.assertFalse(obd_tool.REPORT_DIR.exists())
+
+    async def test_download_only_accepts_catalog_names(self):
+        code, data = await self.app.api("POST", "/api/download", {}, {"name": "../../secrets"})
+        self.assertEqual(code, 400)
+        self.assertIn("error", data)
 
 
 class DashboardAppTests(unittest.IsolatedAsyncioTestCase):
@@ -699,8 +886,8 @@ class DashboardAppTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(app.state()["demo"])
 
     async def test_page_starts_hidden_until_data_arrives(self):
-        page = dashboard.PAGE.read_text(encoding="utf-8")
-        self.assertIn('<div id="content" hidden>', page)
+        page = bridge.PAGE.read_text(encoding="utf-8")
+        self.assertIn('<div class="page" id="page-overview" hidden>', page)
 
 
 class DemoTests(unittest.IsolatedAsyncioTestCase):

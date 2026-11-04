@@ -1,10 +1,10 @@
 # Car profiles
 
-These files tell elmlens how to read extra values from a specific car model.
+These files tell Fahis how to read extra values from a specific car model.
 
 ## catalog.json
 
-A list of the CC BY-SA 4.0 profile repositories in [OBDb](https://github.com/OBDb). When you use a car from this list, elmlens downloads its profile to `downloaded\` and records the source next to it. Downloaded profiles are also CC BY-SA 4.0, by OBDb editors and contributors, and aren't stored in this repo.
+A list of the CC BY-SA 4.0 profile repositories in [OBDb](https://github.com/OBDb). When you use a car from this list, Fahis downloads its profile to `downloaded\` and records the source next to it. Downloaded profiles are also CC BY-SA 4.0, by OBDb editors and contributors, and aren't stored in this repo.
 
 ## kia-picanto.json
 
@@ -13,6 +13,6 @@ A list of the CC BY-SA 4.0 profile repositories in [OBDb](https://github.com/OBD
 - **Licence:** [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), full text in [LICENSE](LICENSE)
 - **Changes:** the JSON was saved unchanged
 
-This licence applies to the profile data in this folder. It is different from the licence on the elmlens code.
+This licence applies to the profile data in this folder. It is different from the licence on the Fahis code.
 
 OBDb's test recordings for this profile cover model years 2012, 2013 and 2024, so values on other years may be wrong or missing.

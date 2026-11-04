@@ -25,7 +25,9 @@ UNSUPPORTED_SETTINGS = {"din", "dout", "eax", "tst", "pri", "proto", "baud", "in
 # Stop asking a module after this many requests in a row get no reply.
 MAX_SILENT = 3
 
-UDS_READ_CODES = "1902FF"
+# Mask AF leaves out "test not completed" entries. Asking for everything (FF) got a reply of 359
+# bytes from a real engine module, which came back cut off after the first frame.
+UDS_READ_CODES = "1902AF"
 KWP_READ_CODES = "1800FF00"
 
 # Request IDs to try. Replies come from the ID plus 8, so only low digits 0-7 can be requests.
@@ -85,7 +87,7 @@ def local_profile_files(name):
 
 
 def fetch_json(url):
-    request = urllib.request.Request(url, headers={"User-Agent": "elmlens"})
+    request = urllib.request.Request(url, headers={"User-Agent": "fahis"})
     with urllib.request.urlopen(request, timeout=60) as response:
         return json.load(response)
 
@@ -269,7 +271,7 @@ async def scan_modules(elm, ids=SCAN_IDS, on_progress=None):
             if reply is None:
                 continue
             module = {"hdr": hdr, "reply_id": rax, "name": LIKELY_MODULES.get(hdr, "Unknown module"),
-                      "codes": [], "read_codes": True}
+                      "codes": [], "read_codes": True, "complete": getattr(reply, "complete", True)}
             if reply[0] == 0x59:
                 module["codes"] = decode_uds_codes(reply)
             else:
@@ -290,6 +292,8 @@ def format_scan(modules, descriptions):
         lines.append(f"{module['hdr']}  {t(module['name'])}")
         if not module["read_codes"]:
             lines.append("  " + t("Answered, but refused to share fault codes with these commands"))
+        elif not module.get("complete", True):
+            lines.append("  " + t("The reply was cut off, so this list may be missing codes. Run the codes command to check."))
         elif not module["codes"]:
             lines.append("  " + t("No fault codes"))
         for fault in module["codes"]:

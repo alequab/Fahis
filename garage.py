@@ -79,6 +79,7 @@ def summaries():
         vehicle = record.get("vehicle", {})
         status = record.get("status", {})
         cars.append({
+            "key": path.stem,
             "vin": next((v for v in vehicle.get("VIN", {}).values() if v), None),
             "modules": [v for v in vehicle.get("Module name", {}).values() if v],
             "first_seen": record.get("first_seen", ""),

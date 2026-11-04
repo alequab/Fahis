@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fahis</title>
+<style>
+  :root {
+    --bg: #101418; --panel: #1a2027; --line: #2c343d; --text: #e8edf2; --muted: #93a0ad;
+    --accent: #5cb8ff; --good: #4cc38a; --bad: #ff6b6b;
+    --warn-bg: #5a4410; --warn-line: #a8831f; --warn-text: #ffe08a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, "Segoe UI", sans-serif; }
+  [hidden] { display: none !important; }
+  .shell { display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: 100vh; }
+  nav { background: var(--panel); border-inline-end: 1px solid var(--line); padding: 16px 10px; position: sticky; top: 0; height: 100vh; }
+  nav .brand { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 650; padding: 0 10px 12px; }
+  nav .brand svg { width: 30px; height: 30px; flex: none; }
+  nav a { display: block; color: var(--text); text-decoration: none; padding: 9px 10px; border-radius: 8px; margin-bottom: 2px; }
+  nav a:hover { background: var(--line); }
+  nav a[aria-current="page"] { background: var(--line); color: var(--accent); font-weight: 600; }
+  main { padding: 16px; max-width: 1100px; width: 100%; margin: 0 auto; min-width: 0; }
+  header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 16px; }
+  h1 { font-size: 22px; margin: 0; }
+  h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  .header-end { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  #status { color: var(--muted); font-size: 13px; }
+  #status.lost { color: var(--bad); font-weight: 600; }
+  button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.primary { background: #17476b; border-color: #2a6c9c; }
+  button.danger { border-color: var(--bad); color: var(--bad); }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  input, select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: inherit; min-width: 0; }
+  #waiting { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-bottom: 12px; }
+  #waiting h2 { font-size: 18px; letter-spacing: 0; text-transform: none; color: var(--text); }
+  #waiting ol { margin: 12px 0 0; padding-inline-start: 20px; }
+  #demo-banner, .notice { background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-text); border-radius: 10px; padding: 10px 14px; margin: 0 0 12px; }
+  #demo-banner { font-weight: 600; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .tile, section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .tile .label { color: var(--muted); font-size: 13px; }
+  .tile .number { font-size: 34px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .tile .unit { font-size: 14px; color: var(--muted); font-weight: 400; margin-inline-start: 4px; }
+  .tile svg { display: block; width: 100%; height: 36px; margin-top: 6px; }
+  .tile polyline { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+  .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-bottom: 12px; align-items: start; }
+  .tile .number { display: flex; flex-wrap: wrap; align-items: baseline; }
+  .tile .unit { white-space: nowrap; unicode-bidi: isolate; }
+  section { overflow-x: auto; margin-bottom: 12px; }
+  .columns section { margin-bottom: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding-block: 4px; padding-inline-end: 8px; border-top: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+  tr:first-child td { border-top: 0; }
+  td.dim, .dim { color: var(--muted); }
+  .values { columns: 2 300px; column-gap: 24px; }
+  .row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-top: 1px solid var(--line); break-inside: avoid; }
+  .val { font-variant-numeric: tabular-nums; text-align: end; }
+  .good { color: var(--good); font-weight: 600; }
+  .bad { color: var(--bad); font-weight: 600; }
+  .code { font-weight: 650; unicode-bidi: isolate; direction: ltr; }
+  .intro { color: var(--muted); margin: 0 0 12px; }
+  .action { padding: 12px 0; border-top: 1px solid var(--line); }
+  .action:first-of-type { border-top: 0; }
+  .action-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+  .action-title { font-weight: 600; }
+  .action p { margin: 4px 0 0; }
+  .fields { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: end; }
+  .fields label { display: grid; gap: 2px; font-size: 13px; color: var(--muted); }
+  .needs, .terminal { color: var(--muted); font-size: 13px; }
+  code { font: 13px/1.4 Consolas, "Cascadia Mono", monospace; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; overflow-wrap: anywhere; unicode-bidi: isolate; }
+  .small { padding: 2px 8px; font-size: 13px; }
+  .job { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
+  .job-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+  .badge { font-size: 13px; font-weight: 600; }
+  .badge.running, .badge.queued { color: var(--accent); }
+  .badge.done { color: var(--good); }
+  .badge.failed { color: var(--bad); }
+  pre { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.5 Consolas, "Cascadia Mono", "Segoe UI", monospace; max-height: 480px; overflow-y: auto; }
+  .catalog-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .catalog-tools input { flex: 1 1 220px; }
+  .car-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); }
+  .car-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .car-actions input { width: 90px; padding: 3px 8px; }
+  .local { color: var(--good); font-size: 13px; }
+  .car { padding: 10px 0; border-top: 1px solid var(--line); }
+  .car:first-child { border-top: 0; }
+  .car strong { display: block; }
+  .car-sub { color: var(--muted); font-size: 13px; }
+  details { margin-top: 6px; }
+  summary { cursor: pointer; color: var(--accent); }
+  .report-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+  #action-error { color: var(--bad); font-weight: 600; margin: 8px 0 0; }
+  footer { color: var(--muted); font-size: 13px; padding: 4px 0 16px; }
+  footer span { display: block; }
+  @media (max-width: 760px) {
+    .shell { grid-template-columns: minmax(0, 1fr); }
+    nav { position: static; height: auto; border-inline-end: 0; border-bottom: 1px solid var(--line); padding: 8px; display: flex; gap: 4px; overflow-x: auto; }
+    nav .brand { display: none; }
+    nav a { white-space: nowrap; margin: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <nav aria-label="Pages">
+    <div class="brand">
+      <svg viewBox="0 0 512 512" aria-hidden="true">
+        <rect x="16" y="16" width="480" height="480" rx="108" fill="#14202b"/>
+        <path d="M361 361 L438 438" fill="none" stroke="#2f8fe0" stroke-width="50" stroke-linecap="round"/>
+        <path d="M340.9 357.3 A 145 145 0 1 1 357.3 340.9" fill="none" stroke="#5cb8ff" stroke-width="34" stroke-linecap="round"/>
+        <g fill="none" stroke="#ffffff" stroke-width="27" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="277" cy="224" r="30"/>
+          <path d="M307 226 C 314 288 280 310 226 310 C 186 310 156 294 148 252"/>
+        </g>
+        <circle cx="275" cy="156" r="18" fill="#4cc38a"/>
+      </svg>
+      <span data-i18n="Fahis">Fahis</span>
+    </div>
+    <a href="#/overview" data-page="overview" data-i18n="Overview">Overview</a>
+    <a href="#/live" data-page="live" data-i18n="Live data">Live data</a>
+    <a href="#/faults" data-page="faults" data-i18n="Fault codes">Fault codes</a>
+    <a href="#/commands" data-page="commands" data-i18n="Commands">Commands</a>
+    <a href="#/cars" data-page="cars" data-i18n="Supported cars">Supported cars</a>
+    <a href="#/saved" data-page="saved" data-i18n="Saved cars">Saved cars</a>
+    <a href="#/reports" data-page="reports" data-i18n="Reports">Reports</a>
+  </nav>
+  <main>
+    <header>
+      <h1 id="page-title" data-i18n="Overview">Overview</h1>
+      <div class="header-end">
+        <span id="status" role="status" data-i18n="Connecting ...">Connecting ...</span>
+        <button id="lang-toggle" type="button">العربية</button>
+      </div>
+    </header>
+    <div id="demo-banner" hidden data-i18n="Demo mode: this is simulated data, not your car.">Demo mode: this is simulated data, not your car.</div>
+    <section id="waiting" hidden>
+      <h2 data-i18n="Not connected to a car">Not connected to a car</h2>
+      <p id="waiting-message" class="dim"></p>
+      <ol>
+        <li data-i18n="Plug the adapter into the car's OBD-II port.">Plug the adapter into the car's OBD-II port.</li>
+        <li data-i18n="Start the engine, or turn the ignition ON.">Start the engine, or turn the ignition ON.</li>
+        <li data-i18n="Turn off Bluetooth on any phone that has connected to the adapter.">Turn off Bluetooth on any phone that has connected to the adapter.</li>
+      </ol>
+      <p class="dim" data-i18n="This page keeps trying and fills in by itself once the car answers.">This page keeps trying and fills in by itself once the car answers.</p>
+    </section>
+
+    <div class="page" id="page-overview" hidden>
+      <div class="needs-car">
+        <div class="tiles" id="tiles"></div>
+        <div class="columns">
+          <section><h2 data-i18n="Fault codes">Fault codes</h2><div id="codes-summary"></div></section>
+          <section><h2 data-i18n="Vehicle and adapter">Vehicle and adapter</h2><table id="vehicle"></table></section>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="page-live" hidden>
+      <div class="needs-car">
+        <section><h2 data-i18n="All live values">All live values</h2><div class="values" id="values"></div></section>
+        <section id="raw-section" hidden><h2 data-i18n="Other data, not decoded (raw bytes)">Other data, not decoded (raw bytes)</h2><div class="values" id="raw"></div></section>
+      </div>
+    </div>
+
+    <div class="page" id="page-faults" hidden>
+      <div class="needs-car">
+        <div class="columns">
+          <section><h2 data-i18n="Fault codes">Fault codes</h2><div id="codes"></div>
+            <p><button id="scan-button" type="button" data-i18n="Scan for other modules">Scan for other modules</button></p>
+          </section>
+          <section><h2 data-i18n="Emissions self-tests">Emissions self-tests</h2><div id="monitors"></div></section>
+        </div>
+        <section id="freeze-section" hidden><h2 id="freeze-title" data-i18n="Freeze frame">Freeze frame</h2><div class="values" id="freeze"></div></section>
+      </div>
+    </div>
+
+    <div class="page" id="page-commands" hidden>
+      <p class="intro" data-i18n="Run a command on the connected car and see its result here.">Run a command on the connected car and see its result here.</p>
+      <p class="notice" id="commands-offline" hidden data-i18n="Connect to a car to run these commands.">Connect to a car to run these commands.</p>
+      <section id="actions"></section>
+      <p id="action-error" role="alert" hidden></p>
+      <section><h2 data-i18n="Results">Results</h2><div id="jobs"></div></section>
+      <section>
+        <h2 data-i18n="Terminal only">Terminal only</h2>
+        <p class="intro" data-i18n="The adapter serves one program at a time. Stop this app with Ctrl+C before running a command in a terminal, or the adapter won't be found.">The adapter serves one program at a time. Stop this app with Ctrl+C before running a command in a terminal, or the adapter won't be found.</p>
+        <div class="action"><code dir="ltr">.\obd live</code><p data-i18n="Shows live values in the terminal. On this app, use the Live data page.">Shows live values in the terminal. On this app, use the Live data page.</p></div>
+        <div class="action"><code dir="ltr">.\obd log</code><p data-i18n="Records live values to a CSV file in the logs folder. Press Ctrl+C to stop.">Records live values to a CSV file in the logs folder. Press Ctrl+C to stop.</p></div>
+      </section>
+    </div>
+
+    <div class="page" id="page-cars" hidden>
+      <p class="intro" data-i18n="Search about 880 community car profiles. A listing means community data exists for that car, not that every value will work on yours. Only two Kia cars have been tested.">Search about 880 community car profiles. A listing means community data exists for that car, not that every value will work on yours. Only two Kia cars have been tested.</p>
+      <section>
+        <div class="catalog-tools">
+          <input id="catalog-search" type="search" data-i18n-placeholder="Search for a car, such as toyota camry" placeholder="Search for a car, such as toyota camry" aria-label="Search">
+          <select id="catalog-make" aria-label="Make"></select>
+        </div>
+        <p class="dim" id="catalog-count"></p>
+        <div id="catalog"></div>
+      </section>
+    </div>
+
+    <div class="page" id="page-saved" hidden>
+      <p class="intro" data-i18n="Cars that have connected are saved on this laptop only.">Cars that have connected are saved on this laptop only.</p>
+      <section><div id="cars"></div></section>
+    </div>
+
+    <div class="page" id="page-reports" hidden>
+      <p class="intro" data-i18n="Reports saved on this laptop. They can contain a VIN, so be careful who you share them with.">Reports saved on this laptop. They can contain a VIN, so be careful who you share them with.</p>
+      <section><div id="reports"></div><pre id="report-text" hidden></pre></section>
+    </div>
+
+    <footer>
+      <span data-i18n="Standard OBD-II data only: ABS, airbag and body modules usually need other tools. Don't watch this page while driving.">Standard OBD-II data only: ABS, airbag and body modules usually need other tools. Don't watch this page while driving.</span>
+      <span id="english-note" hidden data-i18n="Some fault code descriptions are only available in English.">Some fault code descriptions are only available in English.</span>
+    </footer>
+  </main>
+</div>
+<script>
+const TILES = ["0C", "0D", "05", "0F", "11", "04"];
+const HISTORY = 60;
+const CATALOG_LIMIT = 200;
+const PAGES = {overview: "Overview", live: "Live data", faults: "Fault codes", commands: "Commands",
+               cars: "Supported cars", saved: "Saved cars", reports: "Reports"};
+const ACTIONS = [
+  {id: "battery", title: "Battery check", what: "Explains the battery voltage. With the engine running, it also checks charging.",
+   needs: "Needs: adapter powered by the car. Works even if the car's computer doesn't answer.", cmd: ".\\obd battery"},
+  {id: "codes", title: "Fault codes command", what: "Shows stored, pending and permanent fault codes with descriptions.",
+   needs: "Needs: ignition ON or engine running.", cmd: ".\\obd codes"},
+  {id: "info", title: "Car information", what: "Shows the adapter, voltage, check engine light, self-tests and available values.",
+   needs: "Needs: ignition ON or engine running.", cmd: ".\\obd info"},
+  {id: "report", title: "Full report", what: "Reads everything once and saves it to a text file in the reports folder.",
+   needs: "Needs: ignition ON or engine running.", cmd: ".\\obd report"},
+  {id: "scan", title: "Scan modules", what: "Looks for other modules and reads their fault codes where the car allows it. Takes about a minute.",
+   needs: "Needs: at least 11.8 V. Running the engine is best.", cmd: ".\\obd scan"},
+  {id: "profile", title: "Read a car profile", what: "Reads extra values using a community profile. Replace the name and year with your car's. Some values may not apply to your car.",
+   needs: "Needs: at least 11.8 V. Running the engine is best.", cmd: ".\\obd profile --name kia-picanto --year 2017"},
+  {id: "clear", title: "Clear fault codes", what: "Clears fault codes after you type CLEAR. This doesn't fix the fault, and it resets the emissions self-tests.",
+   needs: "Needs: engine off and ignition ON.", cmd: ".\\obd clear", danger: true},
+];
+const JOB_STATUS = {queued: "Queued", running: "Running", done: "Done", failed: "Failed"};
+const history = {};
+let language = "en";
+let translations = {};
+let catalogCars = [];
+let connected = false;
+let lastState = null;
+let lastJobs = "";
+let lastCars = "";
+
+function tr(text, values) {
+  let result = translations[text] || text;
+  for (const [key, value] of Object.entries(values || {})) result = result.replaceAll(`{${key}}`, value);
+  return result;
+}
+
+function savedLanguage() {
+  try { return localStorage.getItem("language"); } catch (error) { return null; }
+}
+
+function saveLanguage(value) {
+  try { localStorage.setItem("language", value); } catch (error) { /* the choice just won't be remembered */ }
+}
+
+function el(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+
+function fill(parent, children) {
+  parent.replaceChildren(...children);
+}
+
+function row(left, right, rightClass) {
+  const div = el("div", undefined, "row");
+  const value = el("span", right, "val " + (rightClass || ""));
+  value.dir = "auto";
+  div.append(el("span", left), value);
+  return div;
+}
+
+async function api(method, path, query, body) {
+  const reply = await window.fahis.request("api", {method, path, query: query || {}, body: body || {}});
+  if (reply.status >= 400) throw new Error(reply.data.error);
+  return reply.data;
+}
+
+function post(path, body) {
+  return api("POST", path, {}, {...body, lang: language});
+}
+
+async function setLanguage(value) {
+  const data = (await window.fahis.request("i18n", {lang: value})).data;
+  translations = data.text;
+  language = value;
+  document.documentElement.lang = value;
+  document.documentElement.dir = value === "ar" ? "rtl" : "ltr";
+  document.querySelectorAll("[data-i18n]").forEach(node => { node.textContent = tr(node.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(node => { node.placeholder = tr(node.dataset.i18nPlaceholder); });
+  document.getElementById("english-note").hidden = value !== "ar";
+  document.getElementById("lang-toggle").textContent = value === "ar" ? "English" : "العربية";
+  lastJobs = lastCars = "";
+  document.getElementById("action-error").hidden = true;
+  renderActions();
+  renderCatalog();
+  showPage();
+  refreshJobs();
+  if (currentPage() === "reports") loadReports();
+  return data;
+}
+
+function currentPage() {
+  const page = location.hash.replace("#/", "");
+  return PAGES[page] ? page : "overview";
+}
+
+function showPage() {
+  const page = currentPage();
+  document.querySelectorAll(".page").forEach(node => { node.hidden = node.id !== `page-${page}`; });
+  document.querySelectorAll("nav a").forEach(link => {
+    if (link.dataset.page === page) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+  const title = tr(PAGES[page]);
+  document.getElementById("page-title").textContent = title;
+  document.title = `${title} - ${tr("Fahis")}`;
+  updateConnectionViews();
+  if (page === "reports") loadReports();
+  if (page === "commands" || page === "cars") refreshJobs();
+}
+
+function updateConnectionViews() {
+  const needsCar = ["overview", "live", "faults"].includes(currentPage());
+  document.getElementById("waiting").hidden = connected || !needsCar;
+  document.querySelectorAll(".needs-car").forEach(node => { node.hidden = !connected; });
+  document.getElementById("commands-offline").hidden = connected;
+  document.querySelectorAll("[data-needs-connection]").forEach(node => { node.disabled = !connected; });
+  document.querySelectorAll(".read-car").forEach(node => { node.disabled = !connected; });
+}
+
+function sparkline(values) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 100 30");
+  svg.setAttribute("preserveAspectRatio", "none");
+  svg.setAttribute("aria-hidden", "true");
+  if (values.length > 1) {
+    const low = Math.min(...values), high = Math.max(...values), span = high - low || 1;
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    line.setAttribute("points", values.map((v, i) =>
+      `${(i / (HISTORY - 1) * 100).toFixed(1)},${(27 - (v - low) / span * 24).toFixed(1)}`).join(" "));
+    svg.append(line);
+  }
+  return svg;
+}
+
+function renderTiles(values) {
+  const byPid = Object.fromEntries(values.map(v => [v.pid, v]));
+  fill(document.getElementById("tiles"), TILES.filter(pid => byPid[pid]).map(pid => {
+    const v = byPid[pid];
+    const past = history[pid] = history[pid] || [];
+    if (v.value !== null) past.push(v.value);
+    if (past.length > HISTORY) past.shift();
+    const tile = el("div", undefined, "tile");
+    const number = el("div", v.value === null ? "-" : String(Math.round(v.value)), "number");
+    number.append(el("span", v.unit, "unit"));
+    tile.append(el("div", v.name, "label"), number, sparkline(past));
+    return tile;
+  }));
+}
+
+function codeNodes(state) {
+  const nodes = [];
+  const light = Object.values(state.monitors).some(m => m.mil);
+  nodes.push(el("p", tr(light ? "Check engine light is ON" : "Check engine light is off"), light ? "bad" : "good"));
+  for (const [label, modules] of Object.entries(state.codes)) {
+    const found = Object.entries(modules).flatMap(([h, codes]) => codes.map(c => ({...c, module: h})));
+    const answered = Object.keys(modules).length;
+    nodes.push(row(label, tr("{count} code(s), {modules} module(s) answered", {count: found.length, modules: answered}),
+                   found.length ? "bad" : "dim"));
+    for (const c of found) {
+      const line = el("div");
+      line.append(el("span", c.code, "code bad"), " ", el("span", `${c.description} (${tr("Module {header}", {header: c.module})})`));
+      nodes.push(line);
+    }
+  }
+  return nodes;
+}
+
+function renderMonitors(monitors) {
+  const nodes = [];
+  for (const [header, status] of Object.entries(monitors)) {
+    nodes.push(el("div", tr("Module {header}", {header}), "dim"));
+    for (const [name, done] of status.tests) {
+      nodes.push(row(name, tr(done ? "Finished" : "Not finished"), done ? "good" : "bad"));
+    }
+  }
+  fill(document.getElementById("monitors"), nodes);
+}
+
+function renderVehicle(state) {
+  const rows = [[tr("Adapter"), state.adapter], [tr("Protocol"), state.protocol],
+                [tr("Voltage at adapter (approximate)"), state.voltage]];
+  for (const [label, modules] of Object.entries(state.vehicle)) {
+    const entries = Object.entries(modules);
+    if (!entries.length) rows.push([label, tr("Not reported")]);
+    for (const [header, text] of entries) rows.push([`${label} (${header})`, text || tr("Empty")]);
+  }
+  fill(document.getElementById("vehicle"), rows.map(([label, text]) => {
+    const line = el("tr");
+    const value = el("td", text);
+    value.dir = "auto";
+    line.append(el("td", label, "dim"), value);
+    return line;
+  }));
+}
+
+function renderSavedCars(cars) {
+  const signature = JSON.stringify(cars) + language;
+  if (signature === lastCars) return;
+  lastCars = signature;
+  const parent = document.getElementById("cars");
+  if (!cars.length) {
+    fill(parent, [el("p", tr("No cars saved yet. A car is saved the first time it connects."), "dim")]);
+    return;
+  }
+  fill(parent, cars.map(car => {
+    const node = el("div", undefined, "car");
+    const name = el("strong", car.vin || tr("VIN not reported"));
+    name.dir = "auto";
+    node.append(name, el("div", `${tr("First seen")}: ${car.first_seen.replace("T", " ")}`, "car-sub"),
+                el("div", `${tr("Last seen")}: ${car.last_seen.replace("T", " ")}`, "car-sub"),
+                el("div", `${tr("Connections")}: ${car.connections}`, "car-sub"));
+    if (car.modules.length) node.append(el("div", `${tr("Modules")}: ${car.modules.join(", ")}`, "car-sub"));
+    if (car.light !== null) {
+      const codes = car.codes && car.codes.length ? car.codes.join(", ") : tr("none");
+      node.append(el("div", `${tr("Check engine light")}: ${tr(car.light ? "ON" : "off")}`, "car-sub"),
+                  el("div", `${tr("Stored and pending codes")}: ${codes}`, "car-sub"));
+    }
+    const details = el("details");
+    details.append(el("summary", tr("Details")));
+    details.addEventListener("toggle", async () => {
+      if (!details.open || details.dataset.loaded) return;
+      details.dataset.loaded = "1";
+      const record = await api("GET", "/api/car", {key: car.key, lang: language});
+      const values = record.status ? record.status.values : {};
+      details.append(el("div", tr("Latest values"), "car-sub"));
+      const list = el("div", undefined, "values");
+      fill(list, Object.entries(values).map(([name, text]) => row(tr(name), text)));
+      details.append(list);
+    });
+    node.append(details);
+    return node;
+  }));
+}
+
+function render(state) {
+  lastState = state;
+  connected = state.connected;
+  const status = document.getElementById("status");
+  renderSavedCars(state.cars);
+  updateConnectionViews();
+  if (!state.connected) {
+    status.textContent = tr("Not connected");
+    status.className = "lost";
+    document.getElementById("waiting-message").textContent = state.message;
+    document.getElementById("demo-banner").hidden = true;
+    return;
+  }
+  status.textContent = tr("Connected, updated {time}", {time: state.time});
+  status.className = "";
+  document.getElementById("demo-banner").hidden = !state.demo;
+  renderTiles(state.values);
+  fill(document.getElementById("codes"), codeNodes(state));
+  fill(document.getElementById("codes-summary"), codeNodes(state));
+  renderMonitors(state.monitors);
+  renderVehicle(state);
+  fill(document.getElementById("values"), state.values.map(v => row(v.name, `${v.text} ${v.unit}`.trim())));
+  document.getElementById("raw-section").hidden = !state.raw.length;
+  fill(document.getElementById("raw"), state.raw.map(r => row(`PID ${r.pid}`, r.text)));
+  document.getElementById("freeze-section").hidden = !state.freeze;
+  if (state.freeze) {
+    document.getElementById("freeze-title").textContent =
+      tr("Freeze frame for {code}: {description}", {code: state.freeze.code, description: state.freeze.description});
+    fill(document.getElementById("freeze"), state.freeze.values.map(v => row(v.name, `${v.text} ${v.unit}`.trim())));
+  }
+}
+
+async function runAction(action, params) {
+  const error = document.getElementById("action-error");
+  error.hidden = true;
+  location.hash = "#/commands";
+  try {
+    await post("/api/run", {action, params: params || {}});
+    await refreshJobs();
+    document.getElementById("jobs").scrollIntoView({block: "nearest"});
+  } catch (problem) {
+    error.textContent = problem.message;
+    error.hidden = false;
+  }
+}
+
+function renderActions() {
+  fill(document.getElementById("actions"), ACTIONS.map(action => {
+    const node = el("div", undefined, "action");
+    const head = el("div", undefined, "action-head");
+    const run = el("button", tr("Run"), action.danger ? "danger" : "primary");
+    run.type = "button";
+    run.dataset.needsConnection = "1";
+    run.disabled = !connected;
+    head.append(el("span", tr(action.title), "action-title"), run);
+    node.append(head, el("p", tr(action.what)), el("p", tr(action.needs), "needs"));
+    const terminal = el("p", `${tr("In the terminal")}: `, "terminal");
+    const code = el("code", action.cmd);
+    code.dir = "ltr";
+    terminal.append(code);
+    node.append(terminal);
+    const fields = el("div", undefined, "fields");
+    if (action.id === "profile") {
+      const name = labelledInput(tr("Car"), "text", "kia-picanto");
+      const year = labelledInput(tr("Model year (optional)"), "number", "");
+      fields.append(name.label, year.label);
+      node.append(fields);
+      run.addEventListener("click", () => runAction("profile", {name: name.input.value.trim(), year: year.input.value.trim()}));
+    } else if (action.id === "clear") {
+      const answer = labelledInput(tr("Type CLEAR to confirm"), "text", "");
+      answer.input.autocomplete = "off";
+      fields.append(answer.label);
+      node.append(fields);
+      run.addEventListener("click", async () => {
+        await runAction("clear", {answer: answer.input.value.trim()});
+        answer.input.value = "";
+      });
+    } else {
+      run.addEventListener("click", () => runAction(action.id));
+    }
+    return node;
+  }));
+}
+
+function labelledInput(text, type, value) {
+  const label = el("label", text);
+  const input = el("input");
+  input.type = type;
+  input.value = value;
+  input.dir = "ltr";
+  label.append(input);
+  return {label, input};
+}
+
+function jobTitle(job) {
+  if (job.action === "download") return `${tr("Download profile")}: ${job.params.name}`;
+  const action = ACTIONS.find(item => item.id === job.action);
+  const title = action ? tr(action.title) : job.action;
+  return job.action === "profile" ? `${title}: ${job.params.name}` : title;
+}
+
+async function refreshJobs() {
+  try {
+    const jobs = await api("GET", "/api/jobs");
+    const signature = JSON.stringify(jobs) + language;
+    if (signature !== lastJobs) {
+      const finished = lastJobs && jobs.some(job => job.action === "download" && job.status === "done");
+      lastJobs = signature;
+      renderJobs(jobs);
+      if (finished) loadCatalog();
+    }
+  } catch (error) { /* the status line already shows a lost connection */ }
+}
+
+function renderJobs(jobs) {
+  const parent = document.getElementById("jobs");
+  if (!jobs.length) {
+    fill(parent, [el("p", tr("No results yet. Run a command to see its result here."), "dim")]);
+    return;
+  }
+  fill(parent, jobs.map(job => {
+    const node = el("div", undefined, "job");
+    const head = el("div", undefined, "job-head");
+    head.append(el("strong", jobTitle(job)), el("span", `${job.started} · ${tr(JOB_STATUS[job.status])}`, `badge ${job.status}`));
+    node.append(head);
+    const text = job.output.split("\n").map(line => line.split("\r").pop()).join("\n").trim();
+    if (text) {
+      const pre = el("pre", text);
+      pre.dir = job.lang === "ar" ? "rtl" : "ltr";
+      node.append(pre);
+    }
+    return node;
+  }));
+}
+
+function makeOf(name) {
+  return name.split("-")[0];
+}
+
+async function loadCatalog() {
+  try {
+    catalogCars = await api("GET", "/api/catalog");
+    const select = document.getElementById("catalog-make");
+    const chosen = select.value;
+    fill(select, [Object.assign(el("option", tr("All makes")), {value: ""}),
+                  ...[...new Set(catalogCars.map(car => makeOf(car.name)))].sort()
+                    .map(make => Object.assign(el("option", make), {value: make}))]);
+    select.value = chosen;
+    renderCatalog();
+  } catch (error) { /* the status line already shows a lost connection */ }
+}
+
+function renderCatalog() {
+  const select = document.getElementById("catalog-make");
+  if (select.options.length) select.options[0].textContent = tr("All makes");
+  const words = document.getElementById("catalog-search").value.toLowerCase().replaceAll("-", " ").split(/\s+/).filter(Boolean);
+  const matches = catalogCars.filter(car => (!select.value || makeOf(car.name) === select.value)
+                                            && words.every(word => car.name.toLowerCase().includes(word)));
+  const shown = matches.slice(0, CATALOG_LIMIT);
+  let count = tr("{count} of {total} cars", {count: matches.length, total: catalogCars.length});
+  if (matches.length > CATALOG_LIMIT) count += ` ${tr("Showing the first {count}. Search to narrow the list.", {count: CATALOG_LIMIT})}`;
+  document.getElementById("catalog-count").textContent = count;
+  fill(document.getElementById("catalog"), shown.map(car => {
+    const node = el("div", undefined, "car-row");
+    const name = el("span", car.name.replaceAll("-", " "));
+    name.dir = "ltr";
+    const actions = el("div", undefined, "car-actions");
+    if (car.local) {
+      actions.append(el("span", tr("On this laptop"), "local"));
+    } else {
+      const get = el("button", tr("Download profile"), "small");
+      get.type = "button";
+      get.addEventListener("click", async () => {
+        get.disabled = true;
+        await post("/api/download", {name: car.name});
+        location.hash = "#/commands";
+        refreshJobs();
+      });
+      actions.append(get);
+    }
+    const year = el("input");
+    year.type = "number";
+    year.placeholder = tr("Model year (optional)");
+    year.setAttribute("aria-label", tr("Model year (optional)"));
+    const read = el("button", tr("Read on car"), "small read-car");
+    read.type = "button";
+    read.disabled = !connected;
+    read.addEventListener("click", () => runAction("profile", {name: car.name, year: year.value.trim()}));
+    actions.append(year, read);
+    node.append(name, actions);
+    return node;
+  }));
+}
+
+async function loadReports() {
+  try {
+    const reports = await api("GET", "/api/reports");
+    const parent = document.getElementById("reports");
+    if (!reports.length) {
+      fill(parent, [el("p", tr("No reports yet. Run a report or a scan to create one."), "dim")]);
+      return;
+    }
+    fill(parent, reports.map(report => {
+      const node = el("div", undefined, "report-row");
+      const name = el("span", `${report.time}  ${report.name}`);
+      name.dir = "ltr";
+      const open = el("button", tr("Open"), "small");
+      open.type = "button";
+      open.addEventListener("click", async () => {
+        const data = await api("GET", "/api/report", {name: report.name});
+        const text = document.getElementById("report-text");
+        text.textContent = data.text;
+        text.dir = /[؀-ۿ]/.test(data.text) ? "rtl" : "ltr";
+        text.hidden = false;
+      });
+      node.append(name, open);
+      return node;
+    }));
+  } catch (error) { /* the status line already shows a lost connection */ }
+}
+
+async function update() {
+  try {
+    const asked = language;
+    const state = (await window.fahis.request("state", {lang: asked})).data;
+    if (asked === language) render(state);
+    if (["commands", "cars"].includes(currentPage())) await refreshJobs();
+  } catch (error) {
+    const status = document.getElementById("status");
+    status.textContent = tr("Could not reach the app. Is it still running?");
+    status.className = "lost";
+  }
+  setTimeout(update, 500);
+}
+
+document.getElementById("lang-toggle").addEventListener("click", () => {
+  const next = language === "ar" ? "en" : "ar";
+  saveLanguage(next);
+  setLanguage(next);
+});
+document.getElementById("scan-button").addEventListener("click", () => runAction("scan"));
+document.getElementById("catalog-search").addEventListener("input", renderCatalog);
+document.getElementById("catalog-make").addEventListener("change", renderCatalog);
+window.addEventListener("hashchange", showPage);
+
+async function start() {
+  try {
+    const data = await setLanguage(savedLanguage() || "en");
+    if (!savedLanguage() && data.default !== "en") await setLanguage(data.default);
+  } catch (error) { /* keep the English already on the page */ }
+  showPage();
+  loadCatalog();
+  update();
+}
+
+start();
+</script>
+</body>
+</html>

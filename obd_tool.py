@@ -5,17 +5,17 @@ Only the `clear` command changes anything in the car, and it asks first.
 # Wrapped in t(), the text in this file is shown in the user's language; see i18n.py.
 import argparse
 import asyncio
+import contextlib
 import csv
-import json
 import os
 import re
 import sys
-import webbrowser
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
+import bridge
 import car_modules
-import dashboard
 import garage
 import i18n
 from demo import DemoTransport
@@ -32,7 +32,8 @@ SUPPORTED_PROTOCOLS = {"6": "ISO 15765-4 CAN 11-bit 500 kbps", "8": "ISO 15765-4
 
 CAN_LINE = re.compile(r"^[0-9A-F]{3}( [0-9A-F]{2})+$")
 
-FUEL_STATUS = {0: "Off (engine not running)", 1: "Open loop (cold)", 2: "Closed loop", 4: "Open loop (load)",
+# 0 means closed/open loop doesn't apply right now: an engine that's off, or a diesel at any speed.
+FUEL_STATUS = {0: "Not active", 1: "Open loop (cold)", 2: "Closed loop", 4: "Open loop (load)",
                8: "Open loop (fault)", 16: "Closed loop (fault)"}
 OBD_STANDARDS = {1: "OBD-II (CARB)", 2: "OBD (EPA)", 3: "OBD and OBD-II", 4: "OBD-I", 5: "Not OBD compliant",
                  6: "EOBD", 7: "EOBD and OBD-II", 8: "EOBD and OBD", 9: "EOBD, OBD and OBD-II",
@@ -115,6 +116,11 @@ LIVE_PIDS = {
     0x56: ("Long O2 trim B1", "%", trim),
     0x57: ("Short O2 trim B2", "%", trim),
     0x58: ("Long O2 trim B2", "%", trim),
+    0x59: ("Fuel rail absolute pressure", "kPa", lambda d: word(d) * 10),
+    0x5D: ("Fuel injection timing", "deg", lambda d: word(d) / 128 - 210),
+    0x61: ("Driver demand torque", "%", lambda d: d[0] - 125),
+    0x62: ("Actual engine torque", "%", lambda d: d[0] - 125),
+    0x63: ("Engine reference torque", "Nm", word),
 }
 for _index, _pid in enumerate(range(0x14, 0x1C)):
     LIVE_PIDS[_pid] = (f"O2 voltage B{_index // 4 + 1}S{_index % 4 + 1}", "V", lambda d: d[0] / 200)
@@ -141,6 +147,12 @@ class OBDError(Exception):
         super().__init__(t(text, **values))
 
 
+class Reply(bytes):
+    """A module's reply. `complete` is False if frames were lost and the reply was cut off."""
+
+    complete = True
+
+
 def parse_can(lines):
     """Rebuild each module's reply from CAN lines, joining multi-frame messages."""
     frames = {}
@@ -164,7 +176,9 @@ def parse_can(lines):
                 payload.extend(frame[2:])
             elif kind == 2:
                 payload.extend(frame[1:])
-        replies[header] = bytes(payload[:length])
+        reply = Reply(payload[:length])
+        reply.complete = length is None or len(payload) >= length
+        replies[header] = reply
     return replies
 
 
@@ -251,6 +265,7 @@ class ELM:
         self.transport = transport
         self.version = self.protocol = ""
         self.vehicle = None
+        self.demo = False
 
     async def setup(self):
         reply = await self.transport.send("ATZ", 5)
@@ -491,6 +506,8 @@ def format_report(snapshot):
 
 def remember_snapshot(elm, snapshot):
     """Save the latest full reading to this car's record on this laptop."""
+    if elm.demo:
+        return
     codes = snapshot["codes"]
     active = sorted({c for label in ("Stored", "Pending") for found in codes[label].values() for c in found})
     garage.remember(elm.vehicle or snapshot["vehicle"], "status", {
@@ -512,7 +529,7 @@ async def run_report(elm, _):
     remember_snapshot(elm, snapshot)
     report = format_report(snapshot)
     print(report)
-    save_report("report", report)
+    save_report("report", report, elm.demo)
 
 
 class LiveReader:
@@ -626,17 +643,179 @@ def dashboard_state(snapshot, reader, demo=False, lang=None, cars=()):
     }
 
 
+class Job:
+    """One command run from the web app, with its text output."""
+
+    MAX_OUTPUT = 200_000
+
+    def __init__(self, number, action, params, lang):
+        self.number = number
+        self.action = action
+        self.params = params
+        self.lang = lang
+        self.status = "queued"
+        self.output = ""
+        self.started = datetime.now().strftime("%H:%M:%S")
+
+    def write(self, text):
+        self.output = (self.output + text)[-self.MAX_OUTPUT:]
+
+    def flush(self):
+        pass
+
+    def view(self):
+        return {"id": self.number, "action": self.action, "params": self.params, "status": self.status,
+                "output": self.output, "started": self.started, "lang": self.lang}
+
+
+# What the web app can run on the car. `live` and `log` are terminal commands, since they never end.
+WEB_ACTIONS = ("battery", "info", "codes", "report", "scan", "profile", "clear")
+MAX_JOBS_KEPT = 20
+MAX_JOBS_WAITING = 5
+
+
 class DashboardApp:
-    """Serves the page straight away, then keeps trying to reach the car until it answers."""
+    """Serves the app straight away, then keeps trying to reach the car until it answers."""
 
     RETRY_SECONDS = 5
 
     def __init__(self, args):
         self.args = args
         self.message = ("Looking for the adapter ...", {})
-        self.snapshot = self.reader = None
+        self.snapshot = self.reader = self.elm = None
         # Demo pages get shared and screenshotted, so they never list real saved cars.
         self.cars = [] if args.demo else garage.summaries()
+        self.jobs = []
+        self.waiting = []
+        self.tasks = set()
+        self.next_job = 1
+
+    def new_job(self, action, params, lang):
+        job = Job(self.next_job, action, params, lang)
+        self.next_job += 1
+        self.jobs.append(job)
+        del self.jobs[:-MAX_JOBS_KEPT]
+        return job
+
+    def submit(self, action, params, lang):
+        """Queue a command for the car. Returns (job, None), or (None, why it was refused)."""
+        if action not in WEB_ACTIONS:
+            return None, t("That command isn't available here.", lang)
+        if self.elm is None:
+            return None, t("Not connected to a car", lang)
+        if len(self.waiting) >= MAX_JOBS_WAITING:
+            return None, t("Too many commands are waiting. Try again when they finish.", lang)
+        if action == "profile":
+            name = str(params.get("name", ""))
+            if name.lower() not in {car.lower() for car in car_modules.catalog()}:
+                return None, t("'{name}' isn't in the catalog. Search for your car with: .\\obd profiles {search}",
+                               lang, name=name, search=name.split("-")[0])
+            year = params.get("year")
+            if year not in (None, "") and not (str(year).isdigit() and 1980 <= int(year) <= 2100):
+                return None, t("Enter a model year between 1980 and 2100.", lang)
+            params = {"name": name, "year": int(year) if year not in (None, "") else None}
+        elif action == "clear":
+            if params.get("answer") != "CLEAR":
+                return None, t("Clearing needs you to type CLEAR.", lang)
+            params = {"answer": "CLEAR"}
+        else:
+            params = {}
+        job = self.new_job(action, params, lang)
+        self.waiting.append(job)
+        return job, None
+
+    async def run_job(self, elm, job):
+        previous = i18n.current_language()
+        i18n.set_language(job.lang)
+        job.status = "running"
+        try:
+            with contextlib.redirect_stdout(job):
+                if job.action == "profile" and not car_modules.local_profile_files(job.params["name"]):
+                    print(t("Downloading profile {name} from OBDb ...", name=job.params["name"]), flush=True)
+                    await asyncio.to_thread(car_modules.download_profile, job.params["name"])
+                handler = {"battery": run_battery, "info": run_info, "codes": run_codes, "report": run_report,
+                           "scan": run_scan, "profile": run_profile, "clear": run_clear}[job.action]
+                await handler(elm, SimpleNamespace(**job.params))
+            job.status = "done"
+            if job.action == "clear":
+                self.snapshot = await read_snapshot(elm)
+                self.reader.values.update(self.snapshot["values"])
+            elif job.action == "battery":
+                await elm.setup()  # the battery check resets the adapter
+        except (OBDError, ValueError) as error:
+            job.status = "failed"
+            job.write(f"{error}\n")
+        except Exception as error:
+            job.status = "failed"
+            job.write(t("Error: {error}", error=error) + "\n")
+            raise  # the connection is probably gone, so reconnect
+        finally:
+            i18n.set_language(previous)
+            if not self.args.demo:
+                self.cars = garage.summaries()
+
+    async def run_waiting_jobs(self, elm):
+        while self.waiting:
+            await self.run_job(elm, self.waiting.pop(0))
+
+    async def run_download(self, job):
+        job.status = "running"
+        try:
+            files = await asyncio.to_thread(car_modules.download_profile, job.params["name"])
+            job.write(t("Downloaded {name}: {files}", job.lang, name=job.params["name"], files=", ".join(files)) + "\n")
+            job.write(t("Data from OBDb contributors (https://github.com/OBDb), licensed CC BY-SA 4.0.", job.lang) + "\n")
+            job.status = "done"
+        except Exception as error:
+            job.write(t("Error: {error}", job.lang, error=error) + "\n")
+            job.status = "failed"
+
+    def fail_waiting_jobs(self):
+        for job in self.waiting:
+            job.status = "failed"
+            job.write(t("Not connected to a car", job.lang) + "\n")
+        self.waiting.clear()
+
+    async def api(self, method, path, query, body):
+        """Answer the web app's requests. Returns (HTTP status, data)."""
+        lang = i18n.normalize(query.get("lang") or body.get("lang"))
+        if method == "GET" and path == "/api/catalog":
+            return 200, [{"name": name, "local": bool(car_modules.local_profile_files(name))}
+                         for name in car_modules.catalog()]
+        if method == "GET" and path == "/api/jobs":
+            return 200, [job.view() for job in reversed(self.jobs)]
+        if method == "POST" and path == "/api/run":
+            params = body.get("params") if isinstance(body.get("params"), dict) else {}
+            job, refusal = self.submit(body.get("action"), params, lang)
+            return (400, {"error": refusal}) if refusal else (200, job.view())
+        if method == "POST" and path == "/api/download":
+            name = next((car for car in car_modules.catalog() if car.lower() == str(body.get("name")).lower()), None)
+            if name is None:
+                return 400, {"error": t("That car isn't in the catalog.", lang)}
+            job = self.new_job("download", {"name": name}, lang)
+            task = asyncio.create_task(self.run_download(job))
+            self.tasks.add(task)
+            task.add_done_callback(self.tasks.discard)
+            return 200, job.view()
+        if self.args.demo and path in ("/api/reports", "/api/report"):
+            # Demo pages get shared and screenshotted, and real reports can contain a VIN.
+            return (200, []) if path == "/api/reports" else (404, {"error": t("Not found", lang)})
+        if method == "GET" and path == "/api/reports":
+            files = sorted(REPORT_DIR.glob("*.txt"), key=lambda p: p.stat().st_mtime, reverse=True) if REPORT_DIR.is_dir() else []
+            return 200, [{"name": p.name, "time": datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M")}
+                         for p in files[:100]]
+        if method == "GET" and path == "/api/report":
+            name = query.get("name", "")
+            path_on_disk = REPORT_DIR / name
+            if not re.fullmatch(r"[\w-]+\.txt", name) or not path_on_disk.is_file():
+                return 404, {"error": t("Not found", lang)}
+            return 200, {"name": name, "text": path_on_disk.read_text(encoding="utf-8")}
+        if method == "GET" and path == "/api/car":
+            key = query.get("key", "")
+            record = garage.load_car(key) if re.fullmatch(r"[\w-]+", key) and not self.args.demo else {}
+            if not record:
+                return 404, {"error": t("Not found", lang)}
+            return 200, record
+        return 404, {"error": t("Not found", lang)}
 
     def state(self, lang=None):
         if self.snapshot is None:
@@ -652,39 +831,47 @@ class DashboardApp:
             self.cars = garage.summaries()
         self.reader = LiveReader(elm, snapshot["values"], snapshot["values"], snapshot["voltage"])
         self.snapshot = snapshot
+        self.elm = elm
         count = 0
-        while self.args.samples is None or count < self.args.samples:
-            await self.reader.step()
-            count += 1
-            await asyncio.sleep(self.args.interval)
+        try:
+            while self.args.samples is None or count < self.args.samples:
+                await self.run_waiting_jobs(elm)
+                await self.reader.step()
+                count += 1
+                await asyncio.sleep(self.args.interval)
+        finally:
+            self.elm = None
+            self.fail_waiting_jobs()
 
     async def connect(self):
         if self.args.demo:
             elm = ELM(DemoTransport())
+            elm.demo = True
             await elm.setup()
             await self.session(elm, self.args)
         else:
             await connect_and_run(self.args, self.session)
 
     async def run(self):
-        server = await dashboard.start(lambda lang: json.dumps(self.state(lang)), self.args.port)
-        url = f"http://127.0.0.1:{self.args.port}"
-        print(t("Dashboard running at {url} (on this laptop only). Press Ctrl+C to stop.", url=url), flush=True)
-        if not self.args.no_browser:
-            webbrowser.open(url)
-        async with server:
-            while True:
-                try:
-                    await self.connect()
-                    return
-                except Exception as error:
-                    self.snapshot = self.reader = None
-                    if isinstance(error, OBDError):
-                        self.message = (error.text, error.values)
-                    else:
-                        self.message = (str(error), {})
-                    print(t("Not connected: {error}", error=error), flush=True)
-                await asyncio.sleep(self.RETRY_SECONDS)
+        while True:
+            try:
+                await self.connect()
+                return
+            except Exception as error:
+                self.snapshot = self.reader = None
+                if isinstance(error, OBDError):
+                    self.message = (error.text, error.values)
+                else:
+                    self.message = (str(error), {})
+                print(t("Not connected: {error}", error=error), flush=True)
+            await asyncio.sleep(self.RETRY_SECONDS)
+
+
+def run_backend(args):
+    """Run for the desktop window. Stdout carries the pipe's replies, so stray prints go to stderr."""
+    replies = sys.stdout.buffer
+    sys.stdout = sys.stderr
+    asyncio.run(bridge.serve(DashboardApp(args), sys.stdin.buffer, replies))
 
 
 def battery_advice(volts, running):
@@ -765,7 +952,9 @@ def show_progress(done, total):
     print("\r  " + t("{done} of {total} ...", done=done, total=total), end="" if done < total else "\n", flush=True)
 
 
-def save_report(prefix, text):
+def save_report(prefix, text, demo=False):
+    if demo:
+        return
     REPORT_DIR.mkdir(exist_ok=True)
     path = REPORT_DIR / f"{prefix}_{datetime.now():%Y%m%d_%H%M%S}.txt"
     path.write_text(text + "\n", encoding="utf-8")
@@ -779,7 +968,7 @@ async def run_scan(elm, _):
     garage.remember(elm.vehicle, "modules", {"modules": modules})
     report = car_modules.format_scan(modules, describe_dtc)
     print(report)
-    save_report("modules", report)
+    save_report("modules", report, elm.demo)
 
 
 async def run_profile(elm, args):
@@ -790,7 +979,7 @@ async def run_profile(elm, args):
     garage.remember(elm.vehicle, "profile", {"name": args.name, "year": args.year, "values": values})
     report = car_modules.format_profile(values, answered, tried)
     print(report)
-    save_report("profile", report)
+    save_report("profile", report, elm.demo)
 
 
 def run_profiles(args):
@@ -826,14 +1015,17 @@ def run_cars():
             print(f"  {t('Stored and pending codes')}: {', '.join(car['codes']) or t('none')}")
 
 
-async def run_clear(elm, _):
+async def run_clear(elm, args):
     rpm = await elm.read_pid(0x0C)
     if rpm is None or rpm > 0:
         raise OBDError("Not clearing: the engine must be off with the ignition ON.")
     codes = await read_codes(elm)
     print_codes(codes)
     print("\n" + t("Clearing erases these codes and their saved fault data, and resets the emissions self-tests, which then need driving to finish. It does not fix the fault."))
-    answer = await asyncio.to_thread(input, t("Type CLEAR to continue, anything else to cancel: "))
+    # The web app asks for the typed confirmation before it queues this command.
+    answer = getattr(args, "answer", None)
+    if answer is None:
+        answer = await asyncio.to_thread(input, t("Type CLEAR to continue, anything else to cancel: "))
     if answer.strip() != "CLEAR":
         print(t("Cancelled, nothing was changed."))
         return
@@ -920,14 +1112,12 @@ def main():
     commands.add_parser("clear", help=t("clear fault codes (asks first)")).set_defaults(handler=run_clear)
     for name, handler, text in (("live", run_live, t("live values in this window")),
                                 ("log", run_log, t("live values, saved to CSV")),
-                                ("dashboard", None, t("everything on one page in your browser"))):
+                                ("app", None, t("backend for the desktop app, started by npm start"))):
         command = commands.add_parser(name, help=text)
         command.add_argument("--interval", type=float, default=0.1, help=t("seconds between readings"))
         command.add_argument("--samples", type=int, help=t("stop after this many readings"))
         command.set_defaults(handler=handler)
-        if name == "dashboard":
-            command.add_argument("--port", type=int, default=8765, help=t("local port for the page"))
-            command.add_argument("--no-browser", action="store_true", help=t("don't open the browser"))
+        if name == "app":
             command.add_argument("--demo", action="store_true", help=t("show simulated data, no adapter or car needed"))
     args = parser.parse_args()
 
@@ -938,8 +1128,8 @@ def main():
         if args.command == "cars":
             run_cars()
             return 0
-        if args.command == "dashboard":
-            asyncio.run(DashboardApp(args).run())
+        if args.command == "app":
+            run_backend(args)
             return 0
         if args.command == "profile":
             # Fetch and check the profile first, so a mistake doesn't use up battery connecting.

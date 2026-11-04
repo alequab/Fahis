@@ -1,0 +1,17 @@
+{
+  "name": "fahis",
+  "version": "1.0.0",
+  "description": "See what your car is reporting on Windows with a Bluetooth LE ELM327 adapter.",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "alequab",
+  "main": "electron/main.js",
+  "scripts": {
+    "setup": "node node_modules/electron/install.js",
+    "start": "electron .",
+    "demo": "electron . --demo"
+  },
+  "devDependencies": {
+    "electron": "45.0.0"
+  }
+}

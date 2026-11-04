@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Fahis">
+  <title>Fahis</title>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d3346"/>
+      <stop offset="1" stop-color="#0d1319"/>
+    </linearGradient>
+    <linearGradient id="lens" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7fd0ff"/>
+      <stop offset="1" stop-color="#2f8fe0"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#background)"/>
+  <!-- Magnifier handle -->
+  <path d="M361 361 L438 438" fill="none" stroke="#2f8fe0" stroke-width="50" stroke-linecap="round"/>
+  <!-- Lens ring, drawn as a gauge dial with a gap at the handle -->
+  <path d="M340.9 357.3 A 145 145 0 1 1 357.3 340.9" fill="none" stroke="url(#lens)" stroke-width="34" stroke-linecap="round"/>
+  <!-- The Arabic letter faa, drawn as shapes so it doesn't depend on a font -->
+  <g fill="none" stroke="#ffffff" stroke-width="27" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="277" cy="224" r="30"/>
+    <path d="M307 226 C 314 288 280 310 226 310 C 186 310 156 294 148 252"/>
+  </g>
+  <circle cx="275" cy="156" r="18" fill="#4cc38a"/>
+</svg>
