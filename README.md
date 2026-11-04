@@ -2,15 +2,32 @@
 
 **بسم الله الرحمن الرحيم**
 
-**والصلاة والسلام على نبينا محمد ﷺ**
+**والصلاة والسلام على نبينا محمد**
+
+<br>
+
+<img src="electron/icon.svg" alt="أيقونة فاحص: عدسة مكبرة بداخلها حرف الفاء" width="128">
+
+<h1>فاحص · Fahis</h1>
+
+**اعرف ما تقوله سيارتك، من حاسوبك وبمحوّل ELM327 رخيص.**
+
+*See what your car is reporting, on your laptop, with a cheap ELM327 adapter.*
+
+<br>
+
+![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-5cb8ff?style=flat-square)
+![Python](https://img.shields.io/badge/Python-3.12-5cb8ff?style=flat-square)
+![Electron](https://img.shields.io/badge/Electron-45-5cb8ff?style=flat-square)
+![Bluetooth LE](https://img.shields.io/badge/Bluetooth-LE-5cb8ff?style=flat-square)
+![Arabic and English](https://img.shields.io/badge/Arabic%20%7C%20English-4cc38a?style=flat-square)
+[![Free for individuals](https://img.shields.io/badge/license-free%20for%20individuals-4cc38a?style=flat-square)](LICENSE)
+
+<br>
+
+### [العربية](#العربية) &nbsp;·&nbsp; [English](#english)
 
 </div>
-
-<img src="electron/icon.svg" alt="أيقونة فاحص: عدسة مكبرة بداخلها حرف الفاء" width="96">
-
-# فاحص (Fahis)
-
-**[العربية](#العربية) | [English](#english)**
 
 ---
 
@@ -18,38 +35,45 @@
 
 ## العربية
 
-اعرف ما تُبلغ عنه سيارتك من خلال حاسوب محمول يعمل بنظام Windows ومحوّل ELM327 رخيص يعمل بتقنية Bluetooth LE.
+كثير من محوّلات ELM327 تعمل بتقنية Bluetooth LE، ولا يعطيها Windows منفذ COM، لذلك لا تجدها معظم برامج OBD-II. أما **فاحص** فيتصل بالمحوّل مباشرة، ويعرض بيانات سيارتك في تطبيق سطح مكتب بالعربية والإنجليزية.
 
-كثير من محوّلات ELM327 تعمل بتقنية Bluetooth LE ‏(BLE)، ولا يعطيها Windows منفذ COM، لذلك لا تجدها معظم برامج OBD-II. أما فاحص فيتصل بالمحوّل مباشرة عبر BLE.
+<table>
+<tr>
+<td width="50%"><img src="docs/overview-ar.png" alt="صفحة النظرة العامة ببيانات محاكاة"><p align="center"><b>نظرة عامة</b></p></td>
+<td width="50%"><img src="docs/faults-ar.png" alt="صفحة رموز الأعطال ببيانات محاكاة"><p align="center"><b>رموز الأعطال</b></p></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/commands-ar.png" alt="صفحة الأوامر وفيها نتيجة أمر ببيانات محاكاة"><p align="center"><b>الأوامر والنتائج</b></p></td>
+<td width="50%"><img src="docs/cars-ar.png" alt="صفحة السيارات المدعومة"><p align="center"><b>السيارات المدعومة</b></p></td>
+</tr>
+</table>
 
-![تطبيق فاحص باللغة العربية، ويعرض بيانات محاكاة](docs/app-overview-ar.png)
-
-*لقطة من الوضع التجريبي، فالبيانات المعروضة محاكاة.*
+<p align="center"><i>الصور من الوضع التجريبي، فالبيانات المعروضة محاكاة.</i></p>
 
 ### المزايا
 
-- **تطبيق سطح مكتب:** نافذة Electron فيها صفحات للنظرة العامة والبيانات المباشرة ورموز الأعطال والأوامر والسيارات المدعومة والسيارات المحفوظة والتقارير
-- **تشغيل الأوامر من التطبيق:** ابدأ فحص البطارية والتقرير والبحث عن الوحدات وغيرها، واقرأ النتائج في الصفحة
-- **العربية والإنجليزية:** بدّل اللغة بزر واحد، فيتحول التطبيق أيضًا من اليمين إلى اليسار، أو استخدم `--lang` في الطرفية
-- **رموز الأعطال:** المخزّنة والمعلّقة والدائمة، مع أوصاف لنحو 9,500 رمز عام
-- **وحدات أخرى:** يبحث عن وحدات غير المحرك ويقرأ رموز أعطالها إذا سمحت السيارة بذلك
-- **سيارات كثيرة:** قائمة قابلة للبحث تضم نحو 880 ملف سيارة من المجتمع، تُنزَّل عند الحاجة
-- **حفظ السيارات:** يحفظ كل سيارة تتصل به مع بياناتها وآخر قراءاتها، على جهازك فقط
-- **فحص البطارية:** يشرح الجهد بلغة بسيطة، ويعتمد على قراءة السيارة نفسها إذا توفرت
-- **تقرير كامل وسجل CSV:** احفظ قراءة كاملة في ملف نصي، أو سجّل القيم المباشرة لفتحها في جدول بيانات
-- **مسح محميّ:** لا يعمل مسح الرموز إلا والمحرك متوقف، وبعد أن تكتب `CLEAR`
+<table>
+<tr>
+<td width="50%" valign="top"><b>تطبيق سطح مكتب</b><br>سبع صفحات: نظرة عامة، وبيانات مباشرة، ورموز أعطال، وأوامر، وسيارات مدعومة، وسيارات محفوظة، وتقارير.</td>
+<td width="50%" valign="top"><b>الأوامر داخل التطبيق</b><br>شغّل فحص البطارية والتقرير والبحث عن الوحدات وغيرها، واقرأ النتيجة في الصفحة نفسها.</td>
+</tr>
+<tr>
+<td valign="top"><b>رموز الأعطال</b><br>المخزّنة والمعلّقة والدائمة، مع أوصاف لنحو 9,500 رمز عام.</td>
+<td valign="top"><b>سيارات كثيرة</b><br>قائمة قابلة للبحث تضم نحو 880 ملف سيارة من المجتمع، وتُنزَّل عند الحاجة.</td>
+</tr>
+<tr>
+<td valign="top"><b>العربية والإنجليزية</b><br>زر واحد يبدّل اللغة ويحوّل التطبيق من اليمين إلى اليسار.</td>
+<td valign="top"><b>حفظ السيارات</b><br>يحفظ كل سيارة تتصل به مع بياناتها وآخر قراءاتها، على جهازك فقط.</td>
+</tr>
+<tr>
+<td valign="top"><b>فحص البطارية</b><br>يشرح الجهد بلغة بسيطة، ويعتمد على قراءة السيارة نفسها إذا توفرت.</td>
+<td valign="top"><b>مسح محميّ</b><br>لا يعمل مسح الرموز إلا والمحرك متوقف، وبعد أن تكتب <code>CLEAR</code>.</td>
+</tr>
+</table>
 
-### المتطلبات
+### البدء السريع
 
-- نظام Windows 10 أو 11 مع Bluetooth
-- ‏Python 3.12 (الإصدارات الأخرى لم تُختبر)
-- ‏Node.js لتشغيل تطبيق سطح المكتب
-- محوّل ELM327 يعمل بتقنية BLE ويوفر الخدمة التسلسلية `FFF0`
-- سيارة تستخدم CAN بعناوين 11 بت، وهذا حال معظم السيارات منذ نحو عام 2008
-
-المحوّلات التي تعمل بتقنية Bluetooth التقليدية أو USB أو Wi-Fi غير مدعومة.
-
-### التثبيت
+**المتطلبات:** نظام Windows 10 أو 11 مع Bluetooth، و‏Python 3.12، و‏Node.js، ومحوّل ELM327 يعمل بتقنية BLE ويوفر الخدمة `FFF0`، وسيارة تستخدم CAN بعناوين 11 بت.
 
 <div dir="ltr">
 
@@ -60,32 +84,55 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 npm install
 npm run setup
+npm start
 ```
 
 </div>
 
-ثم:
+لتجربته دون سيارة ببيانات محاكاة، شغّل `npm run demo`.
+
+**للاتصال بالسيارة:**
 
 1. وصّل المحوّل بمنفذ OBD-II في السيارة.
 2. شغّل المحرك في مكان مفتوح، أو أدر مفتاح الإشعال.
 3. أقرن المحوّل من إعدادات Bluetooth في Windows. إذا طلب رمز PIN فجرّب `1234` أو `0000` أو `6789`.
 4. أوقف Bluetooth في أي هاتف اتصل بالمحوّل من قبل.
 
-### الاستخدام
+يواصل التطبيق البحث عن المحوّل حتى تستجيب السيارة، وعند إغلاق النافذة ينقطع الاتصال بالمحوّل.
 
-شغّل تطبيق سطح المكتب من مجلد المشروع:
+### كيف يعمل
 
 <div dir="ltr">
 
-```
-npm start
+```mermaid
+flowchart LR
+    A["نافذة Electron"] <-- "قناة خاصة" --> B["خدمة Python"]
+    B <-- "Bluetooth LE" --> C["محوّل ELM327"]
+    C <-- "OBD-II" --> D["السيارة"]
 ```
 
 </div>
 
-يواصل التطبيق البحث عن المحوّل حتى تستجيب السيارة. لتجربته ببيانات محاكاة دون سيارة، شغّل `npm run demo`. وعند إغلاق النافذة تتوقف الخدمة الخلفية وينقطع الاتصال بالمحوّل.
+### السلامة والخصوصية
 
-ويمكنك أيضًا تشغيل الأوامر في الطرفية بدلًا من التطبيق:
+- **لا تستخدم التطبيق أثناء القيادة.** استخدم `.\obd log`، أو اجعل أحد الركاب يتابعه.
+- **انتبه إلى البطارية.** تُستنزف البطارية عندما يكون الإشعال يعمل والمحرك متوقفًا. افصل المحوّل عند الانتهاء.
+- **مسح الرموز لا يصلح العطل.** وهو يمحو أيضًا بيانات الأعطال المحفوظة ويعيد ضبط اختبارات الانبعاثات الذاتية.
+- **كل الأوامر ما عدا `clear` تقرأ البيانات فقط.**
+- **بياناتك على جهازك.** تتصل النافذة بخدمتها الخلفية عبر قناة خاصة دون خادم ويب أو منفذ شبكة مفتوح. وتنزيل ملف سيارة هو المرة الوحيدة التي يتصل فيها التطبيق نفسه بالإنترنت.
+
+### ما يجب معرفته
+
+- اختُبر مع محوّل BLE واحد يعرّف نفسه بأنه `ELM327 v2.1` على سيارتين من Kia، إحداهما بنزين والأخرى ديزل. ومعظم السيارات في القائمة لم تُختبر.
+- لم تُختبر الأوامر التي تُشغَّل من صفحة الأوامر حتى الآن إلا في الوضع التجريبي. وقد اختُبرت الأوامر نفسها على سيارات حقيقية من الطرفية، ما عدا `clear` الذي لم يُشغَّل على سيارة من أي منهما.
+- في السيارتين المختبرتين لم يستجب إلا وحدتا المحرك وناقل الحركة، فلم تُقرأ أعطال ABS والوسائد الهوائية والهيكل. وتختلف النتائج من سيارة إلى أخرى.
+
+<details>
+<summary><b>أوامر الطرفية</b></summary>
+
+<br>
+
+أغلق التطبيق قبل تشغيل أمر في الطرفية، لأن المحوّل يخدم برنامجًا واحدًا في كل مرة.
 
 | الأمر | ماذا يفعل |
 |---|---|
@@ -94,50 +141,42 @@ npm start
 | `.\obd battery` | جهد البطارية مع شرح بلغة بسيطة |
 | `.\obd codes` | رموز الأعطال المخزّنة والمعلّقة والدائمة |
 | `.\obd scan` | يبحث عن وحدات أخرى ويقرأ رموز أعطالها إذا سُمح بذلك |
-| `.\obd cars` | يعرض السيارات المحفوظة على هذا الجهاز، دون محوّل |
-| `.\obd profiles toyota` | يبحث في قائمة ملفات السيارات، دون محوّل |
+| `.\obd cars` | يعرض السيارات المحفوظة على هذا الجهاز |
+| `.\obd profiles toyota` | يبحث في قائمة ملفات السيارات |
 | `.\obd profile --name kia-picanto --year 2017` | يقرأ قيمًا إضافية لسيارتك، وينزّل ملفها عند الحاجة |
 | `.\obd live` | القيم المباشرة في الطرفية |
 | `.\obd log` | القيم المباشرة مع حفظها بصيغة CSV في مجلد `logs\` |
 | `.\obd clear` | يمسح رموز الأعطال بعد أن يطلب منك التأكيد |
 
-اضغط Ctrl+C لإيقاف `live` أو `log`. يخدم المحوّل برنامجًا واحدًا في كل مرة، لذلك أغلق التطبيق قبل تشغيل أمر في الطرفية.
-
 **الخيارات**
 
 - ‏`--lang ar` أو `--lang en` يحدد اللغة ويحفظها، ويُكتب قبل الأمر، مثل `.\obd --lang ar report`.
-- ‏`--address AA:BB:CC:DD:EE:FF` يختار محوّلًا محددًا، ويُكتب قبل الأمر. يبحث فاحص افتراضيًا عن محوّل يحتوي اسمه على `OBD` أو `ELM`.
-- ‏`--interval 1` يحدد عدد الثواني بين القراءات، للأمرين `live` و`log`.
-- ‏`--samples 20` يوقف البرنامج بعد 20 قراءة، للأمرين نفسيهما.
+- ‏`--address AA:BB:CC:DD:EE:FF` يختار محوّلًا محددًا، ويُكتب قبل الأمر.
+- ‏`--interval 1` يحدد عدد الثواني بين القراءات، و`--samples 20` يوقف البرنامج بعد 20 قراءة، للأمرين `live` و`log`.
 - ‏`.\obd profiles --get toyota-camry` ينزّل ملف السيارة الآن لتستخدمه لاحقًا دون إنترنت.
 
-### السلامة
+</details>
 
-- **لا تستخدم التطبيق أثناء القيادة.** استخدم `.\obd log`، أو اجعل أحد الركاب يتابعه.
-- **انتبه إلى البطارية.** تُستنزف البطارية عندما يكون الإشعال يعمل والمحرك متوقفًا. افصل المحوّل عند الانتهاء، لأن بعض المحوّلات تواصل سحب الكهرباء.
-- **مسح الرموز لا يصلح العطل.** وهو يمحو أيضًا بيانات الأعطال المحفوظة ويعيد ضبط اختبارات الانبعاثات الذاتية.
-- **كل الأوامر ما عدا `clear` تقرأ البيانات فقط.** لا يرسل `scan` و`profile` إلا طلبات قراءة، ويرفض البرنامج ما سواها.
-- **لا يبدأ `scan` و`profile` إذا كان الجهد أقل من 11.8 فولت،** لأن القراءات الطويلة تستنزف البطارية.
+<details>
+<summary><b>كل الحدود</b></summary>
 
-### الخصوصية
+<br>
 
-قد تحتوي التقارير والسيارات المحفوظة على رقم الهيكل (VIN)، وتسجّل ملفات السجل طريقة استخدام السيارة. كل ذلك يبقى على جهازك، ويمنع ملف `.gitignore` رفعه إلى المستودع. احذف ملف السيارة من مجلد `cars\` إذا أردت نسيانها. تتصل النافذة بخدمتها الخلفية عبر قناة خاصة، دون خادم ويب أو منفذ شبكة مفتوح، ولا تستطيع الصفحة تحميل أي شيء من الإنترنت. وتنزيل ملف سيارة هو المرة الوحيدة التي يتصل فيها التطبيق نفسه بالإنترنت.
-
-### الحدود
-
-- اختُبر البرنامج مع محوّل BLE واحد يعرّف نفسه بأنه `ELM327 v2.1` على سيارتين من Kia، إحداهما بنزين والأخرى ديزل، وكلتاهما تستخدم CAN بسرعة 500 kbps. تعرض صفحة السيارات المدعومة السيارات التي تتوفر لها بيانات من المجتمع، ومعظمها لم يُختبر.
-- لم تُختبر الأوامر التي تُشغَّل من صفحة الأوامر في التطبيق حتى الآن إلا في الوضع التجريبي. وقد اختُبرت الأوامر نفسها على سيارات حقيقية من الطرفية، ما عدا `clear` الذي لم يُشغَّل على سيارة من أي منهما.
-- يعمل التطبيق من الشيفرة المصدرية دون برنامج تثبيت حتى الآن، ويحتاج إلى Python وNode.js.
-- تغطي معظم الأوامر بيانات المحرك والانبعاثات القياسية. في السيارتين اللتين اختُبر عليهما، لم تستجب للأمر `scan` إلا وحدتا المحرك وناقل الحركة، فلم تُقرأ أعطال ABS والوسائد الهوائية والهيكل. وتختلف النتائج من سيارة إلى أخرى.
+- يعمل التطبيق من الشيفرة المصدرية دون برنامج تثبيت حتى الآن.
 - قيم ملفات السيارات مصدرها بيانات المجتمع، وقد لا تطابق سنة سيارتك بالضبط، وقد لا ينطبق بعضها على سيارتك أصلًا.
-- يتخطى `profile` الأوامر التي لا يستطيع إرسالها بأمان أو لا يدعمها: وهي التي تفتح جلسة تشخيص خاصة، والتي تستخدم عناوين 29 بت أو العناوين الموسّعة. وقد تفقد بعض السيارات كثيرًا من البيانات بسبب ذلك.
-- تغطي أوصاف رموز الأعطال نحو 9,500 رمز عام. أما الرموز الخاصة بالشركات المصنّعة فيظهر تصنيفها فقط وتحتاج إلى بحث.
+- يتخطى `profile` الأوامر التي لا يستطيع إرسالها بأمان أو لا يدعمها: وهي التي تفتح جلسة تشخيص خاصة، والتي تستخدم عناوين 29 بت أو العناوين الموسّعة.
+- يدعم CAN بعناوين 11 بت فقط، ولا يدعم المحوّلات التي تعمل بتقنية Bluetooth التقليدية أو USB أو Wi-Fi.
+- تغطي أوصاف رموز الأعطال نحو 9,500 رمز عام. أما الرموز الخاصة بالشركات المصنّعة فيظهر تصنيفها فقط.
 - في العربية تُرجم نحو 80 رمز عطل شائعًا، وتبقى الرموز الأخرى وأسماء قيم ملفات السيارات بالإنجليزية.
-- قد تظهر العربية بشكل سيئ في طرفية Windows، لأن بعض الطرفيات لا تصل الحروف ولا تدعم الكتابة من اليمين إلى اليسار. التطبيق وملفات التقارير أفضل لقراءة العربية.
+- قد تظهر العربية بشكل سيئ في طرفية Windows. التطبيق وملفات التقارير أفضل لقراءتها.
 - قد تكون قراءة الجهد من المحوّل غير دقيقة: ففي الإعداد الذي جرى اختباره كانت أعلى بنحو 1 فولت من قراءة وحدة السيارة.
-- تُحدَّث القيم المباشرة واحدة تلو الأخرى، لذلك قد يستغرق تحديث القيم الأبطأ عدة ثوانٍ.
 
-### التطوير
+</details>
+
+<details>
+<summary><b>التطوير وملفات المشروع</b></summary>
+
+<br>
 
 شغّل الاختبارات التي لا تحتاج إلى سيارة أو محوّل:
 
@@ -155,17 +194,17 @@ npm start
 | `car_modules.py` | البحث عن الوحدات وتفسير ملفات السيارات |
 | `garage.py` | سجلات السيارات المحفوظة |
 | `i18n.py` | النصوص العربية والإنجليزية |
-| `electron/main.js` و`electron/preload.js` | نافذة سطح المكتب، وهي تشغّل الخدمة الخلفية وتوقفها |
-| `electron/index.html` | صفحات التطبيق |
-| `electron/icon.svg` و`icon-small.svg` و`icon.ico` و`icon.png` | أيقونة التطبيق: الرسم الأصلي، ونسخة مبسطة لمقاسي 16 و24 بكسل، والملفات الجاهزة |
 | `bridge.py` | القناة الخاصة بين النافذة والخدمة الخلفية |
+| `electron/` | نافذة سطح المكتب وصفحات التطبيق والأيقونة |
 | `demo.py` | محوّل محاكاة للوضع التجريبي |
 | `dtc_codes.py` | البحث عن أوصاف رموز الأعطال |
 | `profiles\` | قائمة السيارات وملف Kia Picanto، من OBDb |
 | `data\` | أوصاف رموز الأعطال العامة، من OBDex |
 | `test_obd_tool.py` | الاختبارات |
 
-### الترخيص
+</details>
+
+### الرخصة
 
 يمكن **للأفراد** استخدام فاحص وتعديله ومشاركته مجانًا للأغراض الشخصية. **ولا يحق للشركات والمؤسسات استخدامه** بدون إذن كتابي، ويشمل ذلك العاملين لحسابهم الخاص والأعمال الفردية عند استخدامه في عملهم. ولا يجوز بيعه. راجع ملف [LICENSE](LICENSE) للاطلاع على الشروط كاملة، والنص الإنجليزي هو المعتمد.
 
@@ -177,38 +216,45 @@ npm start
 
 ## English
 
-See what your car is reporting, on a Windows laptop, using a cheap Bluetooth LE ELM327 adapter.
+Many ELM327 adapters are Bluetooth LE. Windows gives them no COM port, so most OBD-II programs can't find them. **Fahis** talks to the adapter directly and shows your car's data in a desktop app, in Arabic and English.
 
-Many ELM327 adapters are Bluetooth LE (BLE). Windows gives them no COM port, so most OBD-II programs can't find them. Fahis talks to the adapter directly over BLE.
+<table>
+<tr>
+<td width="50%"><img src="docs/overview-en.png" alt="The Overview page with simulated data"><p align="center"><b>Overview</b></p></td>
+<td width="50%"><img src="docs/faults-en.png" alt="The Fault codes page with simulated data"><p align="center"><b>Fault codes</b></p></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/commands-en.png" alt="The Commands page showing a command result with simulated data"><p align="center"><b>Commands and results</b></p></td>
+<td width="50%"><img src="docs/cars-en.png" alt="The Supported cars page"><p align="center"><b>Supported cars</b></p></td>
+</tr>
+</table>
 
-![The Fahis desktop app in English, showing simulated data](docs/app-overview-en.png)
-
-*Screenshot from demo mode, so the data is simulated.*
+<p align="center"><i>Screenshots are from demo mode, so the data is simulated.</i></p>
 
 ### Features
 
-- **Desktop app:** an Electron window with pages for the overview, live data, fault codes, commands, supported cars, saved cars and reports
-- **Run commands in the app:** start a battery check, report, module scan and more, and read the results on the page
-- **Arabic and English:** switch with one button, which also flips the app to right-to-left, or use `--lang` in the terminal
-- **Fault codes:** stored, pending and permanent, with descriptions for about 9,500 generic codes
-- **Other modules:** looks for modules beyond the engine and reads their fault codes where the car allows it
-- **Many cars:** searchable catalog of about 880 community car profiles, downloaded when you need one
-- **Saved cars:** remembers each car that connects, with its details and latest readings, on your laptop only
-- **Battery check:** explains the voltage in plain language, using the car's own reading when available
-- **Full report and CSV logging:** save a full reading to a text file, or record live values for a spreadsheet
-- **Protected clearing:** clearing codes only works with the engine off, and you must type `CLEAR` first
+<table>
+<tr>
+<td width="50%" valign="top"><b>Desktop app</b><br>Seven pages: overview, live data, fault codes, commands, supported cars, saved cars and reports.</td>
+<td width="50%" valign="top"><b>Commands in the app</b><br>Run a battery check, report, module scan and more, and read the result on the page.</td>
+</tr>
+<tr>
+<td valign="top"><b>Fault codes</b><br>Stored, pending and permanent, with descriptions for about 9,500 generic codes.</td>
+<td valign="top"><b>Many cars</b><br>A searchable catalog of about 880 community car profiles, downloaded when you need one.</td>
+</tr>
+<tr>
+<td valign="top"><b>Arabic and English</b><br>One button switches language and flips the app to right-to-left.</td>
+<td valign="top"><b>Saved cars</b><br>Remembers each car that connects, with its details and latest readings, on your laptop only.</td>
+</tr>
+<tr>
+<td valign="top"><b>Battery check</b><br>Explains the voltage in plain language, using the car's own reading when available.</td>
+<td valign="top"><b>Protected clearing</b><br>Clearing codes only works with the engine off, and after you type <code>CLEAR</code>.</td>
+</tr>
+</table>
 
-### What you need
+### Quick start
 
-- Windows 10 or 11 with Bluetooth
-- Python 3.12 (other versions are untested)
-- Node.js, for the desktop app
-- A BLE ELM327 adapter that offers the `FFF0` serial service
-- A car that uses 11-bit CAN, which is most cars from about 2008 onward
-
-Classic Bluetooth, USB and Wi-Fi adapters aren't supported.
-
-### Setup
+**You need:** Windows 10 or 11 with Bluetooth, Python 3.12, Node.js, a BLE ELM327 adapter with the `FFF0` service, and a car that uses 11-bit CAN.
 
 ```
 git clone https://github.com/alequab/fahis.git
@@ -217,26 +263,49 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 npm install
 npm run setup
+npm start
 ```
 
-Then:
+To try it with simulated data and no car, run `npm run demo`.
+
+**To connect to a car:**
 
 1. Plug the adapter into the car's OBD-II port.
 2. Start the engine outdoors, or turn the ignition ON.
 3. Pair the adapter in Windows Bluetooth settings. If it asks for a PIN, try `1234`, `0000` or `6789`.
 4. Turn off Bluetooth on any phone that has connected to the adapter.
 
-### Usage
+The app keeps looking for the adapter until the car answers. Closing the window disconnects from the adapter.
 
-Start the desktop app from the project folder:
+### How it works
 
+```mermaid
+flowchart LR
+    A["Electron window"] <-- "private pipe" --> B["Python backend"]
+    B <-- "Bluetooth LE" --> C["ELM327 adapter"]
+    C <-- "OBD-II" --> D["Your car"]
 ```
-npm start
-```
 
-It keeps looking for the adapter until the car answers. To try it with simulated data and no car, run `npm run demo`. Closing the window also stops the backend and disconnects from the adapter.
+### Safety and privacy
 
-You can also run commands in a terminal instead of the app:
+- **Don't use the app while driving.** Use `.\obd log`, or have a passenger watch it.
+- **Watch your battery.** With the ignition on and the engine off, the battery drains. Unplug the adapter when you finish.
+- **Clearing codes doesn't fix a fault.** It also erases saved fault data and resets the emissions self-tests.
+- **Every command except `clear` only reads data.**
+- **Your data stays on your laptop.** The window talks to its backend through a private pipe, with no web server or open network port. Downloading a car profile is the only time the app itself goes online.
+
+### Good to know
+
+- It's been tested with one BLE adapter reporting `ELM327 v2.1` on two Kia cars, one gasoline and one diesel. Most cars in the catalog are untested.
+- Commands run from the Commands page have only been tested in demo mode so far. The same commands have been tested on real cars from the terminal, except `clear`, which hasn't been run on a car from either place.
+- On both tested cars, only the engine and transmission modules answered, so ABS, airbag and body faults weren't readable. Results depend on the car.
+
+<details>
+<summary><b>Terminal commands</b></summary>
+
+<br>
+
+Close the app before running a command in a terminal, because the adapter serves one program at a time.
 
 | Command | What it does |
 |---|---|
@@ -245,50 +314,42 @@ You can also run commands in a terminal instead of the app:
 | `.\obd battery` | Battery voltage with a plain-language explanation |
 | `.\obd codes` | Stored, pending and permanent fault codes |
 | `.\obd scan` | Looks for other modules and reads their fault codes where allowed |
-| `.\obd cars` | Lists cars saved on this laptop, no adapter needed |
-| `.\obd profiles toyota` | Searches the car profile catalog, no adapter needed |
+| `.\obd cars` | Lists cars saved on this laptop |
+| `.\obd profiles toyota` | Searches the car profile catalog |
 | `.\obd profile --name kia-picanto --year 2017` | Reads extra values for your car, downloading its profile if needed |
 | `.\obd live` | Live values in the terminal |
 | `.\obd log` | Live values, saved as CSV in `logs\` |
 | `.\obd clear` | Clears fault codes, after asking you to confirm |
 
-Press Ctrl+C to stop `live` or `log`. The adapter serves one program at a time, so close the app before running a command in a terminal.
-
 **Options**
 
 - `--lang ar` or `--lang en` sets the language and remembers it. It goes before the command, such as `.\obd --lang ar report`.
-- `--address AA:BB:CC:DD:EE:FF` picks a specific adapter. It goes before the command. By default, Fahis looks for one with `OBD` or `ELM` in its name.
-- `--interval 1` sets the seconds between readings, for `live` and `log`.
-- `--samples 20` stops after 20 readings, for the same commands.
+- `--address AA:BB:CC:DD:EE:FF` picks a specific adapter. It goes before the command.
+- `--interval 1` sets the seconds between readings, and `--samples 20` stops after 20 readings, for `live` and `log`.
 - `.\obd profiles --get toyota-camry` downloads a profile now, so you can use it later without internet.
 
-### Safety
+</details>
 
-- **Don't use the app while driving.** Use `.\obd log`, or have a passenger watch it.
-- **Watch your battery.** With the ignition on and the engine off, the battery drains. Unplug the adapter when you finish, because some adapters keep drawing power.
-- **Clearing codes doesn't fix a fault.** It also erases saved fault data and resets the emissions self-tests.
-- **Every command except `clear` only reads data.** `scan` and `profile` can only send read requests, and the code refuses anything else.
-- **`scan` and `profile` refuse to start below 11.8 V,** because long reads drain the battery.
+<details>
+<summary><b>All limits</b></summary>
 
-### Privacy
+<br>
 
-Reports and saved cars can contain your VIN, and logs record how the car was used. All of them stay on your laptop, and `.gitignore` keeps them out of the repo. Delete a file in `cars\` to forget that car. The window talks to its backend through a private pipe, with no web server or open network port, and the page can't load anything from the internet. Downloading a car profile is the only time the app itself goes online.
-
-### Limits
-
-- It has been tested with one BLE adapter reporting `ELM327 v2.1` on two Kia cars, one gasoline and one diesel, both using 500 kbps CAN. The Supported cars page lists cars with community data, and most of them are untested.
-- Commands run from the app's Commands page have only been tested in demo mode so far. The same commands have been tested on real cars from the terminal, except `clear`, which hasn't been run on a car from either place.
-- The app is run from source, with no installer yet, and needs Python and Node.js.
-- Most commands cover standard engine and emissions data. On both tested cars, only the engine and transmission modules answered `scan`, so ABS, airbag and body faults weren't readable. Results depend on the car.
+- The app is run from source, with no installer yet.
 - Profile values come from community data and may not match your car's exact year, and some may not apply to your car at all.
-- `profile` skips commands it can't send safely or doesn't support: those that open a special diagnostic session, and those using 29-bit or extended addressing. Some cars lose a lot of data this way.
-- Fault code descriptions cover about 9,500 generic codes. Manufacturer-specific codes show a category and need looking up.
+- `profile` skips commands it can't send safely or doesn't support: those that open a special diagnostic session, and those using 29-bit or extended addressing.
+- Only 11-bit CAN is supported. Classic Bluetooth, USB and Wi-Fi adapters aren't.
+- Fault code descriptions cover about 9,500 generic codes. Manufacturer-specific codes only show a category.
 - In Arabic, about 80 common fault codes are translated. Others, and profile value names, stay in English.
-- Arabic in the Windows terminal may display poorly, because some terminals don't join letters or support right-to-left text. The app and saved report files are better for reading Arabic.
+- Arabic may display poorly in the Windows terminal. The app and saved report files are better for reading it.
 - The adapter's own voltage reading can be off: on the tested setup it read about 1 V above the car's module.
-- Live values update one at a time, so slower ones can take several seconds to refresh.
 
-### Development
+</details>
+
+<details>
+<summary><b>Development and project files</b></summary>
+
+<br>
 
 Run the offline tests, which don't need a car or adapter:
 
@@ -302,15 +363,15 @@ Run the offline tests, which don't need a car or adapter:
 | `car_modules.py` | Module scan and car profile decoding |
 | `garage.py` | Saved car records |
 | `i18n.py` | English and Arabic text |
-| `electron/main.js`, `electron/preload.js` | Desktop window, which starts and stops the backend |
-| `electron/index.html` | The app's pages |
-| `electron/icon.svg`, `icon-small.svg`, `icon.ico`, `icon.png` | The app's icon: artwork, a simplified 16 and 24 pixel version, and rendered files |
 | `bridge.py` | Private pipe between the window and the backend |
+| `electron/` | Desktop window, the app's pages and the icon |
 | `demo.py` | Simulated adapter for demo mode |
 | `dtc_codes.py` | Fault code lookups |
 | `profiles\` | Car catalog and the Kia Picanto profile, from OBDb |
 | `data\` | Generic fault code descriptions, from OBDex |
 | `test_obd_tool.py` | Offline tests |
+
+</details>
 
 ### License
 

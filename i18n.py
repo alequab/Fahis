@@ -327,6 +327,7 @@ ARABIC = {
     "Download profile": "تنزيل الملف",
     "Car": "السيارة",
     "Model year (optional)": "سنة الطراز (اختياري)",
+    "Year": "السنة",
     "Type CLEAR to confirm": "اكتب CLEAR للتأكيد",
     "Terminal only": "من الطرفية فقط",
     "Shows live values in the terminal. On this app, use the Live data page.": "يعرض القيم المباشرة في الطرفية. في هذا التطبيق استخدم صفحة البيانات المباشرة.",
