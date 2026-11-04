@@ -1,8 +1,10 @@
 <div dir="rtl" align="center">
 
-<h1>بسم الله الرحمن الرحيم</h1>
-
-<h1>والصلاة والسلام على نبينا محمد</h1>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/opening-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/opening-light.png">
+  <img src="docs/opening-dark.png" alt="بسم الله الرحمن الرحيم، والصلاة والسلام على نبينا محمد" width="560">
+</picture>
 
 <br>
 
