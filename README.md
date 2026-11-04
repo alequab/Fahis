@@ -56,7 +56,7 @@
 
 <table>
 <tr>
-<td width="50%" valign="top"><b>تطبيق سطح مكتب</b><br>سبع صفحات: نظرة عامة، وبيانات مباشرة، ورموز أعطال، وأوامر، وسيارات مدعومة، وسيارات محفوظة، وتقارير.</td>
+<td width="50%" valign="top"><b>تطبيق سطح مكتب</b><br>سبع صفحات: نظرة عامة مع حالة المحوّل، وبيانات مباشرة، ورموز أعطال، وأوامر، وسيارات مدعومة، وسيارات محفوظة، وتقارير.</td>
 <td width="50%" valign="top"><b>الأوامر داخل التطبيق</b><br>شغّل فحص البطارية والتقرير والبحث عن الوحدات وغيرها، واقرأ النتيجة في الصفحة نفسها.</td>
 </tr>
 <tr>
@@ -126,7 +126,8 @@ flowchart LR
 ### ما يجب معرفته
 
 - اختُبر مع محوّل BLE واحد يعرّف نفسه بأنه `ELM327 v2.1` على سيارتين من Kia، إحداهما بنزين والأخرى ديزل. ومعظم السيارات في القائمة لم تُختبر.
-- لم تُختبر الأوامر التي تُشغَّل من صفحة الأوامر حتى الآن إلا في الوضع التجريبي. وقد اختُبرت الأوامر نفسها على سيارات حقيقية من الطرفية، ما عدا `clear` الذي لم يُشغَّل على سيارة من أي منهما.
+- اختُبرت الأوامر التي تُشغَّل من صفحة الأوامر على سيارة حقيقية واحدة، وهي سيارة البنزين. أما `clear` فلم يُشغَّل على أي سيارة حتى الآن.
+- قد لا تستجيب إحدى الوحدات أحيانًا رغم تكرار الطلب، وعندها يوضّح التطبيق ذلك، فأعد المحاولة قبل أن تعتبرها خالية من الأعطال.
 - في السيارتين المختبرتين لم يستجب إلا وحدتا المحرك وناقل الحركة، فلم تُقرأ أعطال ABS والوسائد الهوائية والهيكل. وتختلف النتائج من سيارة إلى أخرى.
 
 <details>
@@ -237,7 +238,7 @@ Many ELM327 adapters are Bluetooth LE. Windows gives them no COM port, so most O
 
 <table>
 <tr>
-<td width="50%" valign="top"><b>Desktop app</b><br>Seven pages: overview, live data, fault codes, commands, supported cars, saved cars and reports.</td>
+<td width="50%" valign="top"><b>Desktop app</b><br>Seven pages: overview with adapter status, live data, fault codes, commands, supported cars, saved cars and reports.</td>
 <td width="50%" valign="top"><b>Commands in the app</b><br>Run a battery check, report, module scan and more, and read the result on the page.</td>
 </tr>
 <tr>
@@ -299,7 +300,8 @@ flowchart LR
 ### Good to know
 
 - It's been tested with one BLE adapter reporting `ELM327 v2.1` on two Kia cars, one gasoline and one diesel. Most cars in the catalog are untested.
-- Commands run from the Commands page have only been tested in demo mode so far. The same commands have been tested on real cars from the terminal, except `clear`, which hasn't been run on a car from either place.
+- Commands run from the Commands page have been tested on one real car, the gasoline one. `clear` hasn't been run on any car yet.
+- A module sometimes doesn't answer even after repeated requests. The app says when this happens, so try again before assuming it has no faults.
 - On both tested cars, only the engine and transmission modules answered, so ABS, airbag and body faults weren't readable. Results depend on the car.
 
 <details>

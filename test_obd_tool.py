@@ -611,6 +611,32 @@ class LocalizationTests(unittest.TestCase):
 
 
 class MissedReplyTests(unittest.IsolatedAsyncioTestCase):
+    async def test_keeps_asking_until_known_modules_answer(self):
+        replies = [["7E8 02 43 00"]] * 4 + [["7E8 02 43 00", "7E9 04 43 01 07 41"]] + [["7E8 02 43 00"]]
+        transport = FakeTransport({"03": Sequence(replies)})
+        elm = ELM(transport)
+        elm.vehicle = {"Module name": {"7E8": "ECM", "7E9": "TCM"}}
+        with mock.patch("asyncio.sleep", mock.AsyncMock()):
+            result = await elm.request_all(0x03)
+        self.assertEqual(set(result), {"7E8", "7E9"})
+        self.assertEqual(obd_tool.decode_dtcs(result["7E9"]), ["P0741"])
+        self.assertEqual(transport.sent.count("03"), 5)
+
+    def test_silent_module_is_reported_not_hidden(self):
+        codes = {"Stored": {"7E8": []}, "Permanent": {}}
+        lines = obd_tool.code_lines(codes, known=["7E8", "7E9"])
+        self.assertEqual(sum("7E9 didn't answer" in line for line in lines), 1)
+        self.assertFalse(any("7E8 didn't answer" in line for line in lines))
+
+    async def test_stops_at_the_limit_when_a_module_never_answers(self):
+        transport = FakeTransport({"03": ["7E8 02 43 00"]})
+        elm = ELM(transport)
+        elm.vehicle = {"Module name": {"7E8": "ECM", "7E9": "TCM"}}
+        with mock.patch("asyncio.sleep", mock.AsyncMock()):
+            result = await elm.request_all(0x03)
+        self.assertEqual(set(result), {"7E8"})
+        self.assertEqual(transport.sent.count("03"), 6)
+
     async def test_module_that_misses_a_request_is_still_read(self):
         transport = FakeTransport({"03": Sequence([
             ["7E8 02 43 00"],
@@ -861,6 +887,63 @@ class WebJobTests(unittest.IsolatedAsyncioTestCase):
         code, data = await self.app.api("POST", "/api/download", {}, {"name": "../../secrets"})
         self.assertEqual(code, 400)
         self.assertIn("error", data)
+
+
+class AdapterStatusTests(unittest.IsolatedAsyncioTestCase):
+    def rows(self, app, lang="en"):
+        return {row["label"]: row for row in app.device_status(lang)}
+
+    def test_looking_for_adapter(self):
+        app = obd_tool.DashboardApp(SimpleNamespace(demo=True, samples=1, interval=0))
+        rows = self.rows(app)
+        self.assertEqual(rows["Status"]["tone"], "bad")
+        self.assertIn("Looking", rows["Status"]["text"])
+        self.assertEqual(app.state("en")["device"], app.device_status("en"))
+
+    async def test_connected_adapter_details_and_counts(self):
+        app = obd_tool.DashboardApp(SimpleNamespace(demo=True, samples=1, interval=0))
+        transport = FakeTransport({"ATZ": ["ATZ", "ELM327 v2.1"], "AT@1": ["OBDII to RS232 Interpreter"],
+                                   "ATDPN": ["A6"], "0100": ["7E8 06 41 00 BE 3F B8 13"],
+                                   "01FF": Sequence([None, None])})
+        elm = ELM(transport)
+        elm.device_name = "OBDII"
+        elm.device_address = "AA:BB:CC:DD:EE:FF"
+        await elm.setup()
+        await elm.request(0x01, 0xFF)
+        app.link = elm
+        app.connected_at = obd_tool.time.monotonic() - 65
+        app.connections = 2
+        rows = self.rows(app)
+        self.assertEqual(rows["Status"]["tone"], "good")
+        self.assertEqual(rows["Name"]["text"], "OBDII")
+        self.assertEqual(rows["Reported version"]["text"], "ELM327 v2.1")
+        self.assertEqual(rows["Reported description"]["text"], "OBDII to RS232 Interpreter")
+        self.assertIn("500 kbps", rows["Protocol"]["text"])
+        self.assertEqual(rows["Connected for"]["text"], "1:05")
+        self.assertEqual(rows["Times connected"]["text"], "2")
+        self.assertEqual(rows["Replies lost"]["text"], "2")
+        self.assertEqual(rows["Replies lost"]["tone"], "bad")
+        self.assertEqual(int(rows["Commands sent"]["text"]), elm.transport.sent)
+        arabic = self.rows(app, "ar")
+        self.assertEqual(arabic["الحالة"]["text"], "متصل")
+
+    async def test_adapter_that_rejects_description_shows_none(self):
+        transport = FakeTransport({"ATZ": ["ELM327 v1.5"], "AT@1": ["?"], "ATDPN": ["A6"],
+                                   "0100": ["7E8 06 41 00 BE 3F B8 13"]})
+        elm = ELM(transport)
+        await elm.setup()
+        self.assertIsNone(elm.description)
+
+    async def test_session_records_and_clears_the_connection(self):
+        app = obd_tool.DashboardApp(SimpleNamespace(demo=True, samples=1, interval=0))
+        elm = ELM(demo.DemoTransport())
+        elm.demo = True
+        await elm.setup()
+        await app.session(elm, None)
+        self.assertEqual(app.connections, 1)
+        self.assertIsNone(app.link)
+        self.assertIn("Looking", self.rows(app)["Status"]["text"])
+        self.assertEqual(self.rows(app)["Times connected"]["text"], "1")
 
 
 class DashboardAppTests(unittest.IsolatedAsyncioTestCase):

@@ -10,6 +10,7 @@ import csv
 import os
 import re
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -260,10 +261,34 @@ class BleTransport:
         return [line.strip() for line in re.split(r"[\r\n]+", text) if line.strip()]
 
 
-class ELM:
+class MeasuredTransport:
+    """Passes commands to the adapter while recording how it responds."""
+
     def __init__(self, transport):
         self.transport = transport
+        self.sent = self.replied = self.timeouts = 0
+        self.total_seconds = 0.0
+        self.last_reply = None
+
+    async def send(self, command, wait=5):
+        started = time.monotonic()
+        self.sent += 1
+        reply = await self.transport.send(command, wait)
+        if reply is None:
+            self.timeouts += 1
+        else:
+            self.replied += 1
+            self.total_seconds += time.monotonic() - started
+            self.last_reply = time.monotonic()
+        return reply
+
+
+class ELM:
+    def __init__(self, transport):
+        self.transport = MeasuredTransport(transport)
         self.version = self.protocol = ""
+        self.description = None
+        self.device_name = self.device_address = None
         self.vehicle = None
         self.demo = False
 
@@ -274,6 +299,9 @@ class ELM:
         self.version = next(line for line in reply if "ELM" in line)
         for command in ("ATE0", "ATL0", "ATS1", "ATH1", "ATSP0"):
             await self.transport.send(command, 2)
+        description = await self.transport.send("AT@1", 2)
+        if description and description[0] not in ("?", "OK", "NO DATA"):
+            self.description = description[0]
 
         if not await self.request(0x01, 0x00, wait=25):
             raise OBDError("The car did not answer. Check the ignition is ON and the adapter is seated.")
@@ -298,11 +326,19 @@ class ELM:
                 return {}
         return {}
 
-    async def request_all(self, mode, pid=None, attempts=3):
-        """Ask several times and combine the replies, since a module occasionally misses a request."""
+    async def request_all(self, mode, pid=None, attempts=3, max_attempts=6):
+        """Ask several times and combine the replies, since a module occasionally misses a request.
+
+        Keeps asking, up to a limit, until every module this car is known to have has answered.
+        """
+        known = set((self.vehicle or {}).get("Module name", {}))
         replies = {}
-        for _ in range(attempts):
+        for attempt in range(max_attempts):
             replies.update(await self.request(mode, pid))
+            if attempt + 1 >= attempts and known <= set(replies):
+                break
+            if not known <= set(replies):
+                await asyncio.sleep(0.2)
         return dict(sorted(replies.items()))
 
     async def module_request(self, hdr, rax, request, fc=False, wait=2):
@@ -386,7 +422,11 @@ async def read_codes(elm):
     return result
 
 
-def code_lines(codes, indent=""):
+def known_modules(vehicle):
+    return sorted((vehicle or {}).get("Module name", {}))
+
+
+def code_lines(codes, indent="", known=()):
     lines = []
     for label, modules in codes.items():
         found = [(h, c) for h, module_codes in modules.items() for c in module_codes]
@@ -394,16 +434,20 @@ def code_lines(codes, indent=""):
                                 label=t(label), count=len(found), modules=len(modules)))
         lines += [f"{indent}  {code}  {describe_dtc(code)}  [{t('module {header}', header=header)}]"
                   for header, code in found]
+        # Not answering doesn't mean no faults, so say so. Some cars never answer the permanent request.
+        if modules:
+            lines += [indent + "  " + t("Module {header} didn't answer this time, so its codes weren't read. Try again.", header=header)
+                      for header in known if header not in modules]
     return lines
 
 
-def print_codes(codes):
-    print("\n".join(code_lines(codes)))
+def print_codes(codes, known=()):
+    print("\n".join(code_lines(codes, known=known)))
 
 
 async def run_codes(elm, _):
     codes = await read_codes(elm)
-    print_codes(codes)
+    print_codes(codes, known_modules(elm.vehicle))
     garage.remember(elm.vehicle, "codes", {"codes": codes})
     print("\n" + t("This covers engine and emissions codes; ABS, airbag and body faults usually need other tools."))
 
@@ -485,7 +529,7 @@ def format_report(snapshot):
     for header, status in snapshot["monitors"].items():
         lines += ["  " + line for line in monitor_lines(status, header)]
 
-    lines += ["", t("FAULT CODES")] + code_lines(snapshot["codes"], "  ")
+    lines += ["", t("FAULT CODES")] + code_lines(snapshot["codes"], "  ", known_modules(snapshot["vehicle"]))
 
     if snapshot["freeze"]:
         freeze = snapshot["freeze"]
@@ -625,6 +669,7 @@ def dashboard_state(snapshot, reader, demo=False, lang=None, cars=()):
         "adapter": snapshot["adapter"],
         "protocol": snapshot["protocol"],
         "voltage": t(reader.voltage, lang),
+        "known_modules": known_modules(snapshot["vehicle"]),
         "vehicle": {t(label, lang): modules for label, modules in snapshot["vehicle"].items()},
         "monitors": {h: {**status, "tests": [[t(name, lang), done] for name, done in status["tests"]]}
                      for h, status in snapshot["monitors"].items()},
@@ -689,6 +734,40 @@ class DashboardApp:
         self.waiting = []
         self.tasks = set()
         self.next_job = 1
+        self.link = None  # the adapter currently connected, even while it's still reading the car
+        self.connected_at = None
+        self.connections = 0
+
+    def device_status(self, lang=None):
+        """Describe the adapter itself as rows of label, text and tone for the page."""
+        row = lambda label, text, tone="": {"label": t(label, lang), "text": str(text), "tone": tone}
+        elm = self.link
+        if elm is None:
+            rows = [row("Status", t("Looking for the adapter ...", lang), "bad")]
+            if self.connections:
+                rows.append(row("Times connected", self.connections))
+            return rows
+        stats = elm.transport
+        since = time.monotonic() - self.connected_at
+        rows = [row("Status", t("Connected", lang), "good"),
+                row("Name", elm.device_name or t("unknown", lang))]
+        if elm.device_address:
+            rows.append(row("Bluetooth address", elm.device_address))
+        rows.append(row("Reported version", elm.version))
+        if elm.description:
+            rows.append(row("Reported description", elm.description))
+        rows += [row("Protocol", elm.protocol or t("unknown", lang)),
+                 row("Voltage at adapter (approximate)", t(self.reader.voltage, lang) if self.reader else "-"),
+                 row("Connected for", f"{int(since // 60)}:{int(since % 60):02d}"),
+                 row("Times connected", self.connections)]
+        if stats.replied:
+            rows.append(row("Average reply time", t("{ms} ms", lang, ms=round(stats.total_seconds / stats.replied * 1000))))
+            quiet = time.monotonic() - stats.last_reply
+            rows.append(row("Last reply", t("{seconds} seconds ago", lang, seconds=round(quiet)),
+                            "good" if quiet < 10 else "bad"))
+        rows += [row("Commands sent", stats.sent),
+                 row("Replies lost", stats.timeouts, "bad" if stats.timeouts else "good")]
+        return rows
 
     def new_job(self, action, params, lang):
         job = Job(self.next_job, action, params, lang)
@@ -820,10 +899,17 @@ class DashboardApp:
     def state(self, lang=None):
         if self.snapshot is None:
             text, values = self.message
-            return {"connected": False, "message": t(text, lang, **values), "cars": self.cars}
-        return dashboard_state(self.snapshot, self.reader, self.args.demo, lang, self.cars)
+            return {"connected": False, "message": t(text, lang, **values), "cars": self.cars,
+                    "device": self.device_status(lang)}
+        state = dashboard_state(self.snapshot, self.reader, self.args.demo, lang, self.cars)
+        state["device"] = self.device_status(lang)
+        return state
 
     async def session(self, elm, _):
+        self.link = elm
+        self.connected_at = time.monotonic()
+        self.connections += 1
+        self.reader = None
         self.message = ("Connected. Reading everything from the car, this takes about 20 seconds ...", {})
         snapshot = await read_snapshot(elm)
         if not self.args.demo:
@@ -840,13 +926,14 @@ class DashboardApp:
                 count += 1
                 await asyncio.sleep(self.args.interval)
         finally:
-            self.elm = None
+            self.elm = self.link = None
             self.fail_waiting_jobs()
 
     async def connect(self):
         if self.args.demo:
             elm = ELM(DemoTransport())
             elm.demo = True
+            elm.device_name = "Demo"
             await elm.setup()
             await self.session(elm, self.args)
         else:
@@ -1062,6 +1149,8 @@ async def connect_and_run(args, handler):
         transport = BleTransport(client, write_char, notify_char)
         await client.start_notify(notify_char, transport.on_data)
         elm = ELM(transport)
+        elm.device_name = device.name
+        elm.device_address = device.address
         if handler is not run_battery:
             await elm.setup()
             elm.vehicle = await read_identity(elm)

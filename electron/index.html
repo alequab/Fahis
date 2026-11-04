@@ -149,6 +149,11 @@
     </section>
 
     <div class="page" id="page-overview" hidden>
+      <section>
+        <h2 data-i18n="Adapter status">Adapter status</h2>
+        <div class="values" id="device"></div>
+        <p class="needs" data-i18n="An adapter can report any version, so this doesn't prove it's a genuine ELM327 chip.">An adapter can report any version, so this doesn't prove it's a genuine ELM327 chip.</p>
+      </section>
       <div class="needs-car">
         <div class="tiles" id="tiles"></div>
         <div class="columns">
@@ -387,6 +392,11 @@ function codeNodes(state) {
       line.append(el("span", c.code, "code bad"), " ", el("span", `${c.description} (${tr("Module {header}", {header: c.module})})`));
       nodes.push(line);
     }
+    if (answered) {
+      for (const header of state.known_modules.filter(known => !(known in modules))) {
+        nodes.push(el("div", tr("Module {header} didn't answer this time, so its codes weren't read. Try again.", {header}), "dim"));
+      }
+    }
   }
   return nodes;
 }
@@ -463,6 +473,7 @@ function render(state) {
   connected = state.connected;
   const status = document.getElementById("status");
   renderSavedCars(state.cars);
+  fill(document.getElementById("device"), state.device.map(item => row(item.label, item.text, item.tone)));
   updateConnectionViews();
   if (!state.connected) {
     status.textContent = tr("Not connected");

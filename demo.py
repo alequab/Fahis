@@ -73,7 +73,7 @@ class DemoTransport:
         await asyncio.sleep(0.03)
         command = command.upper()
         if command.startswith("AT"):
-            return {"ATZ": ["ELM327 demo"], "ATDPN": ["A6"]}.get(
+            return {"ATZ": ["ELM327 demo"], "ATDPN": ["A6"], "AT@1": ["Simulated adapter"]}.get(
                 command, [f"{14.1 + 0.1 * math.sin(time.time()):.1f}V"] if command == "ATRV" else ["OK"])
         reply = self.reply(command)
         return reply if reply else ["NO DATA"]
