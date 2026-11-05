@@ -12,6 +12,7 @@ import os
 import re
 import sys
 import time
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -166,6 +167,7 @@ THIS_DRIVE_PID = 0x41
 REFRESH_SECONDS = 60
 # Alternators on many modern cars dip for short periods, so only a lasting problem gets an alert.
 CHARGING_ALERT_SECONDS = 60
+DRIVE_SAVE_SECONDS = 30
 # Some cars stop charging for minutes at a time to save fuel, resting near battery voltage, so wait longer
 # there. Below the discharging level the battery is really being drained, so the shorter wait applies.
 CHARGING_RESTING_ALERT_SECONDS = 600
@@ -322,6 +324,71 @@ class BleTransport:
 
 ADAPTER_SILENT = "The adapter stopped answering. Connecting again. If this repeats, unplug the adapter and plug it back in."
 ADAPTER_SILENT_LIMIT = 3
+ACTIVITY_KEPT = 400
+# Replies that identify the car stay out of the live log, since people share screenshots of it.
+IDENTITY_COMMANDS = ("0902", "0904", "0906", "22F190", "22F18C")
+TROUBLE_REPLY = re.compile(r"NO DATA|ERROR|UNABLE|STOPPED|BUFFER FULL|^\?$")
+SLOW_REPLY_MS = 400
+TROUBLE_SHARE_PERCENT = 10
+
+
+class Activity:
+    """The recent commands, replies and connection changes, for the live log page."""
+
+    def __init__(self):
+        self.entries = deque(maxlen=ACTIVITY_KEPT)
+        self.next = 1
+        self.sent = self.lost = self.no_data = 0
+
+    def add(self, **entry):
+        self.entries.append({"n": self.next, "time": datetime.now().strftime("%H:%M:%S.%f")[:-3], **entry})
+        self.next += 1
+
+    def event(self, text, tone="", **values):
+        self.add(kind="event", text=text, values=values, tone=tone)
+
+    def command(self, command, reply, milliseconds):
+        self.sent += 1
+        trouble = reply is not None and any(TROUBLE_REPLY.search(line) for line in reply)
+        self.lost += reply is None
+        self.no_data += trouble
+        shown = [] if reply is None or command in IDENTITY_COMMANDS else reply
+        self.add(kind="command", command=command, reply=shown, ms=milliseconds, hidden=reply is not None and command in IDENTITY_COMMANDS,
+                 state="lost" if reply is None else "trouble" if trouble else "ok")
+
+    def view(self, after, lang=None):
+        """Return entries newer than `after`, in the page's language."""
+        entries = []
+        for entry in self.entries:
+            if entry["n"] > after:
+                entries.append({**entry, "text": t(entry["text"], lang, **entry["values"])} if entry["kind"] == "event" else entry)
+        return {"entries": entries, "review": self.review(lang)}
+
+    def review(self, lang=None):
+        """Look over the recent traffic and say what stands out."""
+        commands = [e for e in self.entries if e["kind"] == "command"]
+        answered = [e["ms"] for e in commands if e["state"] != "lost"]
+        lost = sum(e["state"] == "lost" for e in commands)
+        trouble = sum(e["state"] == "trouble" for e in commands)
+        modules = sorted({line[:3] for e in commands for line in e["reply"] if CAN_LINE.match(line)})
+        average = round(sum(answered) / len(answered)) if answered else None
+        findings = []
+        if lost:
+            findings.append({"text": t("{count} recent requests got no reply from the adapter.", lang, count=lost), "tone": "bad"})
+        if commands and trouble * 100 / len(commands) >= TROUBLE_SHARE_PERCENT:
+            findings.append({"text": t("The car didn't answer {percent}% of recent requests.", lang,
+                                       percent=round(trouble * 100 / len(commands))), "tone": "bad"})
+        if average is not None and average >= SLOW_REPLY_MS:
+            findings.append({"text": t("Replies are slower than usual, at {ms} ms.", lang, ms=average), "tone": "bad"})
+        if not findings:
+            text = "Recent traffic looks normal." if commands else "Nothing has been sent yet."
+            findings.append({"text": t(text, lang), "tone": "good" if commands else ""})
+        return {"findings": findings, "rows": [
+            {"label": t("Commands sent", lang), "text": str(self.sent), "tone": ""},
+            {"label": t("Replies lost", lang), "text": str(self.lost), "tone": "bad" if self.lost else "good"},
+            {"label": t("No data answers", lang), "text": str(self.no_data), "tone": ""},
+            {"label": t("Average reply time", lang), "text": "-" if average is None else t("{ms} ms", lang, ms=average), "tone": ""},
+            {"label": t("Modules answering", lang), "text": ", ".join(modules) or "-", "tone": ""}]}
 
 
 class MeasuredTransport:
@@ -329,6 +396,7 @@ class MeasuredTransport:
 
     def __init__(self, transport):
         self.transport = transport
+        self.activity = None
         self.sent = self.replied = self.timeouts = 0
         self.silent_in_a_row = 0
         self.total_seconds = 0.0
@@ -338,6 +406,8 @@ class MeasuredTransport:
         started = time.monotonic()
         self.sent += 1
         reply = await self.transport.send(command, wait)
+        if self.activity is not None:
+            self.activity.command(command, reply, round((time.monotonic() - started) * 1000))
         if reply is None:
             self.timeouts += 1
             self.silent_in_a_row += 1
@@ -1053,6 +1123,47 @@ class DashboardApp:
         self.last_summary = None
         self.charging_since = None
         self.charging_kind = None
+        self.activity = Activity()
+        self.drive = None
+        self.drive_saved_at = 0.0
+
+    def start_drive(self, elm, snapshot):
+        self.drive = {"id": garage.now(), "started": garage.now(), "ended": garage.now(), "seconds": 0, "adapter": elm.version,
+                      "protocol": elm.protocol, "top_speed": None, "top_rpm": None, "top_coolant": None,
+                      "low_volts": None, "high_volts": None, "updates": 0}
+        self.drive_began = time.monotonic()
+        self.save_drive(elm, snapshot)
+
+    def track_drive(self, elm, snapshot):
+        """Keep the highs and lows of this connection, and save them now and then in case it ends suddenly."""
+        drive, values = self.drive, self.reader.values
+        if drive is None:
+            return
+        drive["updates"] += 1
+        for field, pid in (("top_speed", 0x0D), ("top_rpm", 0x0C), ("top_coolant", 0x05), ("high_volts", 0x42)):
+            value = number(values.get(pid))
+            if value is not None:
+                drive[field] = value if drive[field] is None else max(value, drive[field])
+        volts = number(values.get(0x42))
+        if volts is not None:
+            drive["low_volts"] = volts if drive["low_volts"] is None else min(volts, drive["low_volts"])
+        if time.monotonic() - self.drive_saved_at >= DRIVE_SAVE_SECONDS:
+            self.save_drive(elm, snapshot)
+
+    def save_drive(self, elm, snapshot):
+        if self.drive is None or elm.demo or self.args.demo:
+            return
+        codes = snapshot["codes"]
+        self.drive.update(ended=garage.now(), seconds=round(time.monotonic() - self.drive_began),
+                          light=any(status["mil"] for status in snapshot["monitors"].values()),
+                          codes=sorted({c for label in ("Stored", "Pending") for found in codes[label].values() for c in found}),
+                          method=elm.can_group)
+        self.drive_saved_at = time.monotonic()
+        try:
+            garage.save_session(elm.vehicle or snapshot["vehicle"], self.drive)
+            self.cars = garage.summaries()
+        except OSError as error:
+            print(t("Could not save this car's info: {error}", error=error), flush=True)
 
     def track_charging(self):
         kind = charging_problem(self.reader.values)
@@ -1192,6 +1303,11 @@ class DashboardApp:
             raise  # the connection is probably gone, so reconnect
         finally:
             i18n.set_language(previous)
+            if not self.args.demo and not elm.demo:
+                try:
+                    garage.add_test(elm.vehicle or {}, job.action, job.status, job.output)
+                except OSError as error:
+                    job.write(t("Could not save this car's info: {error}", job.lang, error=error) + "\n")
             if not self.args.demo:
                 self.cars = garage.summaries()
 
@@ -1269,7 +1385,20 @@ class DashboardApp:
             record = garage.load_car(key) if re.fullmatch(r"[\w-]+", key) and not self.args.demo else {}
             if not record:
                 return 404, {"error": t("Not found", lang)}
-            return 200, record
+            faults = [{**fault, "description": describe_dtc(fault["code"], lang)} for fault in garage.fault_history(record)]
+            return 200, {**record, "faults": faults, "timeline": garage.timeline(record)}
+        if method == "POST" and path == "/api/car/name":
+            key = str(body.get("key", ""))
+            if self.args.demo or not re.fullmatch(r"[\w-]+", key) or not garage.set_name(key, body.get("name", "")):
+                return 404, {"error": t("Not found", lang)}
+            self.cars = garage.summaries()
+            return 200, {"ok": True}
+        if method == "GET" and path == "/api/activity":
+            try:
+                after = int(query.get("after", 0))
+            except (TypeError, ValueError):
+                after = 0
+            return 200, self.activity.view(after, lang)
         return 404, {"error": t("Not found", lang)}
 
     def state(self, lang=None):
@@ -1357,6 +1486,7 @@ class DashboardApp:
         self.reader = None
         self.charging_since = self.charging_kind = None
         self.message = ("Connected. Reading everything from the car, this takes about 20 seconds ...", {})
+        elm.transport.activity = self.activity
         snapshot = await read_snapshot(elm)
         if not self.args.demo:
             remember_snapshot(elm, snapshot)
@@ -1365,6 +1495,8 @@ class DashboardApp:
         self.reader.interval = self.args.interval
         self.snapshot = snapshot
         self.elm = elm
+        self.start_drive(elm, snapshot)
+        self.activity.event("Connected to the car, reading live values.", "good")
         count = 0
         last_refresh = time.monotonic()
         refreshing = None
@@ -1374,6 +1506,7 @@ class DashboardApp:
                 await self.reader.step()
                 self.track_charging()
                 self.record_row()
+                self.track_drive(elm, self.snapshot)
                 if refreshing is None and time.monotonic() - last_refresh >= REFRESH_SECONDS:
                     refreshing = self.refresh_parts(elm)
                 if refreshing is not None:
@@ -1385,6 +1518,8 @@ class DashboardApp:
                 count += 1
                 await asyncio.sleep(self.args.interval)
         finally:
+            self.save_drive(elm, self.snapshot)
+            self.drive = None
             self.stop_recording()
             self.elm = self.link = None
             set_car_make(None)
@@ -1392,12 +1527,15 @@ class DashboardApp:
 
     def adapter_found(self, elm):
         self.adapter = elm
+        elm.transport.activity = self.activity
+        self.activity.event("Adapter found, talking to it now.")
 
     async def connect(self):
         if self.args.demo:
             elm = ELM(DemoTransport())
             elm.demo = True
             elm.device_name = "Demo"
+            elm.transport.activity = self.activity
             await elm.setup()
             await self.session(elm, self.args)
         else:
@@ -1417,6 +1555,7 @@ class DashboardApp:
                     self.message = (error.text, error.values)
                 else:
                     self.message = (str(error), {})
+                self.activity.event(*self.message[:1], "bad", **self.message[1])
                 print(t("Not connected: {error}", error=error), flush=True)
             await asyncio.sleep(self.RETRY_SECONDS)
 

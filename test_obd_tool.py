@@ -347,6 +347,30 @@ class EverythingTests(unittest.IsolatedAsyncioTestCase):
             await elm.transport.send("0902")
         self.assertEqual(caught.exception.text, obd_tool.ADAPTER_SILENT)
 
+    async def test_live_log_records_and_reviews_traffic(self):
+        activity = obd_tool.Activity()
+        transport = FakeTransport({"010C": ["7E8 04 41 0C 1A F8"], "0902": ["7E8 10 14 49 02 01 4B 4E 41"], "0105": ["NO DATA"], "0111": None})
+        elm = ELM(transport)
+        elm.transport.activity = activity
+        for command in ("010C", "0902", "0105", "0111"):
+            await elm.transport.send(command)
+        activity.event("Adapter found, talking to it now.")
+        view = activity.view(0, "en")
+        by_command = {e["command"]: e for e in view["entries"] if e["kind"] == "command"}
+        self.assertEqual(by_command["010C"]["state"], "ok")
+        self.assertEqual(by_command["0105"]["state"], "trouble")
+        self.assertEqual(by_command["0111"]["state"], "lost")
+        self.assertEqual(by_command["0902"]["reply"], [])  # it identifies the car
+        self.assertTrue(by_command["0902"]["hidden"])
+        self.assertNotIn("4B 4E 41", str(view))
+        self.assertIn("no reply", view["review"]["findings"][0]["text"])
+        self.assertIn("7E8", [row for row in view["review"]["rows"] if row["label"] == "Modules answering"][0]["text"])
+        self.assertEqual(activity.view(activity.next - 1, "en")["entries"], [])
+        self.assertIn("السجل", i18n.t("Live log", "ar"))
+
+    async def test_a_quiet_log_says_so(self):
+        self.assertIn("Nothing has been sent", obd_tool.Activity().review("en")["findings"][0]["text"])
+
     async def test_a_value_stays_with_its_module_after_a_miss(self):
         both = ["7E8 03 41 1C 1E", "7E9 03 41 1C 01"]
         transport = FakeTransport({"011C": Sequence([both, ["7E9 03 41 1C 01"], ["7E9 03 41 1C 01"], both])})
@@ -872,6 +896,41 @@ class SavedCarsTests(unittest.IsolatedAsyncioTestCase):
         garage.remember_connection(empty, "ELM327", "CAN")
         garage.remember(empty, "status", {"light": False})
         self.assertEqual(garage.summaries(), [])
+
+    def test_past_connections_and_commands_are_kept_per_car(self):
+        garage.save_session(self.VEHICLE, {"id": "a", "started": "2026-01-01T10:00:00", "seconds": 5})
+        garage.save_session(self.VEHICLE, {"id": "a", "started": "2026-01-01T10:00:00", "seconds": 90})
+        garage.add_test(self.VEHICLE, "codes", "done", "x" * (garage.MAX_TEST_OUTPUT + 5))
+        record = garage.load_car(garage.car_key(self.VEHICLE))
+        self.assertEqual([s["seconds"] for s in record["sessions"]], [90])
+        self.assertEqual(len(record["tests"][0]["output"]), garage.MAX_TEST_OUTPUT)
+        kinds = [item["kind"] for item in garage.timeline(record)]
+        self.assertEqual(kinds[-1], "connection")
+        self.assertIn("command", kinds)
+        with mock.patch.object(garage, "MAX_TESTS", 2):
+            for _ in range(4):
+                garage.add_test(self.VEHICLE, "codes", "done", "")
+        self.assertEqual(len(garage.load_car(garage.car_key(self.VEHICLE))["tests"]), 2)
+
+    def test_fault_history_keeps_first_and_last_seen(self):
+        record = {"history": [{"time": "A", "codes": ["P0700", "P2003"]}, {"time": "B", "codes": ["P0700"]}],
+                  "status": {"time": "B", "active_codes": ["P0700"]}}
+        faults = garage.fault_history(record)
+        self.assertEqual([f["code"] for f in faults], ["P0700", "P2003"])
+        self.assertEqual((faults[0]["first_seen"], faults[0]["last_seen"], faults[0]["times"], faults[0]["present"]), ("A", "B", 2, True))
+        self.assertFalse(faults[1]["present"])
+
+    def test_cars_can_be_named_and_summarised(self):
+        garage.remember_connection(self.VEHICLE, "ELM327", "CAN")
+        key = garage.car_key(self.VEHICLE)
+        self.assertTrue(garage.set_name(key, "  My   car "))
+        self.assertEqual(garage.summaries()[0]["name"], "My car")
+        self.assertTrue(garage.set_name(key, ""))
+        self.assertIsNone(garage.summaries()[0]["name"])
+        self.assertFalse(garage.set_name("nobody", "x"))
+        self.assertEqual(garage.model_year("KNAAA000AHT000000"), 2017)
+        self.assertEqual(garage.model_year("KNAAA000AJA000000"), 2018)
+        self.assertIsNone(garage.model_year("short"))
 
     def test_history_is_capped(self):
         with mock.patch.object(garage, "MAX_HISTORY", 3):

@@ -7,6 +7,7 @@
 <title>Fahis</title>
 <style>
   :root {
+    color-scheme: dark;
     --bg: #101418; --panel: #1a2027; --line: #2c343d; --text: #e8edf2; --muted: #93a0ad;
     --accent: #5cb8ff; --good: #4cc38a; --bad: #ff6b6b;
     --warn-bg: #5a4410; --warn-line: #a8831f; --warn-text: #ffe08a;
@@ -110,6 +111,56 @@
   .tag { display: inline-block; font-size: 13px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; margin: 4px 0 0; margin-inline-end: 6px; }
   .report-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
   #action-error { color: var(--bad); font-weight: 600; margin: 8px 0 0; }
+  .garage { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .car-card { display: flex; flex-direction: column; justify-content: flex-start; width: 100%; text-align: start; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; cursor: pointer; color: var(--text); }
+  .car-card:hover { border-color: var(--accent); }
+  .car-title { font-size: 18px; font-weight: 650; overflow-wrap: anywhere; }
+  .car-vin { color: var(--muted); font: 13px Consolas, "Cascadia Mono", monospace; unicode-bidi: isolate; direction: ltr; }
+  .car-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .pill { display: inline-block; flex: none; border-radius: 999px; padding: 2px 10px; font-size: 13px; font-weight: 600; border: 1px solid var(--line); color: var(--muted); }
+  .pill.good { color: var(--good); border-color: #2c6b4f; background: #15291f; }
+  .pill.bad { color: #ffd7d9; border-color: #a8444a; background: #4a1f22; }
+  .pill.warn { color: var(--warn-text); border-color: var(--warn-line); background: var(--warn-bg); }
+  .car-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+  .car-stats div { min-width: 0; }
+  .car-stats b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .car-stats span { color: var(--muted); font-size: 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .chip { color: #ffd7d9; font: 600 13px Consolas, "Cascadia Mono", monospace; background: #4a1f22; border: 1px solid #a8444a; border-radius: 6px; padding: 1px 7px; direction: ltr; unicode-bidi: isolate; }
+  .car-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .car-top h3 { margin: 0; font-size: 20px; overflow-wrap: anywhere; }
+  .rename { display: flex; gap: 6px; flex-wrap: wrap; }
+  .rename input { width: 190px; }
+  .stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .stat-tiles .tile b { display: block; font-size: 16px; margin-top: 2px; overflow-wrap: anywhere; }
+  .stat-tiles .pill { border-radius: 8px; margin-top: 4px; }
+  .fault { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline; padding: 9px 0; border-top: 1px solid var(--line); }
+  .fault:first-of-type { border-top: 0; }
+  .fault .sub { grid-column: 2 / -1; color: var(--muted); font-size: 13px; }
+  .section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .section-head h2 { margin: 0; }
+  .entry { border-top: 1px solid var(--line); margin: 0; padding: 8px 0; }
+  .entry summary, .entry-plain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--text); }
+  .entry summary { cursor: pointer; }
+  .entry summary::marker { color: var(--accent); }
+  .entry-kind { font-weight: 600; }
+  .entry-time { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; margin-inline-start: auto; unicode-bidi: isolate; }
+  .log-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+  #log-lines { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; height: 460px; overflow-y: auto; font: 13px/1.5 Consolas, "Cascadia Mono", "Segoe UI", monospace; padding: 6px 0; }
+  .log-line { display: grid; grid-template-columns: 96px 150px minmax(0, 1fr) 60px; gap: 10px; padding: 1px 10px; }
+  .log-line:hover { background: var(--panel); }
+  .log-time, .log-ms { color: var(--muted); }
+  .log-ms { text-align: end; }
+  .log-command { color: var(--accent); overflow-wrap: anywhere; }
+  .log-reply { overflow-wrap: anywhere; white-space: pre-wrap; }
+  .log-line.trouble .log-reply { color: var(--warn-text); }
+  .log-line.lost .log-reply { color: var(--bad); font-weight: 600; }
+  .log-line.event { grid-template-columns: 96px minmax(0, 1fr); font-family: inherit; }
+  .log-line.event.good span:last-child { color: var(--good); }
+  .log-line.event.bad span:last-child { color: var(--bad); }
+  .finding { font-weight: 600; margin: 0 0 8px; }
+  .finding.good { color: var(--good); }
+  .finding.bad { color: var(--bad); }
   footer { color: var(--muted); font-size: 13px; padding: 4px 0 16px; }
   footer span { display: block; }
   @media (max-width: 760px) {
@@ -144,6 +195,7 @@
     <a href="#/saved" data-page="saved" data-i18n="Saved cars">Saved cars</a>
     <a href="#/lookup" data-page="lookup" data-i18n="Code lookup">Code lookup</a>
     <a href="#/reports" data-page="reports" data-i18n="Reports">Reports</a>
+    <a href="#/log" data-page="log" data-i18n="Live log">Live log</a>
   </nav>
   <main>
     <header>
@@ -252,7 +304,27 @@
 
     <div class="page" id="page-saved" hidden>
       <p class="intro" data-i18n="Cars that have connected are saved on this laptop only.">Cars that have connected are saved on this laptop only.</p>
-      <section><div id="cars"></div></section>
+      <div id="cars"></div>
+    </div>
+
+    <div class="page" id="page-log" hidden>
+      <p class="intro" data-i18n="See what Fahis and the adapter are saying to each other, as it happens.">See what Fahis and the adapter are saying to each other, as it happens.</p>
+      <section>
+        <h2 data-i18n="Automatic review">Automatic review</h2>
+        <div id="log-findings"></div>
+        <div class="values" id="log-review"></div>
+      </section>
+      <section>
+        <div class="log-tools">
+          <button id="log-pause" type="button" data-i18n="Pause">Pause</button>
+          <select id="log-filter" aria-label="Show">
+            <option value="all" data-i18n="Everything">Everything</option>
+            <option value="problems" data-i18n="Problems only">Problems only</option>
+          </select>
+        </div>
+        <div id="log-lines" role="log" dir="ltr" tabindex="0"></div>
+        <p class="needs" data-i18n="Replies that identify the car, such as its VIN, are hidden here. The log isn't saved after the app closes.">Replies that identify the car, such as its VIN, are hidden here. The log isn't saved after the app closes.</p>
+      </section>
     </div>
 
     <div class="page" id="page-lookup" hidden>
@@ -284,7 +356,7 @@ const TILES = ["0C", "0D", "05", "0F", "11", "04"];
 const HISTORY = 60;
 const CATALOG_LIMIT = 200;
 const PAGES = {overview: "Overview", live: "Live data", faults: "Fault codes", commands: "Commands",
-               cars: "Supported cars", saved: "Saved cars", lookup: "Code lookup", reports: "Reports"};
+               cars: "Supported cars", saved: "Saved cars", lookup: "Code lookup", reports: "Reports", log: "Live log"};
 const LIKELIHOOD = {high: "More likely", medium: "Possible", low: "Less likely"};
 const FLAGS = {mil: "Usually turns on the check engine light", emissions_relevant: "Affects emissions",
                drive_cycle_required: "May need driving to confirm a repair", limp_mode_possible: "May limit engine power"};
@@ -371,6 +443,9 @@ async function setLanguage(value) {
   document.getElementById("english-note").hidden = value !== "ar";
   document.getElementById("lang-toggle").textContent = value === "ar" ? "English" : "العربية";
   lastJobs = lastCars = "";
+  logEntries = [];
+  logAfter = 0;
+  fill(document.getElementById("log-lines"), []);
   document.getElementById("action-error").hidden = true;
   renderActions();
   renderCatalog();
@@ -381,8 +456,13 @@ async function setLanguage(value) {
 }
 
 function currentPage() {
-  const page = location.hash.replace("#/", "");
+  const page = location.hash.replace("#/", "").split("/")[0];
   return PAGES[page] ? page : "overview";
+}
+
+function openCarKey() {
+  const [page, key] = location.hash.replace("#/", "").split("/");
+  return page === "saved" && key ? decodeURIComponent(key) : null;
 }
 
 function showPage() {
@@ -398,6 +478,11 @@ function showPage() {
   updateConnectionViews();
   if (page === "reports") loadReports();
   if (page === "commands" || page === "cars") refreshJobs();
+  if (page === "saved" && lastState) {
+    lastCars = "";
+    renderSavedCars(lastState.cars);
+  }
+  if (page === "log") refreshActivity();
 }
 
 function updateConnectionViews() {
@@ -500,52 +585,335 @@ function renderVehicle(state) {
   }));
 }
 
-function renderSavedCars(cars) {
-  const signature = JSON.stringify(cars) + language;
-  if (signature === lastCars) return;
-  lastCars = signature;
+const TIMELINE_STEP = 30;
+const openEntries = new Set();
+let timelineFilter = "all";
+let timelineShown = TIMELINE_STEP;
+let timelineCar = null;
+
+function shortTime(iso) {
+  // Isolated, so an Arabic sentence around it can't reverse the date and the time.
+  return iso ? `⁦${iso.replace("T", " ").slice(0, 16)}⁩` : "-";
+}
+
+function duration(seconds) {
+  const minutes = Math.round((seconds || 0) / 60);
+  if (minutes < 1) return tr("Under a minute");
+  if (minutes < 60) return tr("{minutes} min", {minutes});
+  return tr("{hours} h {minutes} min", {hours: Math.floor(minutes / 60), minutes: minutes % 60});
+}
+
+function carTitle(car) {
+  return car.name || [car.make, car.year].filter(Boolean).join(" ") || tr("Unnamed car");
+}
+
+function maskedVin(vin) {
+  return vin ? `${vin.slice(0, 3)}…${vin.slice(-4)}` : tr("VIN not reported");
+}
+
+function carPill(car) {
+  if (car.light === null || car.light === undefined) return el("span", tr("Not checked yet"), "pill");
+  if (car.light) return el("span", tr("Check engine light is ON"), "pill bad");
+  if (car.codes && car.codes.length) return el("span", tr("{count} code(s)", {count: car.codes.length}), "pill warn");
+  return el("span", tr("No faults found"), "pill good");
+}
+
+function stat(value, label) {
+  const node = el("div");
+  node.append(el("b", String(value)), el("span", label));
+  return node;
+}
+
+function codeChips(codes) {
+  const chips = el("div", undefined, "chips");
+  chips.append(...codes.map(code => el("span", code, "chip")));
+  return chips;
+}
+
+function carCard(car) {
+  const card = el("button", undefined, "car-card");
+  card.type = "button";
+  const head = el("div", undefined, "car-head");
+  const titles = el("div");
+  titles.append(el("div", carTitle(car), "car-title"), el("div", maskedVin(car.vin), "car-vin"));
+  head.append(titles, carPill(car));
+  const stats = el("div", undefined, "car-stats");
+  stats.append(stat(`⁦${car.last_seen.slice(0, 10)}⁩`, tr("Last seen")), stat(car.connections, tr("Connections")),
+               stat(car.past, tr("Past tests")));
+  card.append(head, stats);
+  if (car.codes && car.codes.length) card.append(codeChips(car.codes));
+  card.addEventListener("click", () => { location.hash = `#/saved/${encodeURIComponent(car.key)}`; });
+  return card;
+}
+
+function entryId(item) {
+  return `${item.kind}-${item.id || item.time}`;
+}
+
+function kept(details, id) {
+  details.open = openEntries.has(id);
+  details.addEventListener("toggle", () => {
+    if (details.open) openEntries.add(id);
+    else openEntries.delete(id);
+  });
+  return details;
+}
+
+function connectionEntry(item) {
+  const details = kept(el("details", undefined, "entry"), entryId(item));
+  const head = el("summary");
+  head.append(el("span", tr("Connection"), "entry-kind"), el("span", duration(item.seconds), "dim"));
+  if (item.light) head.append(el("span", tr("Check engine light is ON"), "pill bad"));
+  else if (item.codes && item.codes.length) head.append(el("span", tr("{count} code(s)", {count: item.codes.length}), "pill warn"));
+  head.append(el("span", shortTime(item.started), "entry-time"));
+  const shown = (value, unit) => value === null || value === undefined ? "-" : `${Math.round(value * 10) / 10} ${tr(unit)}`.trim();
+  const list = el("div", undefined, "values");
+  list.append(row(tr("Top speed"), shown(item.top_speed, "km/h")), row(tr("Highest engine RPM"), shown(item.top_rpm, "rpm")),
+              row(tr("Highest coolant temp"), shown(item.top_coolant, "C")),
+              row(tr("Lowest voltage"), shown(item.low_volts, "V")), row(tr("Highest voltage"), shown(item.high_volts, "V")),
+              row(tr("Updates read"), String(item.updates ?? "-")), row(tr("Adapter"), item.adapter || "-"));
+  if (item.method !== null && item.method !== undefined) {
+    list.append(row(tr("Reading method"), tr(item.method ? "Several values per request" : "One value per request")));
+  }
+  details.append(head, list);
+  if (item.codes && item.codes.length) details.append(codeChips(item.codes));
+  return details;
+}
+
+function commandEntry(item) {
+  const details = kept(el("details", undefined, "entry"), entryId(item));
+  const action = ACTIONS.find(known => known.id === item.action);
+  const head = el("summary");
+  head.append(el("span", action ? tr(action.title) : item.action, "entry-kind"),
+              el("span", tr(JOB_STATUS[item.status] || item.status), `badge ${item.status}`),
+              el("span", shortTime(item.time), "entry-time"));
+  const output = el("pre", item.output || tr("No output."));
+  output.dir = "auto";
+  details.append(head, output);
+  return details;
+}
+
+function readingEntry(item) {
+  const line = el("div", undefined, "entry entry-plain");
+  line.append(el("span", tr("Reading saved"), "entry-kind"));
+  if (item.light) line.append(el("span", tr("Check engine light is ON"), "pill bad"));
+  if (item.codes.length) line.append(codeChips(item.codes));
+  else line.append(el("span", tr("No codes"), "dim"));
+  line.append(el("span", shortTime(item.time), "entry-time"));
+  return line;
+}
+
+function timelineNodes(items) {
+  const parent = el("div");
+  const wanted = items.filter(item => timelineFilter === "all" || item.kind === timelineFilter);
+  if (!wanted.length) parent.append(el("p", tr("Nothing here yet. New connections and commands are saved from now on."), "dim"));
+  parent.append(...wanted.slice(0, timelineShown).map(item =>
+    item.kind === "connection" ? connectionEntry(item) : item.kind === "command" ? commandEntry(item) : readingEntry(item)));
+  if (wanted.length > timelineShown) {
+    const more = el("button", tr("Show more"));
+    more.type = "button";
+    more.addEventListener("click", () => {
+      timelineShown += TIMELINE_STEP;
+      fill(parent, [timelineNodes(items)]);
+    });
+    parent.append(more);
+  }
+  return parent;
+}
+
+async function renderCarPage(key, summary) {
   const parent = document.getElementById("cars");
-  if (!cars.length) {
-    fill(parent, [el("p", tr("No cars saved yet. A car is saved the first time it connects."), "dim")]);
+  let record;
+  try {
+    record = await api("GET", "/api/car", {key, lang: language});
+  } catch (problem) {
+    const back = el("button", tr("Back to saved cars"));
+    back.type = "button";
+    back.addEventListener("click", () => { location.hash = "#/saved"; });
+    fill(parent, [back, el("p", problem.message, "bad")]);
     return;
   }
-  fill(parent, cars.map(car => {
-    const node = el("div", undefined, "car");
-    const name = el("strong", car.vin || tr("VIN not reported"));
-    name.dir = "auto";
-    node.append(name, el("div", `${tr("First seen")}: ${car.first_seen.replace("T", " ")}`, "car-sub"),
-                el("div", `${tr("Last seen")}: ${car.last_seen.replace("T", " ")}`, "car-sub"),
-                el("div", `${tr("Connections")}: ${car.connections}`, "car-sub"));
-    if (car.modules.length) node.append(el("div", `${tr("Modules")}: ${car.modules.join(", ")}`, "car-sub"));
-    if (car.light !== null) {
-      const codes = car.codes && car.codes.length ? car.codes.join(", ") : tr("none");
-      node.append(el("div", `${tr("Check engine light")}: ${tr(car.light ? "ON" : "off")}`, "car-sub"),
-                  el("div", `${tr("Stored and pending codes")}: ${codes}`, "car-sub"));
-    }
-    const details = el("details");
-    details.append(el("summary", tr("Details")));
-    details.addEventListener("toggle", async () => {
-      if (!details.open || details.dataset.loaded) return;
-      details.dataset.loaded = "1";
-      const record = await api("GET", "/api/car", {key: car.key, lang: language});
-      const values = record.status ? record.status.values : {};
-      details.append(el("div", tr("Latest values"), "car-sub"));
-      const list = el("div", undefined, "values");
-      fill(list, Object.entries(values).map(([name, text]) => row(tr(name), text)));
-      details.append(list);
-      const past = (record.history || []).slice(-10).reverse();
-      if (past.length) {
-        details.append(el("div", tr("Past readings"), "car-sub"));
-        const pastList = el("div", undefined, "values");
-        fill(pastList, past.map(item => row(item.time.replace("T", " "),
-          `${tr("Check engine light")}: ${tr(item.light ? "ON" : "off")} · ${item.codes.join(", ") || tr("none")}`)));
-        details.append(pastList);
-      }
-    });
-    node.append(details);
+  if (openCarKey() !== key) return;
+  if (timelineCar !== key) {
+    timelineCar = key;
+    timelineFilter = "all";
+    timelineShown = TIMELINE_STEP;
+    openEntries.clear();
+  }
+  const car = summary || {};
+  const top = el("div", undefined, "car-top");
+  const back = el("button", tr("Back to saved cars"));
+  back.type = "button";
+  back.addEventListener("click", () => { location.hash = "#/saved"; });
+  const titles = el("div");
+  titles.append(el("h3", carTitle(car)), el("div", car.vin || tr("VIN not reported"), "car-vin"));
+  const rename = el("form", undefined, "rename");
+  const nameInput = el("input");
+  nameInput.value = record.name || "";
+  nameInput.placeholder = tr("Name this car");
+  nameInput.maxLength = 40;
+  nameInput.setAttribute("aria-label", tr("Name this car"));
+  const saveName = el("button", tr("Save"));
+  rename.append(nameInput, saveName);
+  rename.addEventListener("submit", async event => {
+    event.preventDefault();
+    nameInput.blur();
+    await post("/api/car/name", {key, name: nameInput.value});
+    lastCars = "";
+  });
+  top.append(back, titles, rename);
+
+  const tiles = el("div", undefined, "stat-tiles");
+  const statusTile = el("div", undefined, "tile");
+  statusTile.append(el("div", tr("Status"), "label"), carPill(car));
+  const tile = (label, value) => {
+    const node = el("div", undefined, "tile");
+    node.append(el("div", label, "label"), el("b", String(value)));
     return node;
-  }));
+  };
+  tiles.append(statusTile, tile(tr("Last seen"), shortTime(record.last_seen)), tile(tr("First seen"), shortTime(record.first_seen)),
+               tile(tr("Connections"), record.connections || 0), tile(tr("Commands run"), (record.tests || []).length));
+
+  const faults = el("section");
+  faults.append(el("h2", tr("Fault history")));
+  if (!record.faults.length) faults.append(el("p", tr("No fault codes have been seen on this car."), "dim"));
+  for (const fault of record.faults) {
+    const line = el("div", undefined, "fault");
+    const link = el("button", fault.code, "link");
+    link.type = "button";
+    link.addEventListener("click", () => openLookup(fault.code));
+    line.append(link, el("span", fault.description),
+                el("span", tr(fault.present ? "Present now" : "Not present now"), fault.present ? "pill bad" : "pill"),
+                el("span", tr("First seen {first}, last seen {last}, seen {times} time(s)",
+                              {first: shortTime(fault.first_seen), last: shortTime(fault.last_seen), times: fault.times}), "sub"));
+    faults.append(line);
+  }
+
+  const past = el("section");
+  const head = el("div", undefined, "section-head");
+  head.append(el("h2", tr("Past tests")));
+  const select = el("select");
+  select.setAttribute("aria-label", tr("Past tests"));
+  for (const [value, label] of [["all", "Everything"], ["connection", "Connections"], ["command", "Commands"], ["reading", "Saved readings"]]) {
+    select.append(Object.assign(el("option", tr(label)), {value}));
+  }
+  select.value = timelineFilter;
+  const body = el("div");
+  body.append(timelineNodes(record.timeline));
+  select.addEventListener("change", () => {
+    timelineFilter = select.value;
+    timelineShown = TIMELINE_STEP;
+    fill(body, [timelineNodes(record.timeline)]);
+  });
+  head.append(select);
+  past.append(head, body);
+
+  const sections = [top, tiles, faults, past];
+  const values = record.status ? record.status.values : null;
+  if (values) {
+    const latest = el("section");
+    latest.append(el("h2", `${tr("Latest values")} (${shortTime(record.status.time)})`));
+    const list = el("div", undefined, "values");
+    fill(list, Object.entries(values).map(([name, text]) => row(tr(name), text)));
+    latest.append(list);
+    sections.push(latest);
+  }
+  const identity = el("section");
+  identity.append(el("h2", tr("Vehicle and adapter")));
+  const identityList = el("div", undefined, "values");
+  for (const [label, modules] of Object.entries(record.vehicle || {})) {
+    for (const [header, text] of Object.entries(modules)) identityList.append(row(`${tr(label)} (${header})`, text || tr("Empty")));
+  }
+  if (record.adapter) identityList.append(row(tr("Adapter"), record.adapter));
+  if (record.protocol) identityList.append(row(tr("Protocol"), record.protocol));
+  identity.append(identityList);
+  sections.push(identity);
+  fill(parent, sections);
 }
+
+function renderSavedCars(cars) {
+  const key = openCarKey();
+  const parent = document.getElementById("cars");
+  const signature = JSON.stringify(cars) + language + key;
+  if (signature === lastCars) return;
+  // Don't redraw under someone who is typing a name, or reading a menu.
+  if (parent.contains(document.activeElement) && ["INPUT", "SELECT"].includes(document.activeElement.tagName)) return;
+  lastCars = signature;
+  if (key) {
+    if (currentPage() === "saved") renderCarPage(key, cars.find(car => car.key === key));
+    return;
+  }
+  if (!cars.length) {
+    fill(parent, [el("section", tr("No cars saved yet. A car is saved the first time it connects."), "dim")]);
+    return;
+  }
+  const grid = el("div", undefined, "garage");
+  grid.append(...cars.map(carCard));
+  fill(parent, [grid]);
+}
+
+let logEntries = [];
+let logAfter = 0;
+let logPaused = false;
+let logFetching = false;
+
+function logLine(entry) {
+  if (entry.kind === "event") {
+    const line = el("div", undefined, `log-line event ${entry.tone || ""}`);
+    const text = el("span", entry.text);
+    text.dir = "auto";
+    line.append(el("span", entry.time, "log-time"), text);
+    return line;
+  }
+  const line = el("div", undefined, `log-line ${entry.state}`);
+  const reply = entry.state === "lost" ? tr("No reply") : entry.hidden ? tr("Hidden, it identifies the car") : entry.reply.join("\n");
+  line.append(el("span", entry.time, "log-time"), el("span", entry.command, "log-command"),
+              el("span", reply, "log-reply"), el("span", `${entry.ms} ms`, "log-ms"));
+  return line;
+}
+
+function logWanted(entry) {
+  if (document.getElementById("log-filter").value !== "problems") return true;
+  return entry.kind === "event" ? Boolean(entry.tone) : entry.state !== "ok";
+}
+
+function appendLog(entries) {
+  const lines = document.getElementById("log-lines");
+  const atEnd = lines.scrollHeight - lines.scrollTop - lines.clientHeight < 40;
+  lines.append(...entries.filter(logWanted).map(logLine));
+  while (lines.childElementCount > 400) lines.firstElementChild.remove();
+  if (atEnd) lines.scrollTop = lines.scrollHeight;
+}
+
+async function refreshActivity() {
+  if (logFetching || logPaused) return;
+  logFetching = true;
+  try {
+    const data = await api("GET", "/api/activity", {after: logAfter, lang: language});
+    if (data.entries.length) {
+      logAfter = data.entries[data.entries.length - 1].n;
+      logEntries = logEntries.concat(data.entries).slice(-400);
+      appendLog(data.entries);
+    }
+    fill(document.getElementById("log-findings"), data.review.findings.map(finding => el("p", finding.text, `finding ${finding.tone}`)));
+    fill(document.getElementById("log-review"), data.review.rows.map(item => row(item.label, item.text, item.tone)));
+  } catch (error) {
+    /* the next update tries again */
+  }
+  logFetching = false;
+}
+
+document.getElementById("log-pause").addEventListener("click", event => {
+  logPaused = !logPaused;
+  event.target.dataset.i18n = logPaused ? "Resume" : "Pause";
+  event.target.textContent = tr(event.target.dataset.i18n);
+  if (!logPaused) refreshActivity();
+});
+
+document.getElementById("log-filter").addEventListener("change", () => {
+  fill(document.getElementById("log-lines"), []);
+  appendLog(logEntries);
+});
 
 function savedGraphs() {
   try { return JSON.parse(localStorage.getItem("graphs")) || ["0C", "0D"]; } catch (error) { return ["0C", "0D"]; }
@@ -951,6 +1319,7 @@ async function update() {
     }
     newReading = false;
     if (["commands", "cars"].includes(currentPage())) await refreshJobs();
+    if (currentPage() === "log") refreshActivity();
   } catch (error) {
     const status = document.getElementById("status");
     status.textContent = tr("Could not reach the app. Is it still running?");

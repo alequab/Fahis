@@ -56,7 +56,7 @@
 
 <table>
 <tr>
-<td width="50%" valign="top"><b>تطبيق سطح مكتب</b><br>سبع صفحات: نظرة عامة مع حالة المحوّل، وبيانات مباشرة، ورموز أعطال، وأوامر، وسيارات مدعومة، وسيارات محفوظة، وتقارير.</td>
+<td width="50%" valign="top"><b>تطبيق سطح مكتب</b><br>تسع صفحات: نظرة عامة مع حالة المحوّل، وبيانات مباشرة، ورموز أعطال، وأوامر، وسيارات مدعومة، وسيارات محفوظة، وبحث عن رمز، وتقارير، وسجل مباشر مع مراجعة تلقائية.</td>
 <td width="50%" valign="top"><b>الأوامر داخل التطبيق</b><br>شغّل فحص البطارية والتقرير والبحث عن الوحدات وغيرها، واقرأ النتيجة في الصفحة نفسها.</td>
 </tr>
 <tr>
@@ -65,7 +65,7 @@
 </tr>
 <tr>
 <td valign="top"><b>العربية والإنجليزية</b><br>زر واحد يبدّل اللغة ويحوّل التطبيق من اليمين إلى اليسار.</td>
-<td valign="top"><b>حفظ السيارات</b><br>يحفظ كل سيارة تتصل به مع بياناتها وآخر قراءاتها، على جهازك فقط.</td>
+<td valign="top"><b>حفظ السيارات</b><br>يحفظ كل سيارة تتصل به مع سجل أعطالها وفحوصاتها السابقة ونتائج أوامرها، على جهازك فقط.</td>
 </tr>
 <tr>
 <td valign="top"><b>فحص البطارية</b><br>يشرح الجهد بلغة بسيطة، ويعتمد على قراءة السيارة نفسها إذا توفرت.</td>
@@ -262,7 +262,7 @@ Many ELM327 adapters are Bluetooth LE. Windows gives them no COM port, so most O
 
 <table>
 <tr>
-<td width="50%" valign="top"><b>Desktop app</b><br>Seven pages: overview with adapter status, live data, fault codes, commands, supported cars, saved cars and reports.</td>
+<td width="50%" valign="top"><b>Desktop app</b><br>Nine pages: overview with adapter status, live data, fault codes, commands, supported cars, saved cars, code lookup, reports, and a live log with an automatic review.</td>
 <td width="50%" valign="top"><b>Commands in the app</b><br>Run a battery check, report, module scan and more, and read the result on the page.</td>
 </tr>
 <tr>
@@ -271,7 +271,7 @@ Many ELM327 adapters are Bluetooth LE. Windows gives them no COM port, so most O
 </tr>
 <tr>
 <td valign="top"><b>Arabic and English</b><br>One button switches language and flips the app to right-to-left.</td>
-<td valign="top"><b>Saved cars</b><br>Remembers each car that connects, with its details and latest readings, on your laptop only.</td>
+<td valign="top"><b>Saved cars</b><br>Remembers each car that connects, with its fault history, past tests and command results, on your laptop only.</td>
 </tr>
 <tr>
 <td valign="top"><b>Battery check</b><br>Explains the voltage in plain language, using the car's own reading when available.</td>
