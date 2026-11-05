@@ -4,6 +4,10 @@ node_modules/
 __pycache__/
 *.pyc
 
+# Build output
+build/
+dist/
+
 # Car data: reports and saved cars contain the VIN
 logs/
 reports/

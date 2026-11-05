@@ -9,9 +9,10 @@ from pathlib import Path
 
 from dtc_codes import dtc_name
 from i18n import t
+from paths import DATA_HOME
 
 PROFILE_DIR = Path(__file__).parent / "profiles"
-DOWNLOAD_DIR = PROFILE_DIR / "downloaded"
+DOWNLOAD_DIR = DATA_HOME / "profiles" / "downloaded"
 CATALOG_FILE = PROFILE_DIR / "catalog.json"
 STANDARD_PIDS_FILE = Path(__file__).parent / "data" / "standard-pids.json"
 OBDB_API = "https://api.github.com/repos/OBDb/{repo}/contents/signalsets/v3"

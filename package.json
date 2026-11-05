@@ -1,5 +1,6 @@
 {
   "name": "fahis",
+  "productName": "Fahis",
   "version": "1.0.0",
   "description": "See what your car is reporting on Windows with a Bluetooth LE ELM327 adapter.",
   "private": true,
@@ -9,9 +10,51 @@
   "scripts": {
     "setup": "node node_modules/electron/install.js",
     "start": "electron .",
-    "demo": "electron . --demo"
+    "demo": "electron . --demo",
+    "dist": "electron-builder --win nsis --publish never",
+    "dist:test": "electron-builder --win dir --publish never"
+  },
+  "build": {
+    "appId": "com.alequab.fahis",
+    "npmRebuild": false,
+    "copyright": "Copyright 2026 alequab",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/backend/fahis-backend",
+        "to": "backend"
+      },
+      {
+        "from": "LICENSE",
+        "to": "LICENSE.txt"
+      },
+      {
+        "from": "THIRD_PARTY_NOTICES.md",
+        "to": "THIRD_PARTY_NOTICES.md"
+      }
+    ],
+    "win": {
+      "icon": "electron/icon.ico",
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "differentialPackage": false,
+      "license": "LICENSE",
+      "artifactName": "Fahis-Setup-${version}.exe"
+    }
   },
   "devDependencies": {
-    "electron": "45.0.0"
+    "electron": "45.0.0",
+    "electron-builder": "26.0.12"
   }
 }

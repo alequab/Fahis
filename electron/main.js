@@ -9,6 +9,8 @@ const { pathToFileURL } = require("node:url");
 
 const ROOT = path.join(__dirname, "..");
 const PYTHON = path.join(ROOT, ".venv", "Scripts", "python.exe");
+// The installed app carries its own backend, and saves in the user's folder rather than beside it.
+const BUNDLED_BACKEND = path.join(process.resourcesPath, "backend", "fahis-backend.exe");
 const PAGE = path.join(__dirname, "index.html");
 const ICON = path.join(__dirname, "icon.ico");
 const DEMO = process.argv.includes("--demo");
@@ -38,9 +40,17 @@ function finishRequest(reply) {
 }
 
 function startBackend() {
-  const args = ["obd_tool.py", "app"];
+  const args = ["app"];
   if (DEMO) args.push("--demo");
-  backend = spawn(PYTHON, args, { cwd: ROOT, windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
+  const stdio = ["pipe", "pipe", "ignore"];
+  if (app.isPackaged) {
+    const dataFolder = path.join(app.getPath("userData"), "data");
+    fs.mkdirSync(dataFolder, { recursive: true });
+    backend = spawn(BUNDLED_BACKEND, args, { cwd: dataFolder, windowsHide: true, stdio,
+                                             env: { ...process.env, FAHIS_DATA_DIR: dataFolder } });
+  } else {
+    backend = spawn(PYTHON, ["obd_tool.py", ...args], { cwd: ROOT, windowsHide: true, stdio });
+  }
   readline.createInterface({ input: backend.stdout }).on("line", line => {
     try {
       finishRequest(JSON.parse(line));
@@ -111,7 +121,7 @@ function createWindow() {
 
 function start() {
   Menu.setApplicationMenu(null);
-  if (!fs.existsSync(PYTHON)) {
+  if (!app.isPackaged && !fs.existsSync(PYTHON)) {
     fail("Python setup is missing. Follow the Setup steps in the README first.",
          "إعداد Python غير موجود. اتبع خطوات التثبيت في ملف README أولًا.");
     return;

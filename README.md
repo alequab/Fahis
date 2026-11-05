@@ -83,7 +83,17 @@
 
 ### البدء السريع
 
-**المتطلبات:** نظام Windows 10 أو 11 مع Bluetooth، و‏Python 3.12، و‏Node.js، ومحوّل ELM327 يعمل بتقنية BLE ويوفر الخدمة `FFF0`، وسيارة تستخدم CAN بعناوين 11 بت.
+هناك طريقتان للحصول على فاحص، وكلتاهما تحتاج إلى نظام Windows 10 أو 11 مع Bluetooth، ومحوّل ELM327 يعمل بتقنية BLE ويوفر الخدمة `FFF0`، وسيارة تستخدم CAN بعناوين 11 بت.
+
+| | التطبيق الجاهز | من الشيفرة المصدرية |
+|---|---|---|
+| **السعر** | مدفوع، وسيتوفر قريبًا | مجاني للأفراد |
+| **التثبيت** | ملف تثبيت واحد، دون أي إعداد | يحتاج إلى Python 3.12 و‏Node.js |
+| **المزايا** | المزايا نفسها | المزايا نفسها |
+
+التطبيق الجاهز غير متاح للبيع بعد، وسيدعم شراؤه تطوير فاحص. يمكنك الآن تشغيله من الشيفرة المصدرية بالخطوات التالية.
+
+**للتشغيل من الشيفرة المصدرية:**
 
 <div dir="ltr">
 
@@ -213,13 +223,17 @@ flowchart LR
 | `dtc_codes.py` | البحث عن أوصاف رموز الأعطال |
 | `profiles\` | قائمة السيارات وملف Kia Picanto، من OBDb |
 | `data\` | أوصاف رموز الأعطال من OBDex، وأسماء رموز الشركات من dtc-database، وخطط الإصلاح من MechanicDB |
+| `paths.py` | يحدد مكان حفظ بيانات المستخدم |
+| `build.bat` | يبني ملف تثبيت Windows |
 | `test_obd_tool.py` | الاختبارات |
 
 </details>
 
 ### الرخصة
 
-يمكن **للأفراد** استخدام فاحص وتعديله ومشاركته مجانًا للأغراض الشخصية. **ولا يحق للشركات والمؤسسات استخدامه** بدون إذن كتابي، ويشمل ذلك العاملين لحسابهم الخاص والأعمال الفردية عند استخدامه في عملهم. ولا يجوز بيعه. راجع ملف [LICENSE](LICENSE) للاطلاع على الشروط كاملة، والنص الإنجليزي هو المعتمد.
+يمكن **للأفراد** استخدام الشيفرة المصدرية لفاحص وتعديلها ومشاركتها مجانًا للأغراض الشخصية. **ولا يحق للشركات والمؤسسات استخدامه** بدون إذن كتابي، ويشمل ذلك العاملين لحسابهم الخاص والأعمال الفردية عند استخدامه في عملهم، ولو اشتروا التطبيق الجاهز. ولا يجوز لأي شخص آخر بيعه.
+
+**التطبيق الجاهز** سيبيعه صاحب الحقوق للاستخدام الشخصي، ولا يجوز بيع ملف التثبيت أو مشاركته أو نشره. راجع ملف [LICENSE](LICENSE) للاطلاع على الشروط كاملة، والنص الإنجليزي هو المعتمد.
 
 بسبب هذه القيود، يُعد فاحص مشروعًا متاح الشيفرة للاطلاع (source-available) وليس مفتوح المصدر بالمعنى المعروف. وتبقى المكونات الخارجية المضمنة فيه خاضعة لرخصها الخاصة، وهي مذكورة في [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
@@ -275,7 +289,17 @@ Many ELM327 adapters are Bluetooth LE. Windows gives them no COM port, so most O
 
 ### Quick start
 
-**You need:** Windows 10 or 11 with Bluetooth, Python 3.12, Node.js, a BLE ELM327 adapter with the `FFF0` service, and a car that uses 11-bit CAN.
+There are two ways to get Fahis. Both need Windows 10 or 11 with Bluetooth, a BLE ELM327 adapter with the `FFF0` service, and a car that uses 11-bit CAN.
+
+| | Ready-made app | From source |
+|---|---|---|
+| **Price** | Paid, coming soon | Free for individuals |
+| **Install** | One installer, no setup | Needs Python 3.12 and Node.js |
+| **Features** | The same | The same |
+
+The ready-made app isn't on sale yet, and buying it will support Fahis's development. For now, you can run it from source with the steps below.
+
+**To run from source:**
 
 ```
 git clone https://github.com/alequab/Fahis.git
@@ -393,12 +417,16 @@ Run the offline tests, which don't need a car or adapter:
 | `dtc_codes.py` | Fault code lookups |
 | `profiles\` | Car catalog and the Kia Picanto profile, from OBDb |
 | `data\` | Fault code descriptions from OBDex, manufacturer code names from dtc-database and repair plans from MechanicDB |
+| `paths.py` | Sets where user data is saved |
+| `build.bat` | Builds the Windows installer |
 | `test_obd_tool.py` | Offline tests |
 
 </details>
 
 ### License
 
-Fahis is free for **individuals** to use, modify and share for personal purposes. **Companies and organizations may not use it** without written permission, including freelancers and one-person businesses using it for their work. It may not be sold. See [LICENSE](LICENSE) for the full terms.
+Fahis's source code is free for **individuals** to use, modify and share for personal purposes. **Companies and organizations may not use it** without written permission, including freelancers and one-person businesses using it for their work, even if they buy the ready-made app. Nobody else may sell it.
+
+The **ready-made app** will be sold by the copyright holder for personal use, and its installer may not be sold, shared or posted. See [LICENSE](LICENSE) for the full terms.
 
 Because of these limits, Fahis is source-available rather than open source. The third-party components it includes keep their own licenses, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

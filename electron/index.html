@@ -434,7 +434,7 @@ function renderTiles(values) {
   fill(document.getElementById("tiles"), TILES.filter(pid => byPid[pid]).map(pid => {
     const v = byPid[pid];
     const past = history[pid] = history[pid] || [];
-    if (v.value !== null && !v.note) past.push(v.value);
+    if (newReading && v.value !== null && !v.note) past.push(v.value);
     if (past.length > HISTORY) past.shift();
     const tile = el("div", undefined, v.note ? "tile stale" : "tile");
     const number = el("div", v.value === null ? "-" : String(Math.round(v.value)), "number");
@@ -562,7 +562,7 @@ function renderGraphs(values) {
   const numeric = values.filter(v => v.value !== null);
   for (const v of numeric) {
     const past = graphData[v.pid] = graphData[v.pid] || [];
-    if (!v.note) past.push(v.value);
+    if (newReading && !v.note) past.push(v.value);
     if (past.length > GRAPH_HISTORY) past.shift();
   }
   const select = document.getElementById("graph-add");
@@ -932,18 +932,31 @@ async function loadReports() {
   } catch (error) { /* the status line already shows a lost connection */ }
 }
 
+const ASK_MS = 150, REDRAW_MS = 1000;
+let lastShown = null, lastReading = null, lastDrawn = 0, newReading = false;
+
 async function update() {
   try {
     const asked = language;
     const state = (await window.fahis.request("state", {lang: asked})).data;
-    if (asked === language) render(state);
+    // Asking often keeps the delay short, but redrawing is only worth it when something changed.
+    // The once-a-second redraw keeps details such as "last reply" true if readings stop.
+    const shown = `${state.reading}/${asked}`;
+    newReading = state.reading !== lastReading;
+    if (asked === language && (shown !== lastShown || !state.connected || Date.now() - lastDrawn >= REDRAW_MS)) {
+      render(state);
+      lastShown = shown;
+      lastReading = state.reading;
+      lastDrawn = Date.now();
+    }
+    newReading = false;
     if (["commands", "cars"].includes(currentPage())) await refreshJobs();
   } catch (error) {
     const status = document.getElementById("status");
     status.textContent = tr("Could not reach the app. Is it still running?");
     status.className = "lost";
   }
-  setTimeout(update, 500);
+  setTimeout(update, ASK_MS);
 }
 
 document.getElementById("lang-toggle").addEventListener("click", () => {

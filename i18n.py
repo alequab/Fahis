@@ -1,8 +1,9 @@
 """English and Arabic text. English strings are the keys, so a missing translation still reads well."""
 import json
-from pathlib import Path
 
-SETTINGS_FILE = Path(__file__).parent / "settings.json"
+from paths import DATA_HOME
+
+SETTINGS_FILE = DATA_HOME / "settings.json"
 LANGUAGES = ("en", "ar")
 
 ARABIC = {
@@ -352,6 +353,8 @@ ARABIC = {
     "Adapter status": "حالة المحوّل",
     "Status": "الحالة",
     "Connected": "متصل",
+    "Adapter connected, waiting for the car": "المحوّل متصل، بانتظار استجابة السيارة",
+    "This advice uses only the adapter's reading, which can be about 1 V too high, so the battery may be lower than it says.": "تعتمد هذه النصيحة على قراءة المحوّل وحدها، وقد تزيد بنحو 1 فولت، لذا قد تكون البطارية أضعف مما تظهر.",
     "Name": "الاسم",
     "Bluetooth address": "عنوان Bluetooth",
     "Reported version": "الإصدار الذي يعلنه",

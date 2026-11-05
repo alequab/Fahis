@@ -3,7 +3,10 @@ import asyncio
 import html
 import io
 import json
+import os
 import re
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -197,7 +200,7 @@ class EverythingTests(unittest.IsolatedAsyncioTestCase):
         transport = FakeTransport({
             # 7E8's reply is cut off after its first frame, so only 7E9's complete one may be used.
             "010C0D": ["7E8 10 07 41 0C 1A F8 0D 32", "7E9 06 41 0C 1B 00 0D 33"],
-            "010C": ["7E8 04 41 0C 1A F8", "7E9 04 41 0C 1B 00"], "010D": ["7E8 03 41 0D 32"]})
+            "010C": ["7E9 04 41 0C 1B 00"], "010D": ["7E9 03 41 0D 32"]})
         elm = ELM(transport)
         await elm.read_pid(0x0C)
         await elm.read_pid(0x0D)
@@ -207,16 +210,182 @@ class EverythingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(transport.sent[-1], "010C0D")
 
     async def test_falls_back_when_the_car_refuses_several_values(self):
-        for refusal in (["NO DATA"], ["?"], None, ["7E8 04 41 0C 1A F8"], ["7E8 05 41 0C 1A F8 99"]):
+        for refusal in (["NO DATA"], None, ["7E8 04 41 0C 1A F8"], ["7E8 05 41 0C 1A F8 99"]):
             transport = FakeTransport({"010C0D": refusal, "010C": ["7E8 04 41 0C 1A F8"], "010D": ["7E8 03 41 0D 32"]})
             elm = ELM(transport)
             await elm.read_pid(0x0C)
             await elm.read_pid(0x0D)
-            self.assertEqual(await elm.read_pids([0x0C, 0x0D]), {0x0C: 1726.0, 0x0D: 50}, refusal)
+            for _ in obd_tool.GROUP_SIZES:
+                self.assertIsNot(elm.can_group, False, refusal)
+                self.assertEqual(await elm.read_pids([0x0C, 0x0D]), {0x0C: 1726.0, 0x0D: 50}, refusal)
             self.assertIs(elm.can_group, False, refusal)
             sent = len(transport.sent)
             await elm.read_pids([0x0C, 0x0D])
             self.assertNotIn("010C0D", transport.sent[sent:])
+
+    async def test_a_clear_refusal_ends_the_group_trial_at_once(self):
+        transport = FakeTransport({"010C0D": ["?"], "010C": ["7E8 04 41 0C 1A F8"], "010D": ["7E8 03 41 0D 32"]})
+        elm = ELM(transport)
+        await elm.read_pid(0x0C)
+        await elm.read_pid(0x0D)
+        await elm.read_pids([0x0C, 0x0D])
+        self.assertIs(elm.can_group, False)
+
+    async def test_lost_group_reply_tries_a_shorter_list(self):
+        pids = [0x0C, 0x0D, 0x11, 0x04]
+        transport = FakeTransport({"010C": ["7E8 04 41 0C 1A F8"], "010D": ["7E8 03 41 0D 32"],
+                                   "0111": ["7E8 03 41 11 40"], "0104": ["7E8 03 41 04 40"],
+                                   "010C0D11": ["7E8 07 41 0C 1A F8 0D 32 11", "7E8 21 40"],
+                                   "010C0D": ["7E8 06 41 0C 1A F8 0D 33"]})
+        elm = ELM(transport)
+        elm.use_counts = False
+        for pid in pids:
+            await elm.read_pid(pid)
+        await elm.read_pids(pids)  # the list of 4 gets no reply, so the next try is shorter
+        self.assertIsNone(elm.can_group)
+        self.assertEqual(elm.group_size, 3)
+        self.assertIn("010C0D1104", transport.sent)
+        values = await elm.read_pids([0x0C, 0x0D])
+        self.assertTrue(elm.can_group)
+        self.assertEqual(elm.group_size, 3)
+        self.assertEqual(values[0x0D], 51)
+
+    def test_short_lists_are_packed_into_single_frames(self):
+        elm = ELM(FakeTransport({}))
+        elm.group_size = 3
+        elm.sizes = {0x0C: 2, 0x0D: 1, 0x11: 1, 0x04: 1, 0x05: 1, 0x42: 2, 0x24: 4}
+        groups = []
+        left = [0x0C, 0x0D, 0x11, 0x04, 0x42]
+        while left:
+            groups.append(elm.next_group(left))
+            left = [pid for pid in left if pid not in groups[-1]]
+        self.assertEqual(groups, [[0x0C, 0x42], [0x0D, 0x11, 0x04]])
+        self.assertEqual(elm.next_group([0x24, 0x0C]), [0x24])  # too large to share a frame
+        elm.group_size = obd_tool.MAX_PIDS_PER_REQUEST
+        self.assertEqual(elm.next_group([0x0C, 0x0D, 0x11, 0x04, 0x05, 0x42, 0x24]), [0x0C, 0x0D, 0x11, 0x04, 0x05, 0x42])
+
+    async def test_short_lists_read_fast_values_in_two_requests(self):
+        fast = {"010C42": ["7E8 07 41 0C 1A F8 42 32 00"], "010D1104": ["7E8 07 41 0D 32 11 40 04 40"]}
+        elm = ELM(FakeTransport(fast))
+        elm.can_group, elm.group_size = True, 3
+        elm.sizes = {0x0C: 2, 0x0D: 1, 0x11: 1, 0x04: 1, 0x42: 2, 0x05: 1}
+        reader = obd_tool.LiveReader(elm, [0x0C, 0x0D, 0x11, 0x04, 0x42, 0x05], {})
+        reader.next_slow = reader.slow.index(0x42)
+        await reader.step()
+        self.assertEqual(elm.transport.sent, 2)
+        self.assertEqual(reader.values[0x0D], 50)
+        self.assertEqual(reader.values[0x0C], 1726.0)
+        self.assertEqual(reader.values[0x42], 12.8)
+
+    async def test_other_module_answering_a_group_does_not_end_grouping(self):
+        both = ["7E8 06 41 0C 1A F8 0D 32", "7E9 06 41 0C 1A F8 0D 32"]
+        only_other = ["7E9 06 41 0C 1B 00 0D 33"]
+        transport = FakeTransport({"010C0D": Sequence([both] + [only_other] * 6)})
+        elm = ELM(transport)
+        elm.can_group, elm.group_size = None, 3
+        elm.sizes = {0x0C: 2, 0x0D: 1}
+        reader = obd_tool.LiveReader(elm, [0x0C, 0x0D])
+        reader.store(0x0D, 0)
+        for pid, value in (await elm.read_pids([0x0C, 0x0D])).items():
+            reader.store(pid, value)
+        self.assertEqual(reader.values[0x0D], 50)
+        sent = len(transport.sent)
+        for _ in range(obd_tool.SOURCE_MISSES_ALLOWED - 1):
+            for pid, value in (await elm.read_pids([0x0C, 0x0D])).items():
+                reader.store(pid, value)
+            self.assertEqual(reader.values[0x0D], 50)  # keeps the engine module's last reading
+        self.assertIs(elm.can_group, True)
+        self.assertEqual(len(transport.sent) - sent, obd_tool.SOURCE_MISSES_ALLOWED - 1)  # no extra requests
+        for _ in range(4):
+            await elm.read_pids([0x0C, 0x0D])
+        self.assertIs(elm.can_group, True)
+
+    async def test_grouping_is_tried_again_after_real_failures(self):
+        good = ["7E8 06 41 0C 1A F8 0D 32"]
+        transport = FakeTransport({"010C0D": Sequence([good, ["NO DATA"], ["NO DATA"], ["NO DATA"], good]),
+                                   "010C": ["7E8 04 41 0C 1A F8"], "010D": ["7E8 03 41 0D 32"]})
+        elm = ELM(transport)
+        elm.use_counts = False
+        elm.sizes, elm.group_size = {0x0C: 2, 0x0D: 1}, 3
+        for _ in range(4):
+            await elm.read_pids([0x0C, 0x0D])
+        self.assertIs(elm.can_group, False)
+        await elm.read_pids([0x0C, 0x0D])
+        self.assertIs(elm.can_group, False)  # not yet
+        elm.group_off_at -= obd_tool.GROUP_RETRY_SECONDS + 1
+        await elm.read_pids([0x0C, 0x0D])
+        self.assertIs(elm.can_group, True)
+
+    def test_egr_error_ff_is_not_shown_as_a_percentage(self):
+        formula = obd_tool.LIVE_PIDS[0x2D][2]
+        self.assertEqual(formula(bytes([0xFF])), "Not reported")
+        self.assertEqual(formula(bytes([0x80])), 0.0)
+        self.assertEqual(i18n.t("Not reported", "ar"), "غير متوفر")
+
+    def test_page_asks_often_but_redraws_only_on_news(self):
+        page = bridge.PAGE.read_text(encoding="utf-8")
+        self.assertIn("ASK_MS = 150", page)
+        self.assertIn("newReading && v.value !== null", page)
+        self.assertIn("newReading && !v.note", page)
+
+    async def test_a_value_stays_with_its_module_after_a_miss(self):
+        both = ["7E8 03 41 1C 1E", "7E9 03 41 1C 01"]
+        transport = FakeTransport({"011C": Sequence([both, ["7E9 03 41 1C 01"], ["7E9 03 41 1C 01"], both])})
+        elm = ELM(transport)
+        elm.use_counts = False
+        reader = obd_tool.LiveReader(elm, [0x1C])
+        reader.store(0x1C, await elm.read_pid(0x1C))
+        first = reader.values[0x1C]
+        for _ in range(3):
+            reader.store(0x1C, await elm.read_pid(0x1C))
+            self.assertEqual(reader.values[0x1C], first)
+
+    async def test_a_value_moves_only_if_its_module_keeps_missing(self):
+        transport = FakeTransport({"010D": Sequence([["7E8 03 41 0D 32"]] + [["7E9 03 41 0D 40"]] * obd_tool.SOURCE_MISSES_ALLOWED)})
+        elm = ELM(transport)
+        elm.use_counts = False
+        self.assertEqual(await elm.read_pid(0x0D), 0x32)
+        for _ in range(obd_tool.SOURCE_MISSES_ALLOWED - 1):
+            self.assertIsNone(await elm.read_pid(0x0D))
+        self.assertEqual(await elm.read_pid(0x0D), 0x40)
+
+    def test_lower_address_takes_over_once_it_answers(self):
+        elm = ELM(FakeTransport({}))
+        self.assertEqual(elm.from_usual_module(0x0D, {"7E9": 1}), 1)
+        self.assertEqual(elm.from_usual_module(0x0D, {"7E8": 2, "7E9": 1}), 2)
+        self.assertEqual(elm.sources[0x0D], "7E8")
+
+    def test_a_missed_reply_keeps_the_last_value_and_marks_it_when_old(self):
+        reader = obd_tool.LiveReader(ELM(FakeTransport({})), [0x03], {0x03: "Closed loop"})
+        reader.store(0x03, None)
+        self.assertEqual(reader.values[0x03], "Closed loop")
+        self.assertIsNone(reader.age_note(0x03))
+        reader.read_at[0x03] -= obd_tool.SLOW_STALE_SECONDS + 1
+        reader.store(0x03, None)
+        self.assertIn("seconds ago", reader.age_note(0x03))
+        fresh = obd_tool.LiveReader(ELM(FakeTransport({})), [0x03])
+        fresh.store(0x03, None)
+        self.assertIsNone(fresh.values[0x03])
+
+    async def test_live_values_keep_updating_during_the_fault_code_recheck(self):
+        args = SimpleNamespace(demo=True, samples=20, interval=0, port=0, no_browser=True)
+        app = obd_tool.DashboardApp(args)
+        elm = ELM(demo.DemoTransport())
+        elm.demo = True
+        await elm.setup()
+        sent = []
+        send = elm.transport.send
+
+        async def spy(command, wait=None):
+            sent.append(command)
+            return await send(command, wait)
+
+        elm.transport.send = spy
+        with mock.patch.object(obd_tool, "REFRESH_SECONDS", 0):
+            await app.session(elm, None)
+        last_pending = len(sent) - 1 - sent[::-1].index("07")
+        last_stored = last_pending - 1 - sent[last_pending - 1::-1].index("03")
+        self.assertTrue(any(command.startswith("010C") for command in sent[last_stored:last_pending]))
 
     def test_a_group_reply_never_guesses_at_unexpected_bytes(self):
         sizes = {0x0C: 2, 0x0D: 1}
@@ -296,6 +465,21 @@ class EverythingTests(unittest.IsolatedAsyncioTestCase):
                     "this_drive": [], "more": [], "raw": {}}
         value = obd_tool.dashboard_state(snapshot, reader, lang="en")["values"][0]
         self.assertIn("seconds ago", value["note"])
+
+
+class DataFolderTests(unittest.TestCase):
+    def test_saved_files_go_to_the_chosen_folder_when_installed(self):
+        code = ("import garage, i18n, car_modules, obd_tool; print(garage.CARS_DIR); print(i18n.SETTINGS_FILE); "
+                "print(car_modules.DOWNLOAD_DIR); print(obd_tool.LOG_DIR); print(obd_tool.REPORT_DIR)")
+        with tempfile.TemporaryDirectory() as folder:
+            result = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, check=True,
+                                    env={**os.environ, "FAHIS_DATA_DIR": folder})
+            for line in result.stdout.splitlines():
+                self.assertTrue(Path(line).is_relative_to(folder), line)
+
+    def test_running_from_source_keeps_saving_beside_the_code(self):
+        if "FAHIS_DATA_DIR" not in os.environ:
+            self.assertEqual(garage.CARS_DIR.parent, ROOT)
 
 
 class FaultDataTests(unittest.TestCase):
@@ -378,6 +562,7 @@ class BatteryTests(unittest.IsolatedAsyncioTestCase):
             await obd_tool.run_battery(ELM(transport), None)
         output = " ".join(str(call.args[0]) for call in printed.call_args_list)
         self.assertIn("11.9 V", output)
+        self.assertIn("about 1 V too high", output)
         self.assertIn("Very low", output)
 
 
@@ -1155,6 +1340,33 @@ class LongSessionTests(unittest.IsolatedAsyncioTestCase):
         self.app.track_charging()
         self.assertIsNone(self.app.charging_since)
 
+    def test_resting_voltage_waits_longer_than_a_real_fault(self):
+        now = obd_tool.time.monotonic()
+        resting = {0x42: 12.7, 0x0C: 2000.0}
+        self.app.reader = SimpleNamespace(values=resting, voltage="13.8V")
+        self.app.track_charging()
+        self.app.charging_since = now - obd_tool.CHARGING_ALERT_SECONDS - 1
+        self.assertFalse(self.app.charging_lasting())
+        self.app.charging_since = now - obd_tool.CHARGING_RESTING_ALERT_SECONDS - 1
+        self.assertTrue(self.app.charging_lasting())
+        self.app.reader.values = {0x42: 11.9, 0x0C: 2000.0}  # draining the battery, and the wait starts again
+        self.app.track_charging()
+        self.assertFalse(self.app.charging_lasting())
+        self.app.charging_since = now - obd_tool.CHARGING_ALERT_SECONDS - 1
+        self.assertTrue(self.app.charging_lasting())
+        self.app.reader.values = {0x42: 15.8, 0x0C: 2000.0}
+        self.app.track_charging()
+        self.app.charging_since = now - obd_tool.CHARGING_ALERT_SECONDS - 1
+        self.assertTrue(self.app.charging_lasting())
+
+    def test_charging_reading_resets_the_resting_wait(self):
+        self.app.reader = SimpleNamespace(values={0x42: 12.7, 0x0C: 2000.0}, voltage="13.8V")
+        self.app.track_charging()
+        self.app.reader.values = {0x42: 14.2, 0x0C: 1500.0}
+        self.app.track_charging()
+        self.assertIsNone(self.app.charging_since)
+        self.assertFalse(self.app.charging_lasting())
+
     def test_real_dip_from_the_log_is_not_a_fault(self):
         self.assertFalse(obd_tool.charging_out_of_range({0x42: 13.0, 0x0C: 900.0}))
         self.assertNotIn("not be charging", obd_tool.battery_advice(13.0, True))
@@ -1298,6 +1510,45 @@ class AdapterStatusTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(int(rows["Commands sent"]["text"]), elm.transport.sent)
         arabic = self.rows(app, "ar")
         self.assertEqual(arabic["الحالة"]["text"], "متصل")
+
+    async def test_adapter_stays_shown_only_while_the_car_is_silent(self):
+        app = obd_tool.DashboardApp(SimpleNamespace(demo=False, samples=1, interval=0))
+        app.RETRY_SECONDS = 0
+        elm = ELM(FakeTransport({"ATZ": ["ELM327 v2.1"], "AT@1": ["OBDII to RS232 Interpreter"], "0100": ["UNABLE TO CONNECT"]}))
+        elm.device_name = "OBDII"
+        elm.device_address = "AA:BB:CC:DD:EE:FF"
+        seen = []
+
+        async def connect():
+            seen.append(self.rows(app))
+            if len(seen) == 1:
+                app.adapter_found(elm)
+                await elm.setup()
+            if len(seen) == 2:
+                raise OBDError("Adapter not found.")
+
+        app.connect = connect
+        with mock.patch("builtins.print"):
+            await app.run()
+        self.assertIn("Looking", seen[0]["Status"]["text"])
+        self.assertEqual(seen[1]["Status"]["text"], "Adapter connected, waiting for the car")
+        self.assertEqual(seen[1]["Status"]["tone"], "bad")
+        self.assertEqual(seen[1]["Name"]["text"], "OBDII")
+        self.assertEqual(seen[1]["Reported version"]["text"], "ELM327 v2.1")
+        self.assertIn("Looking", seen[2]["Status"]["text"])
+        self.assertNotIn("Name", seen[2])
+
+    async def test_missed_supported_values_request_is_retried(self):
+        answer = ["7E8 06 41 00 80 00 00 00"]
+        elm = ELM(FakeTransport({"0100": Sequence([["NO DATA"], ["NO DATA"], answer])}))
+        self.assertEqual(await elm.supported_pids(), {0x01})
+
+    async def test_car_offering_no_values_connects_again(self):
+        elm = ELM(FakeTransport({"0100": ["NO DATA"]}))
+        elm.vehicle = {}
+        with self.assertRaises(OBDError) as caught:
+            await obd_tool.read_snapshot(elm)
+        self.assertEqual(caught.exception.text, obd_tool.CAR_SILENT)
 
     async def test_adapter_that_rejects_description_shows_none(self):
         transport = FakeTransport({"ATZ": ["ELM327 v1.5"], "AT@1": ["?"], "ATDPN": ["A6"],

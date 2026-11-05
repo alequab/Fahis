@@ -3,9 +3,10 @@ import json
 import os
 import re
 from datetime import datetime
-from pathlib import Path
 
-CARS_DIR = Path(__file__).parent / "cars"
+from paths import DATA_HOME
+
+CARS_DIR = DATA_HOME / "cars"
 MAX_HISTORY = 200
 
 
@@ -32,7 +33,7 @@ def load_car(key):
 
 
 def save_car(key, record):
-    CARS_DIR.mkdir(exist_ok=True)
+    CARS_DIR.mkdir(parents=True, exist_ok=True)
     path = CARS_DIR / f"{key}.json"
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")

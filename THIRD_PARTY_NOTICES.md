@@ -21,7 +21,7 @@ The Fahis license does not apply to these components. Each remains under its own
 
 ## Installed during setup
 
-These are installed by `pip` and aren't stored in this repository.
+These are installed by `pip` and aren't stored in this repository. The ready-made installer includes them, along with Python itself (PSF-2.0) and the PyInstaller bootloader (GPL-2.0 with its exception for bundled applications).
 
 | Component | Used for | Owner | License |
 |---|---|---|---|

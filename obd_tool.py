@@ -24,11 +24,12 @@ from demo import DemoTransport
 from dtc_codes import (car_make, dtc_details, dtc_name, lookup_dtc, make_from_vin, oem_meaning, oem_meanings, repair_plans,
                        set_car_make)
 from i18n import t
+from paths import DATA_HOME
 
 ADAPTER_NAME_HINTS = ("OBD", "ELM")
 SERVICE_PREFIX = "0000fff0"
-LOG_DIR = Path(__file__).parent / "logs"
-REPORT_DIR = Path(__file__).parent / "reports"
+LOG_DIR = DATA_HOME / "logs"
+REPORT_DIR = DATA_HOME / "reports"
 
 # CAN with 11-bit headers. Replies are parsed as "7E8 06 41 ..." so others are refused.
 SUPPORTED_PROTOCOLS = {"6": "ISO 15765-4 CAN 11-bit 500 kbps", "8": "ISO 15765-4 CAN 11-bit 250 kbps"}
@@ -93,7 +94,8 @@ LIVE_PIDS = {
     0x21: ("Distance with light on", "km", word),
     0x23: ("Fuel rail pressure", "kPa", lambda d: word(d) * 10),
     0x2C: ("Commanded EGR", "%", percent),
-    0x2D: ("EGR error", "%", trim),
+    # On a tested car FF came almost only with no EGR commanded, so it means no figure rather than +99%.
+    0x2D: ("EGR error", "%", lambda d: "Not reported" if d[0] == 0xFF else trim(d)),
     0x2E: ("Commanded evap purge", "%", percent),
     0x30: ("Warm-ups since clear", "", lambda d: "255+" if d[0] == 255 else d[0]),
     0x31: ("Distance since clear", "km", lambda d: "65535+" if word(d) == 65535 else word(d)),
@@ -134,7 +136,15 @@ SLOW_PER_STEP = 2
 # When the car accepts several values in one request, far more of the slow ones fit in each update.
 GROUP_SLOW_PER_STEP = 8
 MAX_PIDS_PER_REQUEST = 6
+# Some adapters only manage a shorter list, so try these sizes before giving up on grouping.
+GROUP_SIZES = (MAX_PIDS_PER_REQUEST, 3, 2)
+# Room in one CAN frame for grouped values, each taking its PID byte plus its data. A reply that fits
+# comes back about one Bluetooth interval sooner, measured at 240 ms against 300 ms on a real car.
+SINGLE_FRAME_GROUP_BYTES = 6
 GROUP_MISSES_ALLOWED = 3
+GROUP_RETRY_SECONDS = 30
+# Replies a value's usual module can miss before another module's answer is used instead.
+SOURCE_MISSES_ALLOWED = 3
 # Reads of a value before trusting how many modules answer it, and the largest reply in one CAN frame.
 READS_BEFORE_COUNTING = 3
 SINGLE_FRAME_DATA_BYTES = 5
@@ -149,6 +159,10 @@ THIS_DRIVE_PID = 0x41
 REFRESH_SECONDS = 60
 # Alternators on many modern cars dip for short periods, so only a lasting problem gets an alert.
 CHARGING_ALERT_SECONDS = 60
+# Some cars stop charging for minutes at a time to save fuel, resting near battery voltage, so wait longer
+# there. Below the discharging level the battery is really being drained, so the shorter wait applies.
+CHARGING_RESTING_ALERT_SECONDS = 600
+CHARGING_DISCHARGING_VOLTS = 12.2
 CHARGING_LOW_VOLTS = 12.8
 CHARGING_HIGH_VOLTS = 15.5
 
@@ -321,6 +335,10 @@ class MeasuredTransport:
         return reply
 
 
+CAR_SILENT = "The car did not answer. Check the ignition is ON and the adapter is seated."
+PID_RANGE_ATTEMPTS = 4
+
+
 class ELM:
     def __init__(self, transport):
         self.transport = MeasuredTransport(transport)
@@ -331,6 +349,10 @@ class ELM:
         self.demo = False
         self.can_group = None  # None until tried on this car
         self.group_misses = 0
+        self.group_size = MAX_PIDS_PER_REQUEST
+        self.group_off_at = None  # when grouping stopped after it had been working
+        self.sources = {}  # the module each value is read from, so it doesn't jump between modules
+        self.source_misses = {}
         self.sizes = {}  # bytes each value used when this car answered it alone
         self.use_counts = True
         self.reply_counts = {}
@@ -348,7 +370,7 @@ class ELM:
             self.description = description[0]
 
         if not await self.request(0x01, 0x00, wait=25):
-            raise OBDError("The car did not answer. Check the ignition is ON and the adapter is seated.")
+            raise OBDError(CAR_SILENT)
 
         number = "".join(await self.transport.send("ATDPN", 2) or []).lstrip("A")
         if number not in SUPPORTED_PROTOCOLS:
@@ -417,7 +439,11 @@ class ELM:
         supported = set()
         base = 0x00
         while base <= 0xE0:
-            replies = await self.request(0x01, base)
+            # A car can miss a request, and a missed first range would hide every live value.
+            for _ in range(PID_RANGE_ATTEMPTS):
+                replies = await self.request(0x01, base)
+                if replies:
+                    break
             if not replies:
                 break
             for payload in replies.values():
@@ -446,46 +472,85 @@ class ELM:
                 self.reply_counts[pid] = self.reads_seen[pid][1]
         return replies
 
+    def from_usual_module(self, pid, answers):
+        """Pick a value from {module: value}, or None if its usual module missed this reply.
+
+        Modules can report the same value differently, so it must not jump to another one after a miss.
+        The lowest address wins, which is the engine module on the cars seen so far.
+        """
+        if not answers:
+            return None
+        source, lowest = self.sources.get(pid), min(answers)
+        if source is not None and source not in answers and lowest > source:
+            self.source_misses[pid] = self.source_misses.get(pid, 0) + 1
+            if self.source_misses[pid] < SOURCE_MISSES_ALLOWED:
+                return None
+        self.sources[pid] = lowest if source is None or source not in answers or lowest < source else source
+        self.source_misses[pid] = 0
+        return answers[self.sources[pid]]
+
     async def read_pid(self, pid):
-        """Read a live value from the first module that answers, or None."""
+        """Read a live value from its usual module, or None."""
         replies = await self.counted_request(pid)
-        for payload in replies.values():
+        answers = {}
+        for header, payload in replies.items():
             try:
-                value = LIVE_PIDS[pid][2](payload[2:])
+                answers[header] = LIVE_PIDS[pid][2](payload[2:])
             except IndexError:
                 continue
-            self.sizes[pid] = len(payload) - 2
-            return value
-        return None
+            self.sizes.setdefault(pid, len(payload) - 2)
+        return self.from_usual_module(pid, answers)
 
     async def read_group(self, pids):
         """Ask for several values in one request. Returns the ones that came back clearly."""
         wanted = set(pids)
         lines = await self.transport.send("01" + "".join(f"{pid:02X}" for pid in pids), 2)
-        found = {}
-        for _, payload in sorted(parse_can(lines or []).items()):
+        answers = {}
+        for header, payload in sorted(parse_can(lines or []).items()):
             for pid, data in split_group(payload, self.sizes, wanted).items():
                 try:
-                    found.setdefault(pid, LIVE_PIDS[pid][2](data))
+                    answers.setdefault(pid, {})[header] = LIVE_PIDS[pid][2](data)
                 except IndexError:
                     continue
-        if len(found) >= 2:
+        # A value whose usual module missed this reply stays None, so it keeps its last reading without asking again.
+        found = {pid: self.from_usual_module(pid, modules) for pid, modules in answers.items()}
+        if len(answers) >= 2:  # any module answering the whole list proves grouping works
             self.can_group, self.group_misses = True, 0
         elif self.can_group is None:
-            self.can_group = False
+            # One lost reply doesn't prove anything, so only a clear refusal or the shortest list ends the trial.
+            shorter = next((size for size in GROUP_SIZES if size < self.group_size), None)
+            if shorter is None or any("?" in line for line in lines or []):
+                self.can_group = False
+            else:
+                self.group_size = shorter
         else:
             self.group_misses += 1
             if self.group_misses >= GROUP_MISSES_ALLOWED:
-                self.can_group = False
+                self.can_group, self.group_off_at = False, time.monotonic()
         return found
+
+    def next_group(self, pids):
+        """Choose the next values to ask for together. Adapters limited to short lists get single-frame replies."""
+        if self.group_size >= MAX_PIDS_PER_REQUEST:
+            return pids[:self.group_size]
+        chunk, room = [], SINGLE_FRAME_GROUP_BYTES
+        for pid in sorted(pids, key=lambda p: self.sizes[p], reverse=True):
+            if len(chunk) < self.group_size and 1 + self.sizes[pid] <= room:
+                chunk.append(pid)
+                room -= 1 + self.sizes[pid]
+        return chunk or pids[:1]
 
     async def read_pids(self, pids):
         """Read several values the fastest way this car allows, and anything missed one at a time."""
         values = {}
         known = [pid for pid in pids if pid in self.sizes]
-        for start in range(0, len(known), MAX_PIDS_PER_REQUEST):
-            chunk = known[start:start + MAX_PIDS_PER_REQUEST]
-            if len(chunk) >= 2 and self.can_group is not False:
+        # A car that accepted groups before may only have gone quiet for a moment, so try once more now and then.
+        if self.can_group is False and self.group_off_at is not None and time.monotonic() - self.group_off_at >= GROUP_RETRY_SECONDS:
+            self.can_group, self.group_misses = True, GROUP_MISSES_ALLOWED - 1
+        while self.can_group is not False and len(known) >= 2:
+            chunk = self.next_group(known)
+            known = [pid for pid in known if pid not in chunk]
+            if len(chunk) >= 2:
                 values.update(await self.read_group(chunk))
         for pid in pids:
             if pid not in values:
@@ -513,10 +578,13 @@ async def run_info(elm, _):
     print(f"{t('All supported PIDs')}: {' '.join(f'{p:02X}' for p in sorted(supported))}")
 
 
+CODE_MODES = (("Stored", 0x03), ("Pending", 0x07), ("Permanent", 0x0A))
+
+
 async def read_codes(elm):
     """Return {label: {module: [codes]}} for stored, pending and permanent codes."""
     result = {}
-    for label, mode in (("Stored", 0x03), ("Pending", 0x07), ("Permanent", 0x0A)):
+    for label, mode in CODE_MODES:
         result[label] = {h: decode_dtcs(p) for h, p in (await elm.request_all(mode)).items()}
     return result
 
@@ -597,6 +665,8 @@ async def read_snapshot(elm):
     codes = await read_codes(elm)
     has_stored = any(codes["Stored"].values())
     supported = await elm.supported_pids()
+    if not supported:
+        raise OBDError(CAR_SILENT)  # Connect again rather than stay connected with nothing to read.
 
     values, raw, more = {}, {}, []
     this_drive = None
@@ -712,6 +782,7 @@ class LiveReader:
         self.voltage = voltage
         self.next_slow = 0
         self.interval = 0
+        self.updates = 0  # lets the page skip redrawing until there's something new
         now = time.monotonic()
         self.read_at = {pid: now for pid in self.values}
         rpm = number(self.values.get(0x0C))
@@ -719,6 +790,8 @@ class LiveReader:
         self.engine_changed_at = float("-inf")
 
     def store(self, pid, value):
+        if value is None and self.values.get(pid) is not None:
+            return  # A missed reply keeps the last value, and age_note marks it if it gets old.
         self.values[pid] = value
         self.read_at[pid] = time.monotonic()
         rpm = number(value) if pid == 0x0C else None
@@ -746,12 +819,18 @@ class LiveReader:
     async def step(self):
         batch = list(self.fast)
         wrapped = False
-        for _ in range(min(GROUP_SLOW_PER_STEP if self.elm.can_group else SLOW_PER_STEP, len(self.slow))):
+        if not self.elm.can_group:
+            slow_count = SLOW_PER_STEP
+        else:
+            # Short lists take more requests, so they carry one slow value to keep the fast ones quick.
+            slow_count = GROUP_SLOW_PER_STEP if self.elm.group_size >= MAX_PIDS_PER_REQUEST else 1
+        for _ in range(min(slow_count, len(self.slow))):
             batch.append(self.slow[self.next_slow])
             self.next_slow = (self.next_slow + 1) % len(self.slow)
             wrapped = wrapped or self.next_slow == 0
         for pid, value in (await self.elm.read_pids(batch)).items():
             self.store(pid, value)
+        self.updates += 1
         if wrapped:
             self.voltage = await self.elm.voltage()
 
@@ -823,6 +902,7 @@ def dashboard_state(snapshot, reader, demo=False, lang=None, cars=()):
         "demo": demo,
         "cars": list(cars),
         "time": datetime.now().strftime("%H:%M:%S"),
+        "reading": reader.updates,
         "adapter": snapshot["adapter"],
         "protocol": snapshot["protocol"],
         "voltage": t(reader.voltage, lang),
@@ -873,6 +953,13 @@ def charging_out_of_range(values):
     """True if the engine is running and the voltage suggests a charging problem."""
     volts, rpm = number(values.get(0x42)), number(values.get(0x0C))
     return volts is not None and rpm is not None and rpm > 0 and not CHARGING_LOW_VOLTS <= volts <= CHARGING_HIGH_VOLTS
+
+
+def charging_problem(values):
+    """Say which kind of out-of-range voltage this is, since they don't wait equally long before an alert."""
+    if not charging_out_of_range(values):
+        return None
+    return "resting" if CHARGING_DISCHARGING_VOLTS <= number(values.get(0x42)) < CHARGING_LOW_VOLTS else "fault"
 
 
 def car_alerts(snapshot, values, lang=None, charging_lasting=True):
@@ -941,30 +1028,39 @@ class DashboardApp:
         self.tasks = set()
         self.next_job = 1
         self.link = None  # the adapter currently connected, even while it's still reading the car
+        self.adapter = None  # the adapter that last answered, while the car itself isn't answering
         self.connected_at = None
         self.connections = 0
         self.recording = None
         self.last_summary = None
         self.charging_since = None
+        self.charging_kind = None
 
     def track_charging(self):
-        if not charging_out_of_range(self.reader.values):
-            self.charging_since = None
-        elif self.charging_since is None:
-            self.charging_since = time.monotonic()
+        kind = charging_problem(self.reader.values)
+        if kind != self.charging_kind:
+            self.charging_kind = kind
+            self.charging_since = time.monotonic() if kind else None
 
-    async def refresh_status(self, elm):
-        """Reread the light and fault codes, so a fault during a long session gets noticed.
+    def charging_lasting(self):
+        wait = CHARGING_RESTING_ALERT_SECONDS if self.charging_kind == "resting" else CHARGING_ALERT_SECONDS
+        return self.charging_since is not None and time.monotonic() - self.charging_since >= wait
+
+    async def refresh_parts(self, elm):
+        """Reread the light and fault codes a part at a time, so live values keep updating between parts.
 
         A module missing from one reread keeps its last known answer rather than looking clear.
+        Each part is saved as soon as it's read, so a command run between parts is never overwritten.
         """
         snapshot = self.snapshot
         before = json.dumps([snapshot["monitors"], snapshot["codes"]], sort_keys=True, default=str)
-        for header, payload in (await elm.request_all(0x01, 0x01)).items():
+        for header, payload in (await elm.request_all(0x01, 0x01, attempts=1)).items():
             snapshot["monitors"][header] = decode_monitors(payload)
-        codes = await read_codes(elm)
-        for label, modules in codes.items():
-            snapshot["codes"].setdefault(label, {}).update(modules)
+        yield
+        for label, mode in CODE_MODES:
+            replies = await elm.request_all(mode, attempts=1)
+            snapshot["codes"].setdefault(label, {}).update({h: decode_dtcs(p) for h, p in replies.items()})
+            yield
         if 0x41 in snapshot["supported"]:
             snapshot["this_drive"] = await read_this_drive(elm) or snapshot["this_drive"]
         if json.dumps([snapshot["monitors"], snapshot["codes"]], sort_keys=True, default=str) != before:
@@ -972,24 +1068,35 @@ class DashboardApp:
                 snapshot["freeze"] = await read_freeze_frame(elm)
             remember_snapshot(elm, snapshot)
 
+    async def refresh_status(self, elm):
+        async for _ in self.refresh_parts(elm):
+            pass
+
     def device_status(self, lang=None):
         """Describe the adapter itself as rows of label, text and tone for the page."""
         row = lambda label, text, tone="": {"label": t(label, lang), "text": str(text), "tone": tone}
+
+        def identity(adapter):
+            rows = [row("Name", adapter.device_name or t("unknown", lang))]
+            if adapter.device_address:
+                rows.append(row("Bluetooth address", adapter.device_address))
+            rows.append(row("Reported version", adapter.version))
+            if adapter.description:
+                rows.append(row("Reported description", adapter.description))
+            return rows
+
         elm = self.link
         if elm is None:
-            rows = [row("Status", t("Looking for the adapter ...", lang), "bad")]
+            if self.adapter and self.adapter.version:
+                rows = [row("Status", t("Adapter connected, waiting for the car", lang), "bad"), *identity(self.adapter)]
+            else:
+                rows = [row("Status", t("Looking for the adapter ...", lang), "bad")]
             if self.connections:
                 rows.append(row("Times connected", self.connections))
             return rows
         stats = elm.transport
         since = time.monotonic() - self.connected_at
-        rows = [row("Status", t("Connected", lang), "good"),
-                row("Name", elm.device_name or t("unknown", lang))]
-        if elm.device_address:
-            rows.append(row("Bluetooth address", elm.device_address))
-        rows.append(row("Reported version", elm.version))
-        if elm.description:
-            rows.append(row("Reported description", elm.description))
+        rows = [row("Status", t("Connected", lang), "good"), *identity(elm)]
         rows += [row("Protocol", elm.protocol or t("unknown", lang)),
                  row("Voltage at adapter (approximate)", t(self.reader.voltage, lang) if self.reader else "-"),
                  row("Connected for", f"{int(since // 60)}:{int(since % 60):02d}"),
@@ -1154,8 +1261,7 @@ class DashboardApp:
                     "device": self.device_status(lang)}
         state = dashboard_state(self.snapshot, self.reader, self.args.demo, lang, self.cars)
         state["device"] = self.device_status(lang)
-        lasting = self.charging_since is not None and time.monotonic() - self.charging_since >= CHARGING_ALERT_SECONDS
-        state["alerts"] = car_alerts(self.snapshot, self.reader.values, lang, lasting)
+        state["alerts"] = car_alerts(self.snapshot, self.reader.values, lang, self.charging_lasting())
         state["recording"] = self.recording_status(lang)
         return state
 
@@ -1231,6 +1337,7 @@ class DashboardApp:
         self.connected_at = time.monotonic()
         self.connections += 1
         self.reader = None
+        self.charging_since = self.charging_kind = None
         self.message = ("Connected. Reading everything from the car, this takes about 20 seconds ...", {})
         snapshot = await read_snapshot(elm)
         if not self.args.demo:
@@ -1242,15 +1349,21 @@ class DashboardApp:
         self.elm = elm
         count = 0
         last_refresh = time.monotonic()
+        refreshing = None
         try:
             while self.args.samples is None or count < self.args.samples:
                 await self.run_waiting_jobs(elm)
                 await self.reader.step()
                 self.track_charging()
                 self.record_row()
-                if time.monotonic() - last_refresh >= REFRESH_SECONDS:
-                    await self.refresh_status(elm)
-                    last_refresh = time.monotonic()
+                if refreshing is None and time.monotonic() - last_refresh >= REFRESH_SECONDS:
+                    refreshing = self.refresh_parts(elm)
+                if refreshing is not None:
+                    try:
+                        await refreshing.__anext__()
+                    except StopAsyncIteration:
+                        refreshing = None
+                        last_refresh = time.monotonic()
                 count += 1
                 await asyncio.sleep(self.args.interval)
         finally:
@@ -1258,6 +1371,9 @@ class DashboardApp:
             self.elm = self.link = None
             set_car_make(None)
             self.fail_waiting_jobs()
+
+    def adapter_found(self, elm):
+        self.adapter = elm
 
     async def connect(self):
         if self.args.demo:
@@ -1267,7 +1383,7 @@ class DashboardApp:
             await elm.setup()
             await self.session(elm, self.args)
         else:
-            await connect_and_run(self.args, self.session)
+            await connect_and_run(self.args, self.session, self.adapter_found)
 
     async def run(self):
         while True:
@@ -1275,7 +1391,10 @@ class DashboardApp:
                 await self.connect()
                 return
             except Exception as error:
-                self.snapshot = self.reader = None
+                self.snapshot = self.reader = self.link = None
+                # Only a silent car proves the adapter is still there; any other failure may mean it's gone.
+                if not (isinstance(error, OBDError) and error.text == CAR_SILENT):
+                    self.adapter = None
                 if isinstance(error, OBDError):
                     self.message = (error.text, error.values)
                 else:
@@ -1342,10 +1461,12 @@ async def run_battery(elm, _):
         print(t("Engine: unknown, car did not answer"))
     else:
         print(t("Engine: running") if running else t("Engine: off"))
-    # On a tested car the adapter read about 0.8 V higher than the car's own module.
+    # On a tested car the adapter read about 1 V higher than the car's own module, across several drives.
     print("\n" + battery_advice(average if module_volts is None else module_volts, running))
     if module_volts is not None:
         print(t("This advice uses the car's module reading, which is usually more accurate than the adapter's."))
+    else:
+        print(t("This advice uses only the adapter's reading, which can be about 1 V too high, so the battery may be lower than it says."))
     if not running:
         print(t("Ignition-on loads and recent charging can shift this reading."))
         print(t("This doesn't test starting power: a weak battery can read normal and still fail to crank."))
@@ -1452,7 +1573,7 @@ async def run_clear(elm, args):
         raise OBDError("The car did not confirm the clear. Run `codes` to check.")
 
 
-async def connect_and_run(args, handler):
+async def connect_and_run(args, handler, on_adapter=None):
     from bleak import BleakClient, BleakScanner
     from bleak.exc import BleakBluetoothNotAvailableError
 
@@ -1485,6 +1606,8 @@ async def connect_and_run(args, handler):
         elm = ELM(transport)
         elm.device_name = device.name
         elm.device_address = device.address
+        if on_adapter:
+            on_adapter(elm)
         if handler is not run_battery:
             await elm.setup()
             elm.vehicle = await read_identity(elm)
