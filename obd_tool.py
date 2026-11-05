@@ -67,6 +67,12 @@ def o2_sensors(d):
     return ", ".join(found) or "None"
 
 
+def catalyst_temp(d):
+    """A tested diesel sends a fixed value just under 0 C with the engine hot, so that isn't a real temperature."""
+    celsius = word(d) / 10 - 40
+    return "Not reported" if celsius <= 0 else celsius
+
+
 # pid: (name, unit, formula taking the data bytes)
 LIVE_PIDS = {
     0x0C: ("Engine RPM", "rpm", lambda d: (256 * d[0] + d[1]) / 4),
@@ -85,7 +91,8 @@ LIVE_PIDS = {
     0x33: ("Barometric pressure", "kPa", lambda d: d[0]),
     0x42: ("Module voltage", "V", lambda d: (256 * d[0] + d[1]) / 1000),
     0x46: ("Ambient temp", "C", lambda d: d[0] - 40),
-    0x5C: ("Oil temp", "C", lambda d: d[0] - 40),
+    # A tested diesel always sends 00 here with a warm engine, which means no sensor rather than -40.
+    0x5C: ("Oil temp", "C", lambda d: "Not reported" if d[0] == 0 else d[0] - 40),
     0x5E: ("Fuel rate", "L/h", lambda d: (256 * d[0] + d[1]) / 20),
     0x03: ("Fuel system", "", lambda d: FUEL_STATUS.get(d[0], f"Code {d[0]}")),
     0x0A: ("Fuel pressure", "kPa", lambda d: d[0] * 3),
@@ -100,10 +107,10 @@ LIVE_PIDS = {
     0x30: ("Warm-ups since clear", "", lambda d: "255+" if d[0] == 255 else d[0]),
     0x31: ("Distance since clear", "km", lambda d: "65535+" if word(d) == 65535 else word(d)),
     0x32: ("Evap vapour pressure", "Pa", lambda d: int.from_bytes(d[:2], "big", signed=True) / 4),
-    0x3C: ("Catalyst temp B1S1", "C", lambda d: word(d) / 10 - 40),
-    0x3D: ("Catalyst temp B2S1", "C", lambda d: word(d) / 10 - 40),
-    0x3E: ("Catalyst temp B1S2", "C", lambda d: word(d) / 10 - 40),
-    0x3F: ("Catalyst temp B2S2", "C", lambda d: word(d) / 10 - 40),
+    0x3C: ("Catalyst temp B1S1", "C", catalyst_temp),
+    0x3D: ("Catalyst temp B2S1", "C", catalyst_temp),
+    0x3E: ("Catalyst temp B1S2", "C", catalyst_temp),
+    0x3F: ("Catalyst temp B2S2", "C", catalyst_temp),
     0x43: ("Absolute load", "%", lambda d: word(d) * 100 / 255),
     0x44: ("Commanded lambda", "", lambda d: word(d) / 32768),
     0x45: ("Relative throttle", "%", percent),
@@ -313,12 +320,17 @@ class BleTransport:
         return [line.strip() for line in re.split(r"[\r\n]+", text) if line.strip()]
 
 
+ADAPTER_SILENT = "The adapter stopped answering. Connecting again. If this repeats, unplug the adapter and plug it back in."
+ADAPTER_SILENT_LIMIT = 3
+
+
 class MeasuredTransport:
     """Passes commands to the adapter while recording how it responds."""
 
     def __init__(self, transport):
         self.transport = transport
         self.sent = self.replied = self.timeouts = 0
+        self.silent_in_a_row = 0
         self.total_seconds = 0.0
         self.last_reply = None
 
@@ -328,7 +340,11 @@ class MeasuredTransport:
         reply = await self.transport.send(command, wait)
         if reply is None:
             self.timeouts += 1
+            self.silent_in_a_row += 1
+            if self.silent_in_a_row >= ADAPTER_SILENT_LIMIT:
+                raise OBDError(ADAPTER_SILENT)  # Waiting out every remaining request could take minutes.
         else:
+            self.silent_in_a_row = 0
             self.replied += 1
             self.total_seconds += time.monotonic() - started
             self.last_reply = time.monotonic()
@@ -632,7 +648,8 @@ async def read_freeze_frame(elm):
     for pid in (p for p in LIVE_PIDS if p in supported):
         for payload in (await elm.request(0x02, pid, frame=0)).values():
             name, unit, formula = LIVE_PIDS[pid]
-            values.append({"name": name, "unit": unit, "text": format_value(formula(payload[3:]))})
+            value = formula(payload[3:])
+            values.append({"name": name, "unit": "" if value == "Not reported" else unit, "text": format_value(value)})
             break
     return {"code": code, "values": values}
 
@@ -917,7 +934,8 @@ def dashboard_state(snapshot, reader, demo=False, lang=None, cars=()):
             "code": freeze["code"], "description": describe_dtc(freeze["code"], lang),
             "values": [{"name": t(v["name"], lang), "unit": t(v["unit"], lang), "text": t(v["text"], lang)}
                        for v in freeze["values"]]},
-        "values": [{"pid": f"{pid:02X}", "name": t(LIVE_PIDS[pid][0], lang), "unit": t(LIVE_PIDS[pid][1], lang),
+        "values": [{"pid": f"{pid:02X}", "name": t(LIVE_PIDS[pid][0], lang),
+                    "unit": "" if value == "Not reported" else t(LIVE_PIDS[pid][1], lang),
                     "value": value if isinstance(value, (int, float)) else None,
                     "text": "-" if value is None else t(format_value(value), lang),
                     "note": reader.age_note(pid, lang)}

@@ -8,6 +8,7 @@ from paths import DATA_HOME
 
 CARS_DIR = DATA_HOME / "cars"
 MAX_HISTORY = 200
+UNKNOWN_CAR = "unknown-car"
 
 
 def now():
@@ -18,7 +19,7 @@ def car_key(vehicle):
     """Identify a car by VIN, falling back to its calibration IDs if the VIN isn't reported."""
     vin = next((v for v in vehicle.get("VIN", {}).values() if v), None)
     fallback = "-".join(sorted(v for v in vehicle.get("Calibration ID", {}).values() if v))
-    return re.sub(r"[^A-Za-z0-9_-]", "_", vin or fallback or "unknown-car")
+    return re.sub(r"[^A-Za-z0-9_-]", "_", vin or fallback or UNKNOWN_CAR)
 
 
 def load_car(key):
@@ -42,6 +43,8 @@ def save_car(key, record):
 
 def remember_connection(vehicle, adapter, protocol):
     key = car_key(vehicle)
+    if key == UNKNOWN_CAR:
+        return {}  # Nothing identifies this car, so a record couldn't be matched to it later.
     record = load_car(key)
     record.setdefault("first_seen", now())
     record["last_seen"] = now()
@@ -58,6 +61,8 @@ def remember(vehicle, section, data):
     if vehicle is None:
         return
     key = car_key(vehicle)
+    if key == UNKNOWN_CAR:
+        return
     record = load_car(key)
     record.setdefault("first_seen", now())
     record["last_seen"] = now()

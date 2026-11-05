@@ -322,11 +322,30 @@ class EverythingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(formula(bytes([0x80])), 0.0)
         self.assertEqual(i18n.t("Not reported", "ar"), "غير متوفر")
 
+    def test_placeholder_temperatures_are_not_shown_as_readings(self):
+        oil, catalyst = obd_tool.LIVE_PIDS[0x5C][2], obd_tool.LIVE_PIDS[0x3C][2]
+        self.assertEqual(oil(bytes([0x00])), "Not reported")
+        self.assertEqual(oil(bytes([0x82])), 90)
+        self.assertEqual(catalyst(bytes([0x01, 0x8E])), "Not reported")
+        self.assertAlmostEqual(catalyst(bytes([0x21, 0xBE])), 823.8)
+
     def test_page_asks_often_but_redraws_only_on_news(self):
         page = bridge.PAGE.read_text(encoding="utf-8")
         self.assertIn("ASK_MS = 150", page)
         self.assertIn("newReading && v.value !== null", page)
         self.assertIn("newReading && !v.note", page)
+
+    async def test_a_silent_adapter_ends_the_connection_quickly(self):
+        transport = FakeTransport({"0902": None, "010C": ["7E8 04 41 0C 1A F8"]})
+        elm = ELM(transport)
+        await elm.transport.send("0902")
+        await elm.transport.send("0902")
+        await elm.transport.send("010C")  # a reply starts the count again
+        await elm.transport.send("0902")
+        await elm.transport.send("0902")
+        with self.assertRaises(OBDError) as caught:
+            await elm.transport.send("0902")
+        self.assertEqual(caught.exception.text, obd_tool.ADAPTER_SILENT)
 
     async def test_a_value_stays_with_its_module_after_a_miss(self):
         both = ["7E8 03 41 1C 1E", "7E9 03 41 1C 01"]
@@ -456,6 +475,14 @@ class EverythingTests(unittest.IsolatedAsyncioTestCase):
         reader.read_at[0x10] -= 1
         reader.store(0x0C, 800.0)
         self.assertEqual(reader.age_note(0x10), "Read before the engine started")
+
+    def test_not_reported_has_no_unit(self):
+        reader = obd_tool.LiveReader(ELM(FakeTransport({})), [0x5C, 0x05], {0x5C: "Not reported", 0x05: 90})
+        snapshot = {"freeze": None, "adapter": "ELM327", "protocol": "CAN", "vehicle": {}, "monitors": {}, "codes": {},
+                    "this_drive": [], "more": [], "raw": {}}
+        values = {v["pid"]: v for v in obd_tool.dashboard_state(snapshot, reader, lang="en")["values"]}
+        self.assertEqual(values["5C"]["unit"], "")
+        self.assertEqual(values["05"]["unit"], "C")
 
     async def test_page_state_carries_the_mark(self):
         elm = ELM(FakeTransport({}))
@@ -839,6 +866,12 @@ class SavedCarsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(garage.car_key({"VIN": {}, "Calibration ID": {"7E8": "AB/../C"}}), "AB____C")
         self.assertEqual(garage.car_key({}), "unknown-car")
         self.assertEqual(garage.car_key({"VIN": {"7E8": "../../evil"}}), "______evil")
+
+    def test_a_car_with_no_identity_is_not_saved(self):
+        empty = {"VIN": {}, "Calibration ID": {}, "Calibration check": {}, "Module name": {}}
+        garage.remember_connection(empty, "ELM327", "CAN")
+        garage.remember(empty, "status", {"light": False})
+        self.assertEqual(garage.summaries(), [])
 
     def test_history_is_capped(self):
         with mock.patch.object(garage, "MAX_HISTORY", 3):

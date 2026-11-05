@@ -354,6 +354,7 @@ ARABIC = {
     "Status": "الحالة",
     "Connected": "متصل",
     "Adapter connected, waiting for the car": "المحوّل متصل، بانتظار استجابة السيارة",
+    "The adapter stopped answering. Connecting again. If this repeats, unplug the adapter and plug it back in.": "توقف المحوّل عن الاستجابة، وتجري إعادة الاتصال. إذا تكرر ذلك، فافصل المحوّل ثم أعد توصيله.",
     "This advice uses only the adapter's reading, which can be about 1 V too high, so the battery may be lower than it says.": "تعتمد هذه النصيحة على قراءة المحوّل وحدها، وقد تزيد بنحو 1 فولت، لذا قد تكون البطارية أضعف مما تظهر.",
     "Name": "الاسم",
     "Bluetooth address": "عنوان Bluetooth",
