@@ -19,6 +19,7 @@ from types import SimpleNamespace
 
 import bridge
 import car_modules
+import car_systems
 import garage
 import i18n
 from demo import DemoTransport
@@ -192,7 +193,7 @@ class OBDError(Exception):
 
 
 class Reply(bytes):
-    """A module's reply. `complete` is False if frames were lost and the reply was cut off."""
+    """A module's reply. `complete` is False if frames were lost, repeated or out of order, so the rest was dropped."""
 
     complete = True
 
@@ -208,20 +209,26 @@ def parse_can(lines):
 
     replies = {}
     for header in sorted(frames):
-        payload, length = bytearray(), None
+        payload, length, next_number, broken = bytearray(), None, None, False
         for frame in frames[header]:
             kind = frame[0] >> 4
             if kind == 0:
-                # A later single frame replaces an earlier one, such as "please wait" before the answer.
-                length = frame[0] & 0x0F
+                # A new message replaces an earlier one, such as "please wait" before the answer.
+                length, next_number, broken = frame[0] & 0x0F, None, False
                 payload = bytearray(frame[1:])
             elif kind == 1 and len(frame) > 1:
-                length = ((frame[0] & 0x0F) << 8) | frame[1]
-                payload.extend(frame[2:])
+                length, next_number, broken = ((frame[0] & 0x0F) << 8) | frame[1], 1, False
+                payload = bytearray(frame[2:])
             elif kind == 2:
-                payload.extend(frame[1:])
+                # Frames are numbered, so a lost or repeated one must not shift the bytes after it into the wrong place.
+                if frame[0] & 0x0F == next_number:
+                    payload.extend(frame[1:])
+                    next_number = (next_number + 1) % 16
+                else:
+                    broken = True
+                    next_number = -1
         reply = Reply(payload[:length])
-        reply.complete = length is None or len(payload) >= length
+        reply.complete = not broken and (length is None or len(payload) >= length)
         replies[header] = reply
     return replies
 
@@ -423,6 +430,11 @@ class MeasuredTransport:
 
 CAR_SILENT = "The car did not answer. Check the ignition is ON and the adapter is seated."
 PID_RANGE_ATTEMPTS = 4
+MODULE_BUSY_ATTEMPTS = 3
+# A module that needs longer replies 7F <service> 78, then has up to 5 seconds (ISO 15765-3), plus 20% tolerance, before
+# it must answer or say so again. One real engine module repeated this for 30 seconds working out its calibration check.
+RESPONSE_PENDING = 0x78
+BUSY_SECONDS = 6
 
 
 class ELM:
@@ -443,6 +455,29 @@ class ELM:
         self.use_counts = True
         self.reply_counts = {}
         self.reads_seen = {}
+        self.busy = {}  # when each module last said it needs more time
+        self.calibration = {}  # filled in when asked, or whenever a slow module finally answers
+
+    def parsed(self, lines):
+        """Rebuild replies from CAN lines, keeping track of modules that say they need more time."""
+        replies = parse_can(lines or [])
+        for header, reply in replies.items():
+            if len(reply) >= 3 and reply[0] == 0x7F and reply[2] == RESPONSE_PENDING:
+                self.busy[header] = time.monotonic()
+                continue
+            self.busy.pop(header, None)
+            if reply[:2] == bytes([0x49, 0x06]) and reply.complete:
+                self.calibration[header] = reply[3:].hex().upper()
+        return replies
+
+    def busy_modules(self):
+        now = time.monotonic()
+        return {header for header, seen in self.busy.items() if now - seen <= BUSY_SECONDS}
+
+    async def close(self):
+        """Ask the adapter to stop talking to the car before letting go. Letting go ends it anyway if this gets no answer."""
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(self.transport.send("ATPC", 1), 2)
 
     async def setup(self):
         reply = await self.transport.send("ATZ", 5)
@@ -467,16 +502,18 @@ class ELM:
         """Return {module header: payload}, retrying once if a reply is lost or stale."""
         command = f"{mode:02X}" + ("" if pid is None else f"{pid:02X}") + ("" if frame is None else f"{frame:02X}")
         expected = bytes([mode + 0x40] + ([] if pid is None else [pid]))
+        best = {}
         for _ in range(2):
             lines = await self.transport.send(command, wait)
             if lines is None:
                 continue
-            good = {h: p for h, p in parse_can(lines).items() if p.startswith(expected)}
-            if good:
-                return good
-            if any("NO DATA" in line for line in lines):
-                return {}
-        return {}
+            good = {h: p for h, p in self.parsed(lines).items() if p.startswith(expected)}
+            best.update({h: p for h, p in good.items() if h not in best or not best[h].complete})
+            if good and all(p.complete for p in best.values()):
+                return best
+            if not good and any("NO DATA" in line for line in lines):
+                return best
+        return best
 
     async def request_all(self, mode, pid=None, attempts=3, max_attempts=6):
         """Ask several times and combine the replies, since a module occasionally misses a request.
@@ -489,8 +526,9 @@ class ELM:
             replies.update(await self.request(mode, pid))
             if attempt + 1 >= attempts and known <= set(replies):
                 break
-            if not known <= set(replies):
-                await asyncio.sleep(0.2)
+            missing = known - set(replies)
+            if missing:
+                await asyncio.sleep(1 if missing & self.busy_modules() else 0.2)
         return dict(sorted(replies.items()))
 
     async def module_request(self, hdr, rax, request, fc=False, wait=2):
@@ -502,11 +540,17 @@ class ELM:
         if fc:
             for command in (f"ATFCSH{hdr}", "ATFCSD300000", "ATFCSM1"):
                 await self.transport.send(command, 2)
-        lines = await self.transport.send(request, wait)
+        service = int(request[:2], 16)
+        reply = None
+        for attempt in range(MODULE_BUSY_ATTEMPTS):
+            lines = await self.transport.send(request, wait)
+            reply = self.parsed(lines).get(rax)
+            if not reply or reply[:2] != bytes([0x7F, service]) or reply[2] not in car_modules.TRY_AGAIN:
+                break
+            if attempt + 1 < MODULE_BUSY_ATTEMPTS:
+                await asyncio.sleep(car_modules.TRY_AGAIN[reply[2]])
         if fc:
             await self.transport.send("ATFCSM0", 2)
-        reply = parse_can(lines or []).get(rax)
-        service = int(request[:2], 16)
         if not reply or (reply[0] != service + 0x40 and reply[:2] != bytes([0x7F, service])):
             return None
         return reply
@@ -544,7 +588,7 @@ class ELM:
         count = self.reply_counts.get(pid)
         if self.use_counts and count:
             lines = await self.transport.send(f"01{pid:02X}{count:X}", 5)
-            good = {h: p for h, p in parse_can(lines or []).items() if p.startswith(bytes([0x41, pid]))}
+            good = {h: p for h, p in self.parsed(lines).items() if p.startswith(bytes([0x41, pid]))}
             if good:
                 return good
             if lines and any("?" in line for line in lines):
@@ -568,6 +612,8 @@ class ELM:
             return None
         source, lowest = self.sources.get(pid), min(answers)
         if source is not None and source not in answers and lowest > source:
+            if source in self.busy_modules():
+                return None  # It said it would be back, so keep its last reading.
             self.source_misses[pid] = self.source_misses.get(pid, 0) + 1
             if self.source_misses[pid] < SOURCE_MISSES_ALLOWED:
                 return None
@@ -592,7 +638,7 @@ class ELM:
         wanted = set(pids)
         lines = await self.transport.send("01" + "".join(f"{pid:02X}" for pid in pids), 2)
         answers = {}
-        for header, payload in sorted(parse_can(lines or []).items()):
+        for header, payload in sorted(self.parsed(lines).items()):
             for pid, data in split_group(payload, self.sizes, wanted).items():
                 try:
                     answers.setdefault(pid, {})[header] = LIVE_PIDS[pid][2](data)
@@ -609,7 +655,7 @@ class ELM:
                 self.can_group = False
             else:
                 self.group_size = shorter
-        else:
+        elif not self.busy_modules():
             self.group_misses += 1
             if self.group_misses >= GROUP_MISSES_ALLOWED:
                 self.can_group, self.group_off_at = False, time.monotonic()
@@ -682,7 +728,9 @@ def known_modules(vehicle):
 async def read_module_records(elm, vehicle=None):
     """Read the fault records kept inside each known module, which can include faults no longer active."""
     ids = [int(header, 16) - 8 for header in known_modules(vehicle or elm.vehicle) if re.fullmatch(r"7E[89A-F]", header)]
-    return await car_modules.scan_modules(elm, ids=ids) if ids else []
+    records = await car_modules.scan_modules(elm, ids=ids) if ids else []
+    await car_modules.read_fault_order(elm, records)
+    return records
 
 
 # Mode 06 units from SAE J1979: unit ID: (signed, scale, unit, offset)
@@ -804,7 +852,10 @@ def page_test_results(results, lang=None):
 
 def page_module_records(records, lang=None):
     return [{"module": record["hdr"], "name": t(record["name"], lang), "read_codes": record["read_codes"], "complete": record["complete"],
-             "codes": [{"code": item["code"], "short": item["code"][:5], "state": item["state"], "description": describe_dtc(item["code"][:5], lang)}
+             "refusal": t(record["refusal"], lang) if record.get("refusal") else None,
+             "first": record.get("first"), "latest": record.get("latest"),
+             "codes": [{"code": item["code"], "short": item["code"][:5], "state": item["state"], "system": car_systems.code_system(item["code"]),
+                        "details": [t(detail, lang) for detail in item.get("details", [])], "description": describe_dtc(item["code"][:5], lang)}
                        for item in record["codes"]]}
             for record in records or []]
 
@@ -857,14 +908,24 @@ async def read_freeze_frame(elm):
 async def read_identity(elm):
     """Read what identifies this car: VIN, calibration IDs and module names."""
     vehicle = {}
-    for pid, label in ((0x02, "VIN"), (0x04, "Calibration ID"), (0x06, "Calibration check"), (0x0A, "Module name")):
+    for pid, label in ((0x02, "VIN"), (0x04, "Calibration ID"), (0x0A, "Module name")):
         replies = await elm.request_all(0x09, pid)  # a module missed here would be forgotten for the session
-        if pid == 0x06:
-            vehicle[label] = {h: p[3:].hex().upper() for h, p in replies.items()}
-        else:
-            vehicle[label] = {h: decode_text(p) for h, p in replies.items()}
+        vehicle[label] = {h: decode_text(p) for h, p in replies.items()}
+    vehicle["Calibration check"] = elm.calibration
     set_car_make(make_from_vin(next(iter(vehicle["VIN"].values()), None)))
     return vehicle
+
+
+async def read_calibration_check(elm):
+    """Ask for the calibration check, once everything else has been read.
+
+    A module can go quiet for about 30 seconds working this out, answering nothing else, and asking again doesn't
+    help. So it comes last, and ELM.parsed picks up the answer whenever it arrives.
+    """
+    for _ in range(3):
+        await elm.request(0x09, 0x06)
+        if elm.busy_modules():
+            break
 
 
 async def read_this_drive(elm):
@@ -900,7 +961,7 @@ async def read_snapshot(elm):
                 more += decoded
             else:
                 raw[pid] = payload[2:].hex(" ").upper() if payload else None
-    return {
+    snapshot = {
         "module_records": await read_module_records(elm, vehicle),
         "test_results": await read_test_results(elm),
         "this_drive": this_drive,
@@ -916,6 +977,9 @@ async def read_snapshot(elm):
         "values": values,
         "raw": raw,
     }
+    if not elm.calibration:
+        await read_calibration_check(elm)
+    return snapshot
 
 
 def shown_value(value):
@@ -1133,23 +1197,89 @@ def dashboard_state(snapshot, reader, demo=False, lang=None, cars=()):
         "vehicle": {t(label, lang): modules for label, modules in snapshot["vehicle"].items()},
         "monitors": {h: {**status, "tests": [[t(name, lang), done] for name, done in status["tests"]]}
                      for h, status in snapshot["monitors"].items()},
-        "codes": {t(label, lang): {h: [{"code": c, "description": describe_dtc(c, lang)} for c in module_codes]
+        "codes": {t(label, lang): {h: [{"code": c, "description": describe_dtc(c, lang), "system": car_systems.code_system(c)}
+                                       for c in module_codes]
                                    for h, module_codes in modules.items()}
                   for label, modules in snapshot["codes"].items()},
         "freeze": freeze and {
-            "code": freeze["code"], "description": describe_dtc(freeze["code"], lang),
+            "code": freeze["code"], "description": describe_dtc(freeze["code"], lang), "system": car_systems.code_system(freeze["code"]),
+            "recheck": recheck_hint(freeze, lang),
             "values": [{"name": t(v["name"], lang), "unit": t(v["unit"], lang), "text": t(v["text"], lang)}
                        for v in freeze["values"]]},
-        "values": [{"pid": f"{pid:02X}", "name": t(LIVE_PIDS[pid][0], lang),
+        "systems": page_systems(snapshot, reader, lang),
+        "values": [{"pid": f"{pid:02X}", "name": t(LIVE_PIDS[pid][0], lang), "system": car_systems.value_system(pid),
                     "unit": "" if value == "Not reported" else t(LIVE_PIDS[pid][1], lang),
                     "value": value if isinstance(value, (int, float)) else None,
                     "text": "-" if value is None else t(format_value(value), lang),
                     "note": reader.age_note(pid, lang)}
                    for pid, value in reader.values.items()],
         "this_drive": [[t(name, lang), done] for name, done in snapshot["this_drive"] or []],
-        "more": snapshot["more"],
+        "more": [{**item, "system": car_systems.more_system(item.get("path", ""), item["name"])} for item in snapshot["more"]],
         "raw": [{"pid": f"{pid:02X}", "text": text or t("no reply", lang)} for pid, text in snapshot["raw"].items()],
     }
+
+
+def recheck_hint(freeze, lang=None):
+    """Say how to drive to recheck a fault, from the conditions saved when it was set. None if nothing useful was saved."""
+    found = {v["name"]: v["text"] for v in freeze["values"]}
+    parts = []
+    for name, text in (("Engine RPM", "engine near {value} rpm"), ("Engine load", "load near {value}%"), ("Coolant temp", "coolant near {value} C")):
+        try:
+            parts.append(t(text, lang, value=round(float(found[name]))))
+        except (KeyError, ValueError):
+            continue
+    return t("To recheck this fault after a repair, drive safely in similar conditions: {conditions}.", lang,
+             conditions=t(", ", lang).join(parts)) if parts else None
+
+
+def page_systems(snapshot, reader, lang=None):
+    """Sort everything known about the car into systems, for the Car systems page."""
+    systems = car_systems.empty_systems(lang)
+
+    def module_row(system, header, label):
+        names = snapshot["vehicle"].get("Module name", {})
+        if header in names:
+            systems[system]["values"].append({"name": t(label, lang), "text": f"{header} {names[header]}".strip(), "note": None})
+
+    module_row("engine", "7E8", "Engine module")
+    module_row("transmission", "7E9", "Transmission module")
+    for pid, value in reader.values.items():
+        unit = "" if value == "Not reported" else t(LIVE_PIDS[pid][1], lang)
+        systems[car_systems.value_system(pid)]["values"].append({
+            "name": t(LIVE_PIDS[pid][0], lang), "text": f"{'-' if value is None else t(format_value(value), lang)} {unit}".strip(),
+            "note": reader.age_note(pid, lang)})
+    systems["electrical"]["values"].append({"name": t("Voltage at adapter (approximate)", lang), "text": t(reader.voltage, lang), "note": None})
+    for item in snapshot["more"]:
+        systems[car_systems.more_system(item.get("path", ""), item["name"])]["values"].append(
+            {"name": item["name"], "text": item["text"], "note": None})
+
+    faults = {}
+
+    def add_fault(code, state, module, now):
+        fault = faults.setdefault(code, {"code": code, "description": describe_dtc(code, lang), "states": [], "modules": [], "now": False})
+        if state not in fault["states"]:
+            fault["states"].append(state)
+        if module not in fault["modules"]:
+            fault["modules"].append(module)
+        fault["now"] = fault["now"] or now
+
+    for label, modules in snapshot["codes"].items():
+        for header, module_codes in modules.items():
+            for code in module_codes:
+                add_fault(code, t(label, lang), header, True)
+    states = {"active": "Active", "stored": "Stored", "pending": "Pending", "history": "Past"}
+    for record in snapshot.get("module_records") or []:
+        for item in record["codes"]:
+            add_fault(item["code"][:5], t(states.get(item["state"], item["state"]), lang), record.get("reply_id", record["hdr"]), item["state"] != "history")
+    for code, fault in faults.items():
+        systems[car_systems.code_system(code)]["faults"].append(fault)
+
+    for header, status in snapshot["monitors"].items():
+        for name, done in status["tests"]:
+            systems[car_systems.readiness_system(name)]["checks"].append({"name": t(name, lang), "done": done, "module": header})
+    for group in page_test_results(snapshot.get("test_results"), lang):
+        systems[car_systems.test_group_system(int(group["monitor"], 16))]["results"].append(group)
+    return list(systems.values())
 
 
 def number(value):
@@ -1262,6 +1392,38 @@ class DashboardApp:
         self.activity = Activity()
         self.drive = None
         self.drive_saved_at = 0.0
+        self.link_state = "on"  # "stopping" and "off" follow the Disconnect button
+        self.stay_disconnected = False
+        self.connect_again = asyncio.Event()
+        self.connecting = None
+
+    def job_changing_car(self):
+        """A clear must finish once it has started, or the driver can't tell whether it happened."""
+        return any(job.action == "clear" and job.status in ("queued", "running") for job in self.jobs)
+
+    def disconnect(self, lang=None):
+        """Stop using the car and the adapter, and stay that way until asked. Returns why it can't, or None."""
+        if self.job_changing_car():
+            return t("Fault codes are being cleared. Wait for that to finish, then disconnect.", lang)
+        if self.link_state == "off":
+            return None
+        self.stay_disconnected = True
+        self.link_state = "stopping"
+        if self.connecting is not None:
+            self.connecting.cancel()
+        return None
+
+    def reconnect(self):
+        self.stay_disconnected = False
+        self.link_state = "on"
+        self.message = ("Looking for the adapter ...", {})
+        self.connect_again.set()
+
+    def mark_disconnected(self):
+        self.snapshot = self.reader = self.link = self.adapter = self.elm = None
+        self.message = ("Disconnected. It's safe to unplug the adapter.", {})
+        self.link_state = "off"
+        self.activity.event("Disconnected. It's safe to unplug the adapter.", "good")
 
     def start_drive(self, elm, snapshot):
         self.drive = {"id": garage.now(), "started": garage.now(), "ended": garage.now(), "seconds": 0, "adapter": elm.version,
@@ -1351,6 +1513,8 @@ class DashboardApp:
             return rows
 
         elm = self.link
+        if self.link_state == "off":
+            return [row("Status", t("Disconnected. It's safe to unplug the adapter.", lang), "good")]
         if elm is None:
             if self.adapter and self.adapter.version:
                 rows = [row("Status", t("Adapter connected, waiting for the car", lang), "bad"), *identity(self.adapter)]
@@ -1433,6 +1597,10 @@ class DashboardApp:
         except (OBDError, ValueError) as error:
             job.status = "failed"
             job.write(f"{error}\n")
+        except asyncio.CancelledError:
+            job.status = "failed"
+            job.write(t("Stopped because you disconnected.", job.lang) + "\n")
+            raise
         except Exception as error:
             job.status = "failed"
             job.write(t("Error: {error}", error=error) + "\n")
@@ -1480,6 +1648,12 @@ class DashboardApp:
             params = body.get("params") if isinstance(body.get("params"), dict) else {}
             job, refusal = self.submit(body.get("action"), params, lang)
             return (400, {"error": refusal}) if refusal else (200, job.view())
+        if method == "POST" and path == "/api/disconnect":
+            refusal = self.disconnect(lang)
+            return (409, {"error": refusal}) if refusal else (200, {"link": self.link_state})
+        if method == "POST" and path == "/api/connect":
+            self.reconnect()
+            return 200, {"link": self.link_state}
         if method == "POST" and path == "/api/download":
             name = next((car for car in car_modules.catalog() if car.lower() == str(body.get("name")).lower()), None)
             if name is None:
@@ -1521,7 +1695,8 @@ class DashboardApp:
             record = garage.load_car(key) if re.fullmatch(r"[\w-]+", key) and not self.args.demo else {}
             if not record:
                 return 404, {"error": t("Not found", lang)}
-            faults = [{**fault, "description": describe_dtc(fault["code"], lang)} for fault in garage.fault_history(record)]
+            faults = [{**fault, "description": describe_dtc(fault["code"], lang), "system": car_systems.code_system(fault["code"])}
+                      for fault in garage.fault_history(record)]
             return 200, {**record, "faults": faults, "timeline": garage.timeline(record)}
         if method == "POST" and path == "/api/car/name":
             key = str(body.get("key", ""))
@@ -1541,11 +1716,14 @@ class DashboardApp:
         if self.snapshot is None:
             text, values = self.message
             return {"connected": False, "message": t(text, lang, **values), "cars": self.cars,
-                    "device": self.device_status(lang)}
+                    "device": self.device_status(lang), "link": self.link_state}
         state = dashboard_state(self.snapshot, self.reader, self.args.demo, lang, self.cars)
         state["device"] = self.device_status(lang)
         state["alerts"] = car_alerts(self.snapshot, self.reader.values, lang, self.charging_lasting())
+        state["alerts"] += [t("Module {header} says it's busy, so its readings are paused. They usually return within a minute.", lang, header=header)
+                            for header in sorted(self.elm.busy_modules())] if self.elm else []
         state["recording"] = self.recording_status(lang)
+        state["link"] = self.link_state
         return state
 
     def start_recording(self, lang=None):
@@ -1673,15 +1851,29 @@ class DashboardApp:
             elm.device_name = "Demo"
             elm.transport.activity = self.activity
             await elm.setup()
-            await self.session(elm, self.args)
+            try:
+                await self.session(elm, self.args)
+            except asyncio.CancelledError:
+                await elm.close()
+                raise
         else:
             await connect_and_run(self.args, self.session, self.adapter_found)
 
     async def run(self):
         while True:
+            if self.stay_disconnected:
+                self.mark_disconnected()
+                self.connect_again.clear()
+                await self.connect_again.wait()
+                continue
+            self.connecting = asyncio.create_task(self.connect())
             try:
-                await self.connect()
+                await self.connecting
                 return
+            except asyncio.CancelledError:
+                if asyncio.current_task().cancelling():
+                    raise  # the app itself is closing
+                continue  # only the connection was stopped, by the Disconnect button
             except Exception as error:
                 self.snapshot = self.reader = self.link = None
                 # Only a silent car proves the adapter is still there; any other failure may mean it's gone.
@@ -1693,7 +1885,17 @@ class DashboardApp:
                     self.message = (str(error), {})
                 self.activity.event(*self.message[:1], "bad", **self.message[1])
                 print(t("Not connected: {error}", error=error), flush=True)
-            await asyncio.sleep(self.RETRY_SECONDS)
+            finally:
+                self.connecting = None
+            if not self.stay_disconnected:
+                await self.retry_wait()
+
+    async def retry_wait(self):
+        """Wait before trying again, but stop waiting at once if the Disconnect button is pressed."""
+        waited = 0.0
+        while waited < self.RETRY_SECONDS and not self.stay_disconnected:
+            await asyncio.sleep(0.2)
+            waited += 0.2
 
 
 def run_backend(args):
@@ -1852,7 +2054,7 @@ async def run_clear(elm, args):
         raise OBDError("Not clearing: the engine must be off with the ignition ON.")
     codes = await read_codes(elm)
     print_codes(codes)
-    print("\n" + t("Clearing erases these codes and their saved fault data, and resets the emissions self-tests, which then need driving to finish. It does not fix the fault."))
+    print("\n" + t("Clearing erases these codes and their saved fault data, and resets the emissions self-tests, which then need driving to finish. It does not fix the fault. Permanent codes stay until the car's own tests pass."))
     # The web app asks for the typed confirmation before it queues this command.
     answer = getattr(args, "answer", None)
     if answer is None:
@@ -1911,7 +2113,11 @@ async def connect_and_run(args, handler, on_adapter=None):
                 garage.remember_connection(elm.vehicle, elm.version, elm.protocol)
             except OSError as error:
                 print(t("Could not save this car's info: {error}", error=error))
-        await handler(elm, args)
+        try:
+            await handler(elm, args)
+        except asyncio.CancelledError:
+            await elm.close()
+            raise
 
 
 def language_from_arguments(arguments):

@@ -56,7 +56,7 @@
 
 <table>
 <tr>
-<td width="50%" valign="top"><b>تطبيق سطح مكتب</b><br>تسع صفحات: نظرة عامة مع حالة المحوّل، وبيانات مباشرة، ورموز أعطال، وأوامر، وسيارات مدعومة، وسيارات محفوظة، وبحث عن رمز، وتقارير، وسجل مباشر مع مراجعة تلقائية.</td>
+<td width="50%" valign="top"><b>تطبيق سطح مكتب</b><br>عشر صفحات: نظرة عامة مع حالة المحوّل، وأنظمة السيارة، وبيانات مباشرة، ورموز أعطال، وأوامر، وسيارات مدعومة، وسيارات محفوظة، وبحث عن رمز، وتقارير، وسجل مباشر مع مراجعة تلقائية.</td>
 <td width="50%" valign="top"><b>الأوامر داخل التطبيق</b><br>شغّل فحص البطارية والتقرير والبحث عن الوحدات وغيرها، واقرأ النتيجة في الصفحة نفسها.</td>
 </tr>
 <tr>
@@ -262,7 +262,7 @@ Many ELM327 adapters are Bluetooth LE. Windows gives them no COM port, so most O
 
 <table>
 <tr>
-<td width="50%" valign="top"><b>Desktop app</b><br>Nine pages: overview with adapter status, live data, fault codes, commands, supported cars, saved cars, code lookup, reports, and a live log with an automatic review.</td>
+<td width="50%" valign="top"><b>Desktop app</b><br>Ten pages: overview with adapter status, car systems, live data, fault codes, commands, supported cars, saved cars, code lookup, reports, and a live log with an automatic review.</td>
 <td width="50%" valign="top"><b>Commands in the app</b><br>Run a battery check, report, module scan and more, and read the result on the page.</td>
 </tr>
 <tr>

@@ -15,6 +15,7 @@ from unittest import mock
 
 import bridge
 import car_modules
+import car_systems
 import demo
 import dtc_codes
 import garage
@@ -840,7 +841,7 @@ class ModuleTests(unittest.IsolatedAsyncioTestCase):
         modules = await car_modules.scan_modules(ELM(transport))
         by_hdr = {m["hdr"]: m for m in modules}
         self.assertEqual(sorted(by_hdr), ["770", "7C6", "7D1", "7E0"])
-        self.assertEqual(by_hdr["7D1"]["codes"], [{"code": "U0123-01", "state": "active"}])
+        self.assertEqual(by_hdr["7D1"]["codes"], [{"code": "U0123-01", "state": "active", "details": []}])
         self.assertFalse(by_hdr["770"]["read_codes"])
         self.assertEqual(by_hdr["7C6"]["codes"], [{"code": "U0155", "state": "active"}])
         self.assertEqual(by_hdr["7E0"]["codes"], [])
@@ -887,7 +888,7 @@ class RecordedScanTests(unittest.TestCase):
     def test_history_codes_are_labelled_and_not_repeated(self):
         reply = parse_can(self.LINES)["7E8"][:19]
         codes = car_modules.decode_uds_codes(reply)
-        self.assertEqual(codes, [{"code": "P0455-00", "state": "history"}, {"code": "U1112-00", "state": "history"}])
+        self.assertEqual([(c["code"], c["state"]) for c in codes], [("P0455-00", "history"), ("U1112-00", "history")])
         report = car_modules.format_scan([{"hdr": "7E0", "name": "Engine", "read_codes": True, "codes": codes}],
                                          obd_tool.describe_dtc)
         self.assertIn("history", report)
@@ -1174,8 +1175,9 @@ class RecordedDieselTests(unittest.TestCase):
     def test_complete_reply_with_confirmed_codes(self):
         reply = parse_can(["7E8 10 0B 59 02 FF 20 03 00", "7E8 21 EC 07 00 00 AF 55 55"])["7E8"]
         self.assertTrue(reply.complete)
-        self.assertEqual(car_modules.decode_uds_codes(reply),
-                         [{"code": "P2003-00", "state": "stored"}, {"code": "P0700-00", "state": "active"}])
+        codes = car_modules.decode_uds_codes(reply)
+        self.assertEqual([(c["code"], c["state"]) for c in codes], [("P2003-00", "stored"), ("P0700-00", "active")])
+        self.assertEqual(codes[1]["details"], ["Asking for the warning light", "Failed on this drive"])
 
     def test_diesel_values(self):
         self.assertEqual(LIVE_PIDS[0x59][2](bytes.fromhex("0B68")), 29200)
@@ -1792,6 +1794,191 @@ class ClearTests(unittest.IsolatedAsyncioTestCase):
         with mock.patch("builtins.input", return_value="CLEAR"), self.assertRaises(OBDError):
             await obd_tool.run_clear(ELM(transport), None)
         self.assertNotIn("04", transport.sent)
+
+
+class BookFixTests(unittest.IsolatedAsyncioTestCase):
+    """Reply handling and fault details from ISO 15765."""
+
+    def test_please_wait_then_long_reply_keeps_only_the_answer(self):
+        reply = parse_can(["7E8 03 7F 19 78", "7E8 10 0A 59 02 AF 04 55 00", "7E8 21 28 07 41 00 28 00 00"])["7E8"]
+        self.assertEqual(reply.hex(" "), "59 02 af 04 55 00 28 07 41 00")
+        self.assertTrue(reply.complete)
+
+    def test_lost_or_repeated_frames_are_not_trusted(self):
+        lost = parse_can(["7E8 10 10 59 02 AF 04 55 00", "7E8 22 11 11 11 11 11 11 11", "7E8 23 22 22 22 22 22 22 22"])["7E8"]
+        self.assertFalse(lost.complete)
+        self.assertEqual(lost, bytes.fromhex("5902AF045500"))
+        repeated = parse_can(["7E8 10 0A 59 02 AF 04 55 00", "7E8 21 28 07 41 00", "7E8 21 28 07 41 00"])["7E8"]
+        self.assertFalse(repeated.complete)
+
+    def test_frame_numbers_wrap_after_15(self):
+        lines = ["7E8 10 80 " + " ".join(["01"] * 6)]
+        lines += [f"7E8 {0x20 | (n % 16):02X} " + " ".join(["02"] * 7) for n in range(1, 19)]
+        self.assertTrue(parse_can(lines)["7E8"].complete)
+
+    def test_busy_module_keeps_its_place_and_late_answer_is_kept(self):
+        elm = ELM(FakeTransport({}))
+        elm.parsed(["7E8 03 7F 09 78"])
+        self.assertEqual(elm.busy_modules(), {"7E8"})
+        elm.sources[0x0C] = "7E8"
+        for _ in range(obd_tool.SOURCE_MISSES_ALLOWED + 2):
+            self.assertIsNone(elm.from_usual_module(0x0C, {"7E9": 700}))
+        self.assertEqual(elm.sources[0x0C], "7E8")
+        elm.parsed(["7E8 10 0B 49 06 01 AA BB CC", "7E8 21 DD 00 00 00 00 00 00"])
+        self.assertEqual(elm.busy_modules(), set())
+        self.assertTrue(elm.calibration["7E8"].startswith("AABBCC"))
+
+    async def test_identity_does_not_ask_for_the_calibration_check(self):
+        transport = FakeTransport({})
+        await obd_tool.read_identity(ELM(transport))
+        self.assertNotIn("0906", transport.sent)
+
+    def test_refusal_reasons_are_named(self):
+        self.assertEqual(car_modules.refusal_reason(bytes.fromhex("7F1933")), "Locked by the maker's security")
+        self.assertEqual(car_modules.refusal_reason(bytes.fromhex("7F19EE")), "Reason not known")
+        self.assertIsNone(car_modules.refusal_reason(bytes.fromhex("5902")))
+
+    def test_first_or_latest_fault_is_decoded(self):
+        self.assertEqual(car_modules.decode_one_record(bytes.fromhex("590BAF04550020")), "P0455-00")
+        self.assertIsNone(car_modules.decode_one_record(bytes.fromhex("590BAF")))
+
+    def test_fault_pattern_tells_returning_from_steady(self):
+        history = [{"time": str(i), "codes": codes} for i, codes in enumerate((["P0300"], [], ["P0300", "P0171"], ["P0171"]))]
+        record = {"history": history, "status": {"active_codes": ["P0171"]}}
+        patterns = {fault["code"]: fault["pattern"] for fault in garage.fault_history(record)}
+        self.assertEqual(patterns, {"P0300": "returns", "P0171": "stays"})
+
+    def test_recheck_hint_uses_saved_conditions_and_skips_missing_ones(self):
+        freeze = {"values": [{"name": "Engine RPM", "text": "2,000"}, {"name": "Engine RPM", "text": "2560"}, {"name": "Coolant temp", "text": "Not reported"}]}
+        self.assertIn("2560 rpm", obd_tool.recheck_hint(freeze, "en"))
+        self.assertIsNone(obd_tool.recheck_hint({"values": []}, "en"))
+
+
+class DisconnectTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.app = obd_tool.DashboardApp(SimpleNamespace(demo=True, samples=None, interval=0, address=None))
+        self.app.RETRY_SECONDS = 0.2
+
+    async def wait_for(self, check, seconds=30):
+        for _ in range(int(seconds / 0.02)):
+            if check():
+                return
+            await asyncio.sleep(0.02)
+        self.fail("timed out")
+
+    async def test_disconnect_stops_saves_and_stays_off_until_asked(self):
+        running = asyncio.create_task(self.app.run())
+        try:
+            await self.wait_for(lambda: self.app.elm is not None and self.app.reader is not None)
+            elm = self.app.elm
+            self.assertIsNone(self.app.start_recording("en"))
+            status, reply = await self.app.api("POST", "/api/disconnect", {}, {"lang": "en"})
+            self.assertEqual((status, reply["link"]), (200, "stopping"))
+            await self.wait_for(lambda: self.app.link_state == "off")
+            self.assertIsNone(self.app.recording)
+            self.assertIsNotNone(self.app.last_summary)
+            state = self.app.state("en")
+            self.assertFalse(state["connected"])
+            self.assertEqual(state["link"], "off")
+            self.assertIn("safe to unplug", state["message"])
+            sent = elm.transport.sent
+            await asyncio.sleep(0.5)
+            self.assertEqual(elm.transport.sent, sent, "nothing more may be sent to the car")
+            self.assertIsNone(self.app.elm)
+            status, _ = await self.app.api("POST", "/api/connect", {}, {})
+            self.assertEqual(status, 200)
+            await self.wait_for(lambda: self.app.elm is not None)
+            self.assertEqual(self.app.state("en")["link"], "on")
+        finally:
+            running.cancel()
+            await asyncio.gather(running, return_exceptions=True)
+
+    async def test_disconnect_during_a_retry_wait_needs_no_connection(self):
+        self.app.connect = mock.AsyncMock(side_effect=OBDError("Adapter not found. Check it is plugged in, the ignition is ON, and no phone is connected to it."))
+        self.app.RETRY_SECONDS = 30
+        running = asyncio.create_task(self.app.run())
+        try:
+            await self.wait_for(lambda: self.app.connect.await_count == 1 and self.app.connecting is None)
+            self.assertIsNone(self.app.disconnect("en"))
+            await self.wait_for(lambda: self.app.link_state == "off", 3)
+        finally:
+            running.cancel()
+            await asyncio.gather(running, return_exceptions=True)
+
+    async def test_disconnect_waits_for_a_clear_to_finish(self):
+        job = self.app.new_job("clear", {"answer": "CLEAR"}, "en")
+        job.status = "running"
+        status, reply = await self.app.api("POST", "/api/disconnect", {}, {"lang": "en"})
+        self.assertEqual(status, 409)
+        self.assertIn("being cleared", reply["error"])
+        self.assertEqual(self.app.link_state, "on")
+
+    async def test_disconnect_closes_the_adapter_and_lets_go_of_bluetooth(self):
+        char = lambda *properties: SimpleNamespace(properties=list(properties))
+        client = mock.AsyncMock()
+        client.__aenter__.return_value = client
+        client.services = [SimpleNamespace(uuid="0000fff0-0000", characteristics=[char("notify"), char("write")])]
+        scanner = mock.Mock(find_device_by_filter=mock.AsyncMock(return_value=SimpleNamespace(name="OBD", address="AA")))
+        talking = asyncio.Event()
+
+        async def stay_connected(elm, _):
+            talking.set()
+            await asyncio.Event().wait()
+
+        args = SimpleNamespace(address=None)
+        with mock.patch("bleak.BleakClient", return_value=client), mock.patch("bleak.BleakScanner", scanner), \
+                mock.patch.object(obd_tool, "run_battery", stay_connected):
+            running = asyncio.create_task(obd_tool.connect_and_run(args, stay_connected))
+            await asyncio.wait_for(talking.wait(), 5)
+            running.cancel()
+            await asyncio.gather(running, return_exceptions=True)
+        written = [call.args[1] for call in client.write_gatt_char.await_args_list]
+        self.assertTrue(any(b"ATPC" in data for data in written), written)
+        client.__aenter__.assert_awaited_once()
+        client.__aexit__.assert_awaited_once()
+
+    async def test_closing_the_app_still_ends_the_run(self):
+        running = asyncio.create_task(self.app.run())
+        await self.wait_for(lambda: self.app.elm is not None and self.app.reader is not None)
+        self.app.disconnect("en")
+        running.cancel()
+        results = await asyncio.gather(running, return_exceptions=True)
+        self.assertIsInstance(results[0], asyncio.CancelledError)
+
+
+class CarSystemTests(unittest.TestCase):
+    def test_every_live_value_has_a_system(self):
+        self.assertEqual([pid for pid in LIVE_PIDS if pid not in car_systems.VALUE_SYSTEMS], [])
+
+    def test_codes_go_to_the_right_system(self):
+        for code, system in (("P0700", "transmission"), ("P0741-00", "transmission"), ("P0300", "engine"), ("P0171", "fuel_air"), ("P0455", "exhaust"),
+                             ("P2003", "exhaust"), ("P0562", "electrical"), ("C0035", "brakes"), ("B0001", "body"), ("U0100", "network"), ("P1234", "engine")):
+            self.assertEqual(car_systems.code_system(code), system, code)
+
+    def test_every_system_name_is_translated_and_on_the_page(self):
+        page = bridge.PAGE.read_text(encoding="utf-8")
+        for system_id, name, what in car_systems.SYSTEMS:
+            self.assertIn(name, i18n.ARABIC)
+            self.assertIn(what, i18n.ARABIC)
+            self.assertIn(f'{system_id}: "{name}"', page)
+            self.assertRegex(page, rf'\b{system_id}: "M')
+
+    def test_page_sorts_values_and_faults_into_systems(self):
+        snapshot = {"vehicle": {"Module name": {"7E8": "ECM", "7E9": "TCM"}}, "more": [{"name": "Transmission actual gear", "text": "3", "path": "Engine.Generic"}],
+                    "codes": {"Stored": {"7E8": ["P0700"]}, "Pending": {"7E8": []}}, "monitors": {"7E8": {"tests": [["Misfire", True], ["Catalyst", False]]}},
+                    "module_records": [{"hdr": "7E0", "reply_id": "7E8", "codes": [{"code": "P0455-00", "state": "history"}]}],
+                    "test_results": [{"module": "7E8", "monitor": 0x21, "test": 1, "value": 1, "low": 0, "high": 2, "unit": "", "state": "pass"}]}
+        reader = SimpleNamespace(values={0x0C: 800, 0x0D: 0}, voltage="14.1V", age_note=lambda pid, lang=None: None)
+        systems = {system["id"]: system for system in obd_tool.page_systems(snapshot, reader, "en")}
+        self.assertEqual([f["code"] for f in systems["transmission"]["faults"]], ["P0700"])
+        self.assertTrue(systems["transmission"]["faults"][0]["now"])
+        self.assertFalse(systems["exhaust"]["faults"][0]["now"])
+        self.assertIn("Transmission actual gear", [v["name"] for v in systems["transmission"]["values"]])
+        self.assertIn("7E9 TCM", [v["text"] for v in systems["transmission"]["values"]])
+        self.assertIn("Engine RPM", [v["name"] for v in systems["engine"]["values"]])
+        self.assertIn("Speed", [v["name"] for v in systems["driving"]["values"]])
+        self.assertEqual(systems["exhaust"]["checks"][0]["name"], "Catalyst")
+        self.assertEqual(len(systems["exhaust"]["results"]), 1)
 
 
 if __name__ == "__main__":

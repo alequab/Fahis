@@ -136,6 +136,17 @@ def model_year(vin):
     return 2000 + int(mark) if mark in "123456789" else None
 
 
+def fault_pattern(code, readings, present):
+    """Tell a fault that comes and goes from one that stays, using the readings saved for this car, oldest first."""
+    seen = [code in reading for reading in readings]
+    first = seen.index(True) if True in seen else None
+    if first is not None and not all(seen[first:len(seen) - seen[::-1].index(True)]):
+        return "returns"
+    if not present:
+        return "gone"
+    return "stays" if sum(seen) >= 2 else "new"
+
+
 def fault_history(record):
     """Summarise each fault code this car has had, with the ones still present first."""
     faults = {}
@@ -148,8 +159,10 @@ def fault_history(record):
     for code in present:
         faults.setdefault(code, {"code": code, "first_seen": record["status"].get("time", ""),
                                  "last_seen": record["status"].get("time", ""), "times": 1})
+    readings = [set(entry.get("codes", [])) for entry in record.get("history", [])]
     for fault in faults.values():
         fault["present"] = fault["code"] in present
+        fault["pattern"] = fault_pattern(fault["code"], readings, fault["present"])
     return sorted(faults.values(), key=lambda f: (not f["present"], f["code"]))
 
 

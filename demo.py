@@ -115,6 +115,10 @@ class DemoTransport:
             return frames("7E8", [response, 0x00]) + frames("7E9", [response, 0x00])
         if command == "1902AF":
             return frames("7E8", [0x59, 0x02, 0xAF, 0x01, 0x71, 0x00, 0x09, 0x04, 0x55, 0x00, 0x20])
+        if command == "190B":
+            return frames("7E8", [0x59, 0x0B, 0xAF, 0x04, 0x55, 0x00, 0x20])
+        if command == "190D":
+            return frames("7E8", [0x59, 0x0D, 0xAF, 0x01, 0x71, 0x00, 0x09])
         if command in DEMO_TESTS:
             return frames("7E8", DEMO_TESTS[command])
         if command == "0902":

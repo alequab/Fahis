@@ -16,20 +16,30 @@
   body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, "Segoe UI", sans-serif; }
   [hidden] { display: none !important; }
   .shell { display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: 100vh; }
-  nav { background: var(--panel); border-inline-end: 1px solid var(--line); padding: 16px 10px; position: sticky; top: 0; height: 100vh; }
+  nav { background: var(--panel); border-inline-end: 1px solid var(--line); padding: 16px 10px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  .nav-group { color: var(--muted); font-size: 12px; font-weight: 600; padding: 12px 10px 4px; }
   nav .brand { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 650; padding: 0 10px 12px; }
   nav .brand svg { width: 30px; height: 30px; flex: none; }
-  nav a { display: block; color: var(--text); text-decoration: none; padding: 9px 10px; border-radius: 8px; margin-bottom: 2px; }
+  nav a { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; padding: 8px 10px; border-radius: 8px; margin-bottom: 2px; }
+  nav a svg { width: 18px; height: 18px; flex: none; color: var(--muted); }
+  nav a[aria-current="page"] svg { color: var(--accent); }
   nav a:hover { background: var(--line); }
-  nav a[aria-current="page"] { background: var(--line); color: var(--accent); font-weight: 600; }
+  nav a[aria-current="page"] { background: var(--line); color: var(--accent); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+  [dir="rtl"] nav a[aria-current="page"] { box-shadow: inset -3px 0 0 var(--accent); }
   main { padding: 16px; max-width: 1100px; width: 100%; margin: 0 auto; min-width: 0; }
-  header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 16px; }
+  header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; margin: -16px -16px 16px; padding: 12px 16px; position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
   h1 { font-size: 22px; margin: 0; }
-  h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  h2 { font-size: 15px; font-weight: 650; color: var(--text); margin: 0 0 10px; }
+  svg.icon { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: block; }
   .header-end { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  #status { color: var(--muted); font-size: 13px; }
+  #status { color: var(--muted); font-size: 13px; display: inline-flex; align-items: center; gap: 7px; }
+  #status::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--good); flex: none; }
+  #status.lost::before { background: var(--bad); }
+  #status.off::before { background: var(--muted); }
   #status.lost { color: var(--bad); font-weight: 600; }
-  button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  button, .button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; text-decoration: none; display: inline-block; }
+  .button:hover { border-color: var(--accent); }
+  .button.primary { background: #17476b; border-color: #2a6c9c; }
   button:hover:not(:disabled) { border-color: var(--accent); }
   button:disabled { opacity: .5; cursor: not-allowed; }
   button.primary { background: #17476b; border-color: #2a6c9c; }
@@ -166,6 +176,52 @@
   .finding { font-weight: 600; margin: 0 0 8px; }
   .finding.good { color: var(--good); }
   .finding.bad { color: var(--bad); }
+  .unplug { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; border-color: #2c6b4f; background: #15291f; }
+  .unplug > div { flex: 1 1 260px; }
+  .unplug h2 { color: var(--good); font-size: 18px; margin: 0 0 4px; }
+  .unplug p { margin: 0; }
+  .unplug-mark { color: var(--good); }
+  .unplug svg { width: 36px; height: 36px; color: var(--good); flex: none; }
+  .health { display: grid; gap: 14px; border-inline-start: 4px solid var(--good); }
+  .health.attention { border-inline-start-color: var(--bad); }
+  .health-title { font-size: 20px; font-weight: 650; }
+  .health.attention .health-title { color: var(--bad); }
+  .health:not(.attention) .health-title { color: var(--good); }
+  .health-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+  .health-facts b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+  .health-facts span { color: var(--muted); font-size: 13px; }
+  .health-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .system-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .system-card { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 4px 10px; align-content: start; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; color: var(--text); text-decoration: none; transition: border-color .12s, background .12s; }
+  .system-card:hover { border-color: var(--accent); }
+  .system-card[aria-current="true"] { border-color: var(--accent); background: #1d2b38; }
+  .system-card.problem { border-color: #a8444a; }
+  .system-icon { grid-row: span 2; width: 40px; height: 40px; border-radius: 10px; background: var(--line); color: var(--accent); display: grid; place-items: center; }
+  .system-icon svg { width: 24px; height: 24px; }
+  .system-card.problem .system-icon { background: #4a1f22; color: #ffd7d9; }
+  .system-card.empty .system-icon { color: var(--muted); }
+  .system-name { font-weight: 650; }
+  .system-card .pill { justify-self: start; font-size: 12px; padding: 1px 8px; }
+  .system-what { grid-column: 1 / -1; color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .system-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .system-head h2 { margin: 0; font-size: 18px; }
+  .system-part { margin-top: 14px; }
+  .system-part h3 { font-size: 14px; color: var(--muted); font-weight: 600; margin: 0 0 6px; }
+  .system-tag { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 13px; text-decoration: none; white-space: nowrap; }
+  a.system-tag:hover { color: var(--accent); }
+  .system-tag svg { width: 15px; height: 15px; }
+  .value-group { break-inside: avoid; margin-bottom: 10px; }
+  .value-head { display: flex; align-items: center; gap: 8px; font-weight: 650; padding: 4px 0; color: var(--accent); }
+  .value-head svg { width: 18px; height: 18px; }
+  .value-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
+  .value-tools input { flex: 1 1 200px; }
+  .filter-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .filter-chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .filter-chip svg { width: 15px; height: 15px; }
+  .filter-chip[aria-pressed="true"] { background: #17476b; border-color: #2a6c9c; }
+  .fault-tags { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; grid-column: 2 / -1; }
+  .explain { display: grid; gap: 3px; color: var(--muted); font-size: 13px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   footer { color: var(--muted); font-size: 13px; padding: 4px 0 16px; }
   footer span { display: block; }
   @media (max-width: 760px) {
@@ -173,6 +229,8 @@
     nav { position: static; height: auto; border-inline-end: 0; border-bottom: 1px solid var(--line); padding: 8px; display: flex; gap: 4px; overflow-x: auto; }
     nav .brand { display: none; }
     nav a { white-space: nowrap; margin: 0; }
+    .nav-group { display: none; }
+    header { position: static; }
   }
 </style>
 </head>
@@ -192,26 +250,40 @@
       </svg>
       <span data-i18n="Fahis">Fahis</span>
     </div>
-    <a href="#/overview" data-page="overview" data-i18n="Overview">Overview</a>
-    <a href="#/live" data-page="live" data-i18n="Live data">Live data</a>
-    <a href="#/faults" data-page="faults" data-i18n="Fault codes">Fault codes</a>
-    <a href="#/commands" data-page="commands" data-i18n="Commands">Commands</a>
-    <a href="#/cars" data-page="cars" data-i18n="Supported cars">Supported cars</a>
-    <a href="#/saved" data-page="saved" data-i18n="Saved cars">Saved cars</a>
-    <a href="#/lookup" data-page="lookup" data-i18n="Code lookup">Code lookup</a>
-    <a href="#/reports" data-page="reports" data-i18n="Reports">Reports</a>
-    <a href="#/log" data-page="log" data-i18n="Live log">Live log</a>
+    <div class="nav-group" data-i18n="Your car">Your car</div>
+    <a href="#/overview" data-page="overview"><span data-icon="page_overview"></span><span data-i18n="Overview">Overview</span></a>
+    <a href="#/systems" data-page="systems"><span data-icon="page_systems"></span><span data-i18n="Car systems">Car systems</span></a>
+    <a href="#/live" data-page="live"><span data-icon="page_live"></span><span data-i18n="Live data">Live data</span></a>
+    <a href="#/faults" data-page="faults"><span data-icon="page_faults"></span><span data-i18n="Fault codes">Fault codes</span></a>
+    <div class="nav-group" data-i18n="Tools">Tools</div>
+    <a href="#/commands" data-page="commands"><span data-icon="page_commands"></span><span data-i18n="Commands">Commands</span></a>
+    <a href="#/lookup" data-page="lookup"><span data-icon="page_lookup"></span><span data-i18n="Code lookup">Code lookup</span></a>
+    <a href="#/reports" data-page="reports"><span data-icon="page_reports"></span><span data-i18n="Reports">Reports</span></a>
+    <a href="#/log" data-page="log"><span data-icon="page_log"></span><span data-i18n="Live log">Live log</span></a>
+    <div class="nav-group" data-i18n="Library">Library</div>
+    <a href="#/saved" data-page="saved"><span data-icon="page_saved"></span><span data-i18n="Saved cars">Saved cars</span></a>
+    <a href="#/cars" data-page="cars"><span data-icon="page_cars"></span><span data-i18n="Supported cars">Supported cars</span></a>
   </nav>
   <main>
     <header>
       <h1 id="page-title" data-i18n="Overview">Overview</h1>
       <div class="header-end">
         <span id="status" role="status" data-i18n="Connecting ...">Connecting ...</span>
+        <button id="link-button" type="button" class="danger" hidden></button>
         <button id="lang-toggle" type="button">العربية</button>
       </div>
     </header>
     <div id="demo-banner" hidden data-i18n="Demo mode: this is simulated data, not your car.">Demo mode: this is simulated data, not your car.</div>
     <div id="alerts" role="status"></div>
+    <div id="link-error" class="alert" role="alert" hidden></div>
+    <section id="unplug" class="unplug" role="status" hidden>
+      <span class="unplug-mark" data-icon="safe"></span>
+      <div>
+        <h2 data-i18n="Safe to unplug the adapter">Safe to unplug the adapter</h2>
+        <p data-i18n="Fahis has stopped talking to the car, saved this visit and let go of the adapter. It won't reconnect until you ask.">Fahis has stopped talking to the car, saved this visit and let go of the adapter. It won't reconnect until you ask.</p>
+      </div>
+      <button id="connect-button" type="button" class="primary" data-i18n="Connect again">Connect again</button>
+    </section>
     <section id="waiting" hidden>
       <h2 data-i18n="Not connected to a car">Not connected to a car</h2>
       <p id="waiting-message" class="dim"></p>
@@ -224,17 +296,33 @@
     </section>
 
     <div class="page" id="page-overview" hidden>
+      <div class="needs-car">
+        <section class="health" id="health"></section>
+        <div class="tiles" id="tiles"></div>
+        <div class="system-grid" id="overview-systems"></div>
+        <div class="columns">
+          <section><h2 data-i18n="Fault codes">Fault codes</h2><div id="codes-summary"></div></section>
+          <section><h2 data-i18n="Vehicle and adapter">Vehicle and adapter</h2><table id="vehicle"></table></section>
+        </div>
+      </div>
       <section>
         <h2 data-i18n="Adapter status">Adapter status</h2>
         <div class="values" id="device"></div>
         <p class="needs" data-i18n="An adapter can report any version, so this doesn't prove it's a genuine ELM327 chip.">An adapter can report any version, so this doesn't prove it's a genuine ELM327 chip.</p>
       </section>
+    </div>
+
+    <div class="page" id="page-systems" hidden>
       <div class="needs-car">
-        <div class="tiles" id="tiles"></div>
-        <div class="columns">
-          <section><h2 data-i18n="Fault codes">Fault codes</h2><div id="codes-summary"></div></section>
-          <section><h2 data-i18n="Vehicle and adapter">Vehicle and adapter</h2><table id="vehicle"></table></section>
-        </div>
+        <p class="intro" data-i18n="Choose a part of the car to see its readings, faults and self-tests together.">Choose a part of the car to see its readings, faults and self-tests together.</p>
+        <div class="system-grid" id="system-grid"></div>
+        <section id="system-detail" hidden>
+          <div class="system-head" id="system-head"></div>
+          <div id="system-faults"></div>
+          <div id="system-values"></div>
+          <div id="system-checks"></div>
+          <p class="needs" id="system-hint" hidden data-i18n="Standard OBD shows little for this system. For more, try Read a car profile on the Commands page, or Scan for other modules on the Fault codes page.">Standard OBD shows little for this system. For more, try Read a car profile on the Commands page, or Scan for other modules on the Fault codes page.</p>
+        </section>
       </div>
     </div>
 
@@ -253,7 +341,10 @@
           <div class="catalog-tools"><select id="graph-add" aria-label="Add a graph"></select></div>
           <div id="graphs"></div>
         </section>
-        <section><h2 data-i18n="All live values">All live values</h2><p class="dim" data-i18n="Engine RPM, speed, throttle and load update most often. Other values take turns, so they can be a little older.">Engine RPM, speed, throttle and load update most often. Other values take turns, so they can be a little older.</p><div class="values" id="values"></div></section>
+        <section><h2 data-i18n="All live values">All live values</h2><p class="dim" data-i18n="Engine RPM, speed, throttle and load update most often. Other values take turns, so they can be a little older.">Engine RPM, speed, throttle and load update most often. Other values take turns, so they can be a little older.</p>
+          <div class="value-tools"><input id="value-search" type="search" data-i18n-placeholder="Find a reading" placeholder="Find a reading" aria-label="Find a reading"></div>
+          <div class="filter-chips" id="value-filter"></div>
+          <div class="values" id="values"></div></section>
         <section id="more-section" hidden>
           <h2 data-i18n="More standard values">More standard values</h2>
           <p class="needs" data-i18n="From community definitions, read once when connecting. Treat any value that looks wrong as unreliable.">From community definitions, read once when connecting. Treat any value that looks wrong as unreliable.</p>
@@ -268,6 +359,11 @@
         <div class="columns">
           <section><h2 data-i18n="Fault codes">Fault codes</h2><div id="codes"></div>
             <p><button id="scan-button" type="button" data-i18n="Scan for other modules">Scan for other modules</button></p>
+            <div class="explain">
+              <span data-i18n="Pending: seen once, and the car is waiting to see it again before confirming it.">Pending: seen once, and the car is waiting to see it again before confirming it.</span>
+              <span data-i18n="Stored: confirmed by the car, and it may turn on the warning light.">Stored: confirmed by the car, and it may turn on the warning light.</span>
+              <span data-i18n="Permanent: can't be cleared with a scan tool. The car removes it after its own tests pass.">Permanent: can't be cleared with a scan tool. The car removes it after its own tests pass.</span>
+            </div>
           </section>
           <section>
             <h2 data-i18n="Emissions self-tests">Emissions self-tests</h2><div id="monitors"></div>
@@ -277,7 +373,10 @@
             </div>
           </section>
         </div>
-        <section id="freeze-section" hidden><h2 id="freeze-title" data-i18n="Freeze frame">Freeze frame</h2><div class="values" id="freeze"></div></section>
+        <section id="freeze-section" hidden><h2 id="freeze-title" data-i18n="Freeze frame">Freeze frame</h2><div class="values" id="freeze"></div>
+          <p id="freeze-recheck" hidden></p>
+          <p class="needs" data-i18n="Saved a few seconds after the fault, and many cars keep it only for the first or most serious code.">Saved a few seconds after the fault, and many cars keep it only for the first or most serious code.</p>
+        </section>
         <section id="records-section" hidden>
           <h2 data-i18n="Records inside the modules">Records inside the modules</h2>
           <p class="needs" data-i18n="Each module keeps its own fault records, which can include faults that are no longer active and don't appear in the codes above. Read when connecting.">Each module keeps its own fault records, which can include faults that are no longer active and don't appear in the codes above. Read when connecting.</p>
@@ -371,8 +470,35 @@
 const TILES = ["0C", "0D", "05", "0F", "11", "04"];
 const HISTORY = 60;
 const CATALOG_LIMIT = 200;
-const PAGES = {overview: "Overview", live: "Live data", faults: "Fault codes", commands: "Commands",
+const PAGES = {overview: "Overview", systems: "Car systems", live: "Live data", faults: "Fault codes", commands: "Commands",
                cars: "Supported cars", saved: "Saved cars", lookup: "Code lookup", reports: "Reports", log: "Live log"};
+const ICONS = {
+  engine: "M4 10h3l2-3h6v3h3l2 2v4h-2v2h-5l-2 2H8l-2-3H4zM1.5 11v6M9 4h6M12 4v3",
+  transmission: "M5 4v16M12 4v16M19 4v8H5",
+  fuel_air: "M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M3 21h12M7 7h4v4H7zM14 12h2a2 2 0 0 1 2 2v3a1.5 1.5 0 0 0 3 0V9l-3-3",
+  exhaust: "M7 17a4 4 0 0 1-.5-8A5.5 5.5 0 0 1 17 8.5 4.3 4.3 0 0 1 17 17zM8 21h2M14 21h2",
+  electrical: "M3 8h18v11H3zM7 8V5h3v3M14 8V5h3v3M6 13.5h4M8 11.5v4M14 13.5h4",
+  driving: "M4 18a9.5 9.5 0 1 1 16 0M12 14l4-5M12 14v.01",
+  brakes: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM12 5.5v.01M12 18.5v.01M5.5 12h.01M18.5 12h.01",
+  body: "M3 16v-3l2-5a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 5v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM5.5 12.5h13M7 17v2M17 17v2",
+  network: "M12 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM5 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM19 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM12 7v5M12 12l-6 5.3M12 12l6 5.3",
+  status: "M8 4h8v3H8zM6 5.5H5a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-1M8 12l2 2 4-4M8 17h8",
+  safe: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 12l3 3 5-6",
+  page_overview: "M4 18a9.5 9.5 0 1 1 16 0M12 14l4-5M12 14v.01",
+  page_systems: "M3 16v-3l2-5a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 5v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM5.5 12.5h13M7 17v2M17 17v2",
+  page_live: "M3 12h4l3-8 4 16 3-8h4",
+  page_faults: "M12 4 2.5 20h19zM12 10v5M12 17.5v.01",
+  page_commands: "M4 5h16v14H4zM8 10l3 2-3 2M13 14h3",
+  page_lookup: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-5-5",
+  page_reports: "M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h7",
+  page_log: "M4 6h16M4 12h16M4 18h10",
+  page_saved: "M6 3h12v18l-6-4-6 4z",
+  page_cars: "M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11",
+};
+const SYSTEM_NAMES = {engine: "Engine", transmission: "Transmission", fuel_air: "Fuel and air", exhaust: "Exhaust and emissions",
+                      electrical: "Battery and charging", driving: "Driving", brakes: "Brakes and chassis", body: "Body and comfort",
+                      network: "Module network", status: "Car status"};
+const FAULT_PATTERNS = {returns: ["Comes and goes", "pill warn"], stays: ["Stays on", "pill bad"], new: ["Seen once", "pill"], gone: ["No longer reported", "pill"]};
 const LIKELIHOOD = {high: "More likely", medium: "Possible", low: "Less likely"};
 const FLAGS = {mil: "Usually turns on the check engine light", emissions_relevant: "Affects emissions",
                drive_cycle_required: "May need driving to confirm a repair", limp_mode_possible: "May limit engine power"};
@@ -392,7 +518,7 @@ const ACTIONS = [
    needs: "Needs: at least 11.8 V. Running the engine is best.", cmd: ".\\obd scan"},
   {id: "profile", title: "Read a car profile", what: "Reads extra values using a community profile. Replace the name and year with your car's. Some values may not apply to your car.",
    needs: "Needs: at least 11.8 V. Running the engine is best.", cmd: ".\\obd profile --name kia-picanto --year 2017"},
-  {id: "clear", title: "Clear fault codes", what: "Clears fault codes after you type CLEAR. This doesn't fix the fault, and it resets the emissions self-tests.",
+  {id: "clear", title: "Clear fault codes", what: "Clears fault codes after you type CLEAR. This doesn't fix the fault, and it resets the emissions self-tests. Permanent codes stay until the car's own tests pass.",
    needs: "Needs: engine off and ignition ON.", cmd: ".\\obd clear", danger: true},
 ];
 const JOB_STATUS = {queued: "Queued", running: "Running", done: "Done", failed: "Failed"};
@@ -409,6 +535,24 @@ function tr(text, values) {
   let result = translations[text] || text;
   for (const [key, value] of Object.entries(values || {})) result = result.replaceAll(`{${key}}`, value);
   return result;
+}
+
+function icon(name) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "icon");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", ICONS[name] || ICONS.status);
+  svg.append(path);
+  return svg;
+}
+
+function systemTag(id, asLink = true) {
+  const tag = el(asLink ? "a" : "span", undefined, "system-tag");
+  if (asLink) tag.href = `#/systems/${id}`;
+  tag.append(icon(id), el("span", tr(SYSTEM_NAMES[id] || id)));
+  return tag;
 }
 
 function savedLanguage() {
@@ -459,6 +603,7 @@ async function setLanguage(value) {
   document.getElementById("english-note").hidden = value !== "ar";
   document.getElementById("lang-toggle").textContent = value === "ar" ? "English" : "العربية";
   lastJobs = lastCars = "";
+  drawn.clear();
   logEntries = [];
   logAfter = 0;
   fill(document.getElementById("log-lines"), []);
@@ -481,6 +626,11 @@ function openCarKey() {
   return page === "saved" && key ? decodeURIComponent(key) : null;
 }
 
+function openSystem() {
+  const [page, id] = location.hash.replace("#/", "").split("/");
+  return page === "systems" && SYSTEM_NAMES[id] ? id : null;
+}
+
 function showPage() {
   const page = currentPage();
   document.querySelectorAll(".page").forEach(node => { node.hidden = node.id !== `page-${page}`; });
@@ -499,11 +649,16 @@ function showPage() {
     renderSavedCars(lastState.cars);
   }
   if (page === "log") refreshActivity();
+  if (lastState && lastState.connected) {
+    renderSystems(lastState);
+    if (openSystem()) document.getElementById("system-detail").scrollIntoView({block: "nearest"});
+  }
 }
 
 function updateConnectionViews() {
-  const needsCar = ["overview", "live", "faults"].includes(currentPage());
-  document.getElementById("waiting").hidden = connected || !needsCar;
+  const needsCar = ["overview", "systems", "live", "faults"].includes(currentPage());
+  const off = lastState && lastState.link === "off";
+  document.getElementById("waiting").hidden = connected || !needsCar || off;
   document.querySelectorAll(".needs-car").forEach(node => { node.hidden = !connected; });
   document.getElementById("commands-offline").hidden = connected;
   document.querySelectorAll("[data-needs-connection]").forEach(node => { node.disabled = !connected; });
@@ -561,7 +716,7 @@ function codeNodes(state) {
       const link = el("button", c.code, "link");
       link.type = "button";
       link.addEventListener("click", () => openLookup(c.code));
-      line.append(link, " ", el("span", `${c.description} (${tr("Module {header}", {header: c.module})})`));
+      line.append(link, " ", el("span", `${c.description} (${tr("Module {header}", {header: c.module})})`), " ", systemTag(c.system));
       nodes.push(line);
     }
     if (answered) {
@@ -588,6 +743,10 @@ function recordLine(module, item) {
   link.addEventListener("click", () => openLookup(item.short));
   line.append(link, el("span", item.description), el("span", tr(RECORD_STATES[item.state] || item.state), `${RECORD_TONES[item.state] || "pill"} record-state`),
               el("span", tr("Module {header}", {header: module}), "sub"));
+  const tags = el("div", undefined, "fault-tags");
+  tags.append(systemTag(item.system));
+  for (const detail of item.details || []) tags.append(el("span", detail, "tag"));
+  line.append(tags);
   return line;
 }
 
@@ -600,8 +759,11 @@ function renderRecords(records) {
   for (const record of records) {
     nodes.push(...record.codes.map(item => recordLine(record.module, item)));
     if (!record.codes.length) {
-      nodes.push(row(record.name, tr(record.read_codes ? "No records" : "This module refused the request"), record.read_codes ? "good" : "dim"));
+      const refused = record.refusal ? tr("This module refused the request: {reason}", {reason: record.refusal}) : tr("This module refused the request");
+      nodes.push(row(record.name, record.read_codes ? tr("No records") : refused, record.read_codes ? "good" : "dim"));
     }
+    if (record.first) nodes.push(row(tr("First fault in module {header}", {header: record.module}), record.first));
+    if (record.latest) nodes.push(row(tr("Latest fault in module {header}", {header: record.module}), record.latest));
     if (!record.complete) nodes.push(el("p", tr("Module {header}'s reply was cut off, so its list may be incomplete.", {header: record.module}), "dim"));
   }
   fill(document.getElementById("records"), nodes);
@@ -869,6 +1031,11 @@ async function renderCarPage(key, summary) {
                 el("span", tr(fault.present ? "Present now" : "Not present now"), fault.present ? "pill bad" : "pill"),
                 el("span", tr("First seen {first}, last seen {last}, seen {times} time(s)",
                               {first: shortTime(fault.first_seen), last: shortTime(fault.last_seen), times: fault.times}), "sub"));
+    const tags = el("div", undefined, "fault-tags");
+    const pattern = FAULT_PATTERNS[fault.pattern];
+    tags.append(systemTag(fault.system, false));
+    if (pattern) tags.append(el("span", tr(pattern[0]), pattern[1]));
+    line.append(tags);
     faults.append(line);
   }
 
@@ -1169,24 +1336,205 @@ async function runLookup(code) {
   }
 }
 
+const drawn = new Map();
+let valueFilter = "all";
+
+// Clickable things shouldn't be rebuilt under the pointer each second, so only redraw what changed.
+function fillIfChanged(id, signature, build) {
+  if (drawn.get(id) === signature) return;
+  drawn.set(id, signature);
+  fill(document.getElementById(id), build());
+}
+
+function systemStatus(system) {
+  const now = system.faults.filter(fault => fault.now).length;
+  const past = system.faults.length - now;
+  const outside = system.results.flatMap(group => group.tests).filter(test => test.state === "fail").length;
+  if (now) return [tr("{count} fault(s)", {count: now}), "pill bad", "problem"];
+  if (outside) return [tr("{count} outside limits", {count: outside}), "pill warn", ""];
+  if (past) return [tr("{count} past fault(s)", {count: past}), "pill warn", ""];
+  if (system.values.length) return [tr("{count} reading(s)", {count: system.values.length}), "pill", ""];
+  if (system.checks.length) return [tr("{count} self-test(s)", {count: system.checks.length}), "pill", ""];
+  return [tr("Nothing reported"), "pill", "empty"];
+}
+
+function systemCard(system, selected) {
+  const [text, tone, mood] = systemStatus(system);
+  const card = el("a", undefined, `system-card ${mood}`);
+  card.href = `#/systems/${system.id}`;
+  if (selected) card.setAttribute("aria-current", "true");
+  const badge = el("span", undefined, "system-icon");
+  badge.append(icon(system.id));
+  card.append(badge, el("span", system.name, "system-name"), el("span", text, tone), el("span", system.what, "system-what"));
+  return card;
+}
+
+function renderSystemGrid(id, systems, selected) {
+  const signature = JSON.stringify([systems.map(system => [system.id, systemStatus(system)]), selected, language]);
+  fillIfChanged(id, signature, () => systems.map(system => systemCard(system, system.id === selected)));
+}
+
+function part(title, nodes) {
+  const node = el("div", undefined, "system-part");
+  node.append(el("h3", title), ...nodes);
+  return node;
+}
+
+function renderSystems(state) {
+  renderSystemGrid("overview-systems", state.systems, null);
+  const open = openSystem();
+  renderSystemGrid("system-grid", state.systems, open);
+  const detail = document.getElementById("system-detail");
+  detail.hidden = !open;
+  if (!open) return;
+  const system = state.systems.find(item => item.id === open);
+  fillIfChanged("system-head", JSON.stringify([open, language]), () => {
+    const badge = el("span", undefined, "system-icon");
+    badge.append(icon(open));
+    const titles = el("div");
+    titles.append(el("h2", system.name), el("div", system.what, "dim"));
+    return [badge, titles];
+  });
+  const freeze = state.freeze && state.freeze.system === open ? state.freeze : null;
+  fillIfChanged("system-faults", JSON.stringify([system.faults, freeze && freeze.code, open, language]), () => {
+    if (!system.faults.length) return [];
+    return [part(tr("Faults"), system.faults.map(fault => {
+      const line = el("div", undefined, "fault");
+      const link = el("button", fault.code, "link");
+      link.type = "button";
+      link.addEventListener("click", () => openLookup(fault.code));
+      line.append(link, el("span", fault.description), el("span", fault.states.join(", "), fault.now ? "pill bad" : "pill"),
+                  el("span", tr("Module {header}", {header: fault.modules.join(", ")}), "sub"));
+      return line;
+    }))];
+  });
+  const rows = system.values.map(v => row(v.name, v.note ? `${v.text} (${v.note})` : v.text, v.note ? "stale" : ""));
+  const box = el("div", undefined, "values");
+  box.append(...rows);
+  const freezeRows = freeze ? freeze.values.map(v => row(v.name, `${v.text} ${v.unit}`.trim())) : [];
+  fill(document.getElementById("system-values"), [
+    ...(rows.length ? [part(tr("Readings"), [box])] : []),
+    ...(freeze ? [part(tr("Freeze frame for {code}: {description}", {code: freeze.code, description: freeze.description}), freezeRows)] : []),
+    ...(!rows.length && !system.faults.length && !system.checks.length && !system.results.length ? [el("p", tr("The car didn't report anything for this system."), "dim")] : []),
+  ]);
+  fillIfChanged("system-checks", JSON.stringify([system.checks, system.results, open, language]), () => {
+    const nodes = [];
+    if (system.checks.length) {
+      nodes.push(part(tr("Emissions self-tests"), system.checks.map(check =>
+        row(`${check.name} (${check.module})`, tr(check.done ? "Finished" : "Not finished"), check.done ? "good" : "bad"))));
+    }
+    if (system.results.length) {
+      nodes.push(part(tr("Detailed self-test results"), system.results.flatMap(group => group.tests.map(test => {
+        const line = el("div", undefined, "test-row");
+        line.append(el("span", `${group.name}, ${test.test}`, "dim"), el("span", test.value, "num"), el("span", test.limits, "num dim"),
+                    el("span", tr(TEST_STATES[test.state]), TEST_TONES[test.state]));
+        return line;
+      }))));
+    }
+    return nodes;
+  });
+  document.getElementById("system-hint").hidden = !system.needs_profile;
+}
+
+function renderHealth(state) {
+  const faults = state.systems.flatMap(system => system.faults).filter(fault => fault.now).length;
+  const light = Object.values(state.monitors).some(monitor => monitor.mil);
+  const tests = Object.values(state.monitors).flatMap(monitor => monitor.tests);
+  const attention = light || faults > 0;
+  const fact = (value, label) => {
+    const node = el("div");
+    node.append(el("b", value), el("span", label));
+    return node;
+  };
+  const box = document.getElementById("health");
+  box.classList.toggle("attention", attention);
+  const signature = JSON.stringify([attention, light, faults, tests.filter(test => test[1]).length, tests.length, state.voltage, language]);
+  fillIfChanged("health", signature, () => {
+    const facts = el("div", undefined, "health-facts");
+    facts.append(fact(tr(light ? "ON" : "off"), tr("Check engine light")), fact(String(faults), tr("Faults reported now")),
+                 fact(`${tests.filter(test => test[1]).length} / ${tests.length}`, tr("Self-tests finished")), fact(state.voltage, tr("Voltage at adapter (approximate)")));
+    const actions = el("div", undefined, "health-actions");
+    const faultsLink = Object.assign(el("a", tr("See fault codes"), attention ? "button primary" : "button"), {href: "#/faults"});
+    const systemsLink = Object.assign(el("a", tr("Explore car systems"), attention ? "button" : "button primary"), {href: "#/systems"});
+    actions.append(faultsLink, systemsLink);
+    return [el("div", tr(attention ? "Needs attention" : "No faults reported"), "health-title"), facts, actions];
+  });
+}
+
+function renderValueFilter(state) {
+  const used = new Set([...state.values, ...state.more].map(item => item.system));
+  if (valueFilter !== "all" && !used.has(valueFilter)) valueFilter = "all";
+  const ids = Object.keys(SYSTEM_NAMES).filter(id => used.has(id));
+  fillIfChanged("value-filter", JSON.stringify([ids, valueFilter, language]), () => ["all", ...ids].map(id => {
+    const chip = el("button", undefined, "filter-chip");
+    chip.type = "button";
+    chip.setAttribute("aria-pressed", String(id === valueFilter));
+    if (id !== "all") chip.append(icon(id));
+    chip.append(el("span", tr(id === "all" ? "All" : SYSTEM_NAMES[id])));
+    chip.addEventListener("click", () => {
+      valueFilter = id;
+      render(lastState);
+    });
+    return chip;
+  }));
+}
+
+function groupedValues(items, makeRow) {
+  const search = document.getElementById("value-search").value.trim().toLowerCase();
+  const wanted = items.filter(item => (valueFilter === "all" || item.system === valueFilter) && (!search || item.name.toLowerCase().includes(search)));
+  return Object.keys(SYSTEM_NAMES).filter(id => wanted.some(item => item.system === id)).map(id => {
+    const group = el("div", undefined, "value-group");
+    const head = el("div", undefined, "value-head");
+    head.append(icon(id), el("span", tr(SYSTEM_NAMES[id])));
+    group.append(head, ...wanted.filter(item => item.system === id).map(makeRow));
+    return group;
+  });
+}
+
+function renderLink(state) {
+  const button = document.getElementById("link-button");
+  const off = state.link === "off";
+  const stopping = state.link === "stopping";
+  button.hidden = off;
+  button.disabled = stopping;
+  button.textContent = tr(stopping ? "Disconnecting ..." : "Disconnect");
+  document.getElementById("unplug").hidden = !off;
+  if (off || stopping) document.getElementById("link-error").hidden = true;
+}
+
+async function changeLink(path) {
+  const problem = document.getElementById("link-error");
+  problem.hidden = true;
+  try {
+    await post(path, {lang: language});
+  } catch (error) {
+    problem.textContent = error.message;
+    problem.hidden = false;
+  }
+}
+
 function render(state) {
   lastState = state;
   connected = state.connected;
+  renderLink(state);
   const status = document.getElementById("status");
   renderSavedCars(state.cars);
   fill(document.getElementById("device"), state.device.map(item => row(item.label, item.text, item.tone)));
   updateConnectionViews();
   fill(document.getElementById("alerts"), (state.alerts || []).map(text => el("div", text, "alert")));
   if (!state.connected) {
-    status.textContent = tr("Not connected");
-    status.className = "lost";
+    status.textContent = tr(state.link === "off" ? "Disconnected" : "Not connected");
+    status.className = state.link === "off" ? "off" : "lost";
     document.getElementById("waiting-message").textContent = state.message;
     document.getElementById("demo-banner").hidden = true;
     return;
   }
-  status.textContent = tr("Connected, updated {time}", {time: state.time});
+  status.textContent = state.link === "stopping" ? tr("Disconnecting ...") : tr("Connected, updated {time}", {time: state.time});
   status.className = "";
   document.getElementById("demo-banner").hidden = !state.demo;
+  renderHealth(state);
+  renderSystems(state);
+  renderValueFilter(state);
   renderTiles(state.values);
   fill(document.getElementById("codes"), codeNodes(state));
   fill(document.getElementById("codes-summary"), codeNodes(state));
@@ -1194,14 +1542,15 @@ function render(state) {
   renderTests(state.test_results || []);
   renderMonitors(state.monitors);
   renderVehicle(state);
-  fill(document.getElementById("values"), state.values.map(v => row(v.name, valueText(v), v.note ? "stale" : "")));
+  const shownValues = groupedValues(state.values, v => row(v.name, valueText(v), v.note ? "stale" : ""));
+  fill(document.getElementById("values"), shownValues.length ? shownValues : [el("p", tr("No readings match."), "dim")]);
   renderGraphs(state.values);
   renderRecording(state.recording);
   document.getElementById("this-drive-section").hidden = !state.this_drive.length;
   fill(document.getElementById("this-drive"), state.this_drive.map(([name, done]) =>
     row(name, tr(done ? "Finished" : "Not finished"), done ? "good" : "bad")));
   document.getElementById("more-section").hidden = !state.more.length;
-  fill(document.getElementById("more"), state.more.map(item => row(item.name, item.text)));
+  fill(document.getElementById("more"), groupedValues(state.more, item => row(item.name, item.text)));
   document.getElementById("raw-section").hidden = !state.raw.length;
   fill(document.getElementById("raw"), state.raw.map(r => row(`PID ${r.pid}`, r.text)));
   document.getElementById("freeze-section").hidden = !state.freeze;
@@ -1209,6 +1558,9 @@ function render(state) {
     document.getElementById("freeze-title").textContent =
       tr("Freeze frame for {code}: {description}", {code: state.freeze.code, description: state.freeze.description});
     fill(document.getElementById("freeze"), state.freeze.values.map(v => row(v.name, `${v.text} ${v.unit}`.trim())));
+    const recheck = document.getElementById("freeze-recheck");
+    recheck.hidden = !state.freeze.recheck;
+    recheck.textContent = state.freeze.recheck || "";
   }
 }
 
@@ -1435,6 +1787,10 @@ document.getElementById("lang-toggle").addEventListener("click", () => {
   setLanguage(next);
 });
 document.getElementById("scan-button").addEventListener("click", () => runAction("scan"));
+document.getElementById("link-button").addEventListener("click", () => changeLink("/api/disconnect"));
+document.getElementById("connect-button").addEventListener("click", () => changeLink("/api/connect"));
+document.getElementById("value-search").addEventListener("input", () => { if (lastState && lastState.connected) render(lastState); });
+document.querySelectorAll("[data-icon]").forEach(node => node.replaceWith(icon(node.dataset.icon)));
 document.getElementById("recording-button").addEventListener("click", toggleRecording);
 document.getElementById("graph-add").addEventListener("change", event => {
   if (event.target.value) setGraphs([...chosenGraphs, event.target.value]);

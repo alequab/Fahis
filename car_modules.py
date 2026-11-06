@@ -32,6 +32,22 @@ MAX_SILENT = 3
 # bytes from a real engine module, which came back cut off after the first frame.
 UDS_READ_CODES = "1902AF"
 KWP_READ_CODES = "1800FF00"
+FIRST_FAULT_REQUEST, LATEST_FAULT_REQUEST = "190B", "190D"
+
+# Why a module refused a request, from its reply 7F <service> <reason>.
+REFUSALS = {
+    0x10: "General refusal", 0x11: "Request type not supported", 0x12: "Request option not supported",
+    0x13: "Request not understood", 0x14: "Reply would be too long", 0x21: "Busy", 0x22: "Conditions not right, such as engine state",
+    0x24: "Requests in the wrong order", 0x25: "A connected part didn't answer", 0x26: "A fault prevents this request",
+    0x31: "Value not available", 0x33: "Locked by the maker's security", 0x37: "Asked again too soon", 0x78: "Still working",
+    0x7E: "Not available in normal mode", 0x7F: "Not available in normal mode",
+}
+# Reasons that mean ask again, with the seconds to wait first.
+TRY_AGAIN = {0x21: 0.2, 0x78: 1}
+
+# What the other status bits of a UDS fault record mean. See ISO 15765-3 for the bits.
+STATUS_DETAILS = ((0x80, "Asking for the warning light"), (0x02, "Failed on this drive"),
+                  (0x40, "Test not finished on this drive"), (0x10, "Test not finished since codes were cleared"))
 
 # Request IDs to try. Replies come from the ID plus 8, so only low digits 0-7 can be requests.
 SCAN_IDS = [i for i in range(0x700, 0x7E8) if i & 0x0F <= 7]
@@ -257,7 +273,7 @@ def decode_standard(pid, data):
             continue
         value = decode_signal(signal["fmt"], data)
         if value is not None:
-            results.append({"name": signal["name"], "text": format_signal(signal["fmt"], value)})
+            results.append({"name": signal["name"], "text": format_signal(signal["fmt"], value), "path": signal.get("path", "")})
     return results
 
 
@@ -267,7 +283,7 @@ def decode_uds_codes(payload):
     Modules can repeat a code, so each is listed once with its most serious state. A code with
     none of the active, confirmed or pending bits only failed at some point since the last clear.
     """
-    worst = {}
+    worst, details = {}, {}
     order = ("history", "pending", "stored", "active")
     body = payload[3:]
     for i in range(0, len(body) - 3, 4):
@@ -277,7 +293,23 @@ def decode_uds_codes(payload):
             code = f"{dtc_name(body[i], body[i + 1])}-{body[i + 2]:02X}"
             if order.index(state) >= order.index(worst.get(code, "history")):
                 worst[code] = state
-    return [{"code": code, "state": state} for code, state in worst.items()]
+            found = details.setdefault(code, [])
+            found += [text for bit, text in STATUS_DETAILS if status & bit and text not in found]
+    return [{"code": code, "state": state, "details": details[code]} for code, state in worst.items()]
+
+
+def refusal_reason(reply):
+    """Name the reason in a 7F refusal, or None if this isn't one."""
+    if not reply or reply[0] != 0x7F or len(reply) < 3:
+        return None
+    return REFUSALS.get(reply[2], "Reason not known")
+
+
+def decode_one_record(reply):
+    """Decode a 59 reply holding a single fault, such as the first or latest. None if there's no such fault."""
+    if reply and reply[0] == 0x59 and len(reply) >= 7 and (reply[3] or reply[4]):
+        return f"{dtc_name(reply[3], reply[4])}-{reply[5]:02X}"
+    return None
 
 
 def decode_kwp_codes(payload):
@@ -302,6 +334,9 @@ async def scan_modules(elm, ids=SCAN_IDS, on_progress=None):
             reply = await elm.module_request(hdr, rax, UDS_READ_CODES, wait=1)
             if reply is None:
                 continue
+            if not getattr(reply, "complete", True):
+                # A long list needs the adapter to tell the module to carry on, which isn't automatic for every address.
+                reply = await elm.module_request(hdr, rax, UDS_READ_CODES, fc=True, wait=2) or reply
             module = {"hdr": hdr, "reply_id": rax, "name": LIKELY_MODULES.get(hdr, "Unknown module"),
                       "codes": [], "read_codes": True, "complete": getattr(reply, "complete", True)}
             if reply[0] == 0x59:
@@ -312,6 +347,7 @@ async def scan_modules(elm, ids=SCAN_IDS, on_progress=None):
                     module["codes"] = decode_kwp_codes(older)
                 else:
                     module["read_codes"] = False
+                    module["refusal"] = refusal_reason(reply)
             found.append(module)
     finally:
         await elm.restore_addressing()
@@ -324,6 +360,8 @@ def format_scan(modules, descriptions):
         lines.append(f"{module['hdr']}  {t(module['name'])}")
         if not module["read_codes"]:
             lines.append("  " + t("Answered, but refused to share fault codes with these commands"))
+            if module.get("refusal"):
+                lines.append("  " + t("Reason: {reason}", reason=t(module["refusal"])))
         elif not module.get("complete", True):
             lines.append("  " + t("The reply was cut off, so this list may be missing codes. Run the codes command to check."))
         elif not module["codes"]:
@@ -338,6 +376,19 @@ def format_scan(modules, descriptions):
     lines += [t("Module names are likely roles based on a Kia Picanto profile, not confirmed for your car."),
               t("Modules can also exist without answering here, so this list may be incomplete.")]
     return "\n".join(lines)
+
+
+async def read_fault_order(elm, records):
+    """Add the first and latest fault to each module record that has faults, if the module can say."""
+    try:
+        for record in records:
+            if not record["codes"]:
+                continue
+            for key, request in (("first", FIRST_FAULT_REQUEST), ("latest", LATEST_FAULT_REQUEST)):
+                record[key] = decode_one_record(await elm.module_request(record["hdr"], record["reply_id"], request))
+    finally:
+        if any(record["codes"] for record in records):
+            await elm.restore_addressing()
 
 
 async def read_profile(elm, profile, year=None, on_progress=None):
