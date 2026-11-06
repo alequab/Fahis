@@ -1167,7 +1167,7 @@ def column_title(pid, lang=None):
 async def run_log(elm, args):
     os.system("")
     pids = await live_pids(elm)
-    LOG_DIR.mkdir(exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
     path = LOG_DIR / f"drive_{datetime.now():%Y%m%d_%H%M%S}.csv"
     # utf-8-sig lets Excel read Arabic headers correctly.
     with path.open("w", newline="", encoding="utf-8-sig") as log_file:
@@ -1732,7 +1732,7 @@ class DashboardApp:
             return t("Not connected to a car", lang)
         if self.recording:
             return t("Recording is already running.", lang)
-        LOG_DIR.mkdir(exist_ok=True)
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
         path = LOG_DIR / f"drive_{datetime.now():%Y%m%d_%H%M%S}.csv"
         log_file = path.open("w", newline="", encoding="utf-8-sig")
         writer = csv.writer(log_file)

@@ -1867,6 +1867,11 @@ class DisconnectTests(unittest.IsolatedAsyncioTestCase):
         self.fail("timed out")
 
     async def test_disconnect_stops_saves_and_stays_off_until_asked(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        logs = mock.patch.object(obd_tool, "LOG_DIR", Path(folder.name) / "new" / "logs")
+        logs.start()
+        self.addCleanup(logs.stop)
         running = asyncio.create_task(self.app.run())
         try:
             await self.wait_for(lambda: self.app.elm is not None and self.app.reader is not None)
