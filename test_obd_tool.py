@@ -1854,6 +1854,38 @@ class BookFixTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(obd_tool.recheck_hint({"values": []}, "en"))
 
 
+class EcuSectionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_details_are_read_only_and_stop_at_a_silent_computer(self):
+        elm = ELM(demo.DemoTransport())
+        details = await car_modules.read_ecu_details(elm, ["7E8", "7E9"])
+        self.assertEqual(details["7E8"][0], {"label": "Part number", "text": "DEMO-PART-1"})
+        self.assertEqual(details["7E9"], [])
+        for request, _ in car_modules.ECU_DETAILS:
+            self.assertIn(request[:2], car_modules.READ_ONLY_SERVICES)
+
+    def test_binary_details_show_as_hex(self):
+        self.assertEqual(car_modules.readable_detail(b"AB-12\x00\xff"), "AB-12")
+        self.assertEqual(car_modules.readable_detail(bytes.fromhex("01FE")), "01 FE")
+
+    def test_page_lists_each_computer_with_its_state(self):
+        snapshot = {"vehicle": {"Module name": {"7E8": "ECM", "7E9": "TCM", "7EA": "OLD"}, "Calibration ID": {"7E8": "CAL"}, "Calibration check": {}},
+                    "monitors": {"7E8": {}, "7E9": {}}, "codes": {"Stored": {"7E9": ["P0700"]}},
+                    "ecu_details": {"7E8": [{"label": "Part number", "text": "P1"}]}}
+        ecus = {ecu["header"]: ecu for ecu in obd_tool.page_ecus(snapshot, {"7E9"}, "en")}
+        self.assertEqual(ecus["7E8"]["role"], "Engine computer")
+        self.assertEqual((ecus["7E8"]["state"], ecus["7E9"]["state"], ecus["7EA"]["state"]), ("answering", "busy", "silent"))
+        self.assertEqual(ecus["7EA"]["role"], "Computer 7EA")
+        self.assertEqual(ecus["7E9"]["faults"], ["P0700"])
+        self.assertIn({"label": "Part number", "text": "P1"}, ecus["7E8"]["rows"])
+        self.assertIn({"label": "Calibration ID", "text": "CAL"}, ecus["7E8"]["rows"])
+
+    def test_start_screen_offers_both_choices_and_is_the_first_page(self):
+        page = bridge.PAGE.read_text(encoding="utf-8")
+        self.assertIn('return PAGES[page] ? page : "home";', page)
+        self.assertRegex(page, r'class="home-card" href="#/overview"')
+        self.assertRegex(page, r'class="home-card" href="#/ecu"')
+
+
 class DisconnectTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.app = obd_tool.DashboardApp(SimpleNamespace(demo=True, samples=None, interval=0, address=None))

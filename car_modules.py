@@ -33,6 +33,8 @@ MAX_SILENT = 3
 UDS_READ_CODES = "1902AF"
 KWP_READ_CODES = "1800FF00"
 FIRST_FAULT_REQUEST, LATEST_FAULT_REQUEST = "190B", "190D"
+# Standard identity values a computer can report about itself.
+ECU_DETAILS = (("22F187", "Part number"), ("22F189", "Software version"), ("22F191", "Hardware version"))
 
 # Why a module refused a request, from its reply 7F <service> <reason>.
 REFUSALS = {
@@ -376,6 +378,35 @@ def format_scan(modules, descriptions):
     lines += [t("Module names are likely roles based on a Kia Picanto profile, not confirmed for your car."),
               t("Modules can also exist without answering here, so this list may be incomplete.")]
     return "\n".join(lines)
+
+
+def readable_detail(data):
+    """Show a reported value as text when it is text, and as hex when it isn't."""
+    text = bytes(data).rstrip(b"\x00\xff ").decode("ascii", "replace")
+    if text and all(32 <= ord(character) < 127 for character in text):
+        return text
+    return bytes(data).hex(" ").upper() if data else None
+
+
+async def read_ecu_details(elm, headers):
+    """Read what each computer reports about itself. Returns {reply header: [{label, text}]}."""
+    details = {}
+    try:
+        for header in headers:
+            found = details.setdefault(header, [])
+            request_id = f"{int(header, 16) - 8:03X}"
+            for request, label in ECU_DETAILS:
+                reply = await elm.module_request(request_id, header, request)
+                if reply is None:
+                    break  # a silent computer won't answer the rest either
+                if reply.startswith(b"\x62" + bytes.fromhex(request[2:])) and getattr(reply, "complete", True):
+                    text = readable_detail(reply[3:])
+                    if text:
+                        found.append({"label": label, "text": text})
+    finally:
+        if headers:
+            await elm.restore_addressing()
+    return details
 
 
 async def read_fault_order(elm, records):

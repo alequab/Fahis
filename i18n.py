@@ -8,6 +8,23 @@ LANGUAGES = ("en", "ar")
 
 ARABIC = {
     # Car systems and fault details
+    'Home': 'الرئيسية',
+    'ECU': 'حاسوب السيارة',
+    'What would you like to do?': 'ماذا تريد أن تفعل؟',
+    'Live monitoring and fault clearing': 'المراقبة المباشرة ومسح الأعطال',
+    'Watch live readings and car systems, read fault codes, and clear them when you choose.': 'تابع القراءات المباشرة وأنظمة السيارة، واقرأ رموز الأعطال وامسحها عندما تختار.',
+    "See the car's computers: their names, calibration, software and whether they answer.": 'اعرض حواسيب السيارة: أسماءها ومعايرتها وبرامجها وهل تستجيب.',
+    "Read only. Fahis shows what each computer reports about itself. It doesn't copy or change the ECU's program.": 'للقراءة فقط. يعرض فاحص ما يبلّغ به كل حاسوب عن نفسه، ولا ينسخ برنامج الحاسوب ولا يغيّره.',
+    'Answering': 'يستجيب',
+    "Didn't answer this time": 'لم يستجب هذه المرة',
+    'Address': 'العنوان',
+    "This computer hasn't reported any details.": 'لم يبلّغ هذا الحاسوب عن أي تفاصيل.',
+    'Engine computer': 'حاسوب المحرك',
+    'Transmission computer': 'حاسوب ناقل الحركة',
+    'Computer {header}': 'الحاسوب {header}',
+    'Part number': 'رقم القطعة',
+    'Software version': 'إصدار البرنامج',
+    'Hardware version': 'إصدار العتاد',
     "Disconnected": "غير متصل",
     'Disconnect': 'قطع الاتصال',
     'Disconnecting ...': 'جارٍ قطع الاتصال ...',

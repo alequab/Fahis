@@ -964,6 +964,7 @@ async def read_snapshot(elm):
     snapshot = {
         "module_records": await read_module_records(elm, vehicle),
         "test_results": await read_test_results(elm),
+        "ecu_details": await car_modules.read_ecu_details(elm, [h for h in known_modules(vehicle) if re.fullmatch(r"7E[89A-F]", h)]),
         "this_drive": this_drive,
         "more": more,
         "adapter": elm.version,
@@ -1207,6 +1208,7 @@ def dashboard_state(snapshot, reader, demo=False, lang=None, cars=()):
             "values": [{"name": t(v["name"], lang), "unit": t(v["unit"], lang), "text": t(v["text"], lang)}
                        for v in freeze["values"]]},
         "systems": page_systems(snapshot, reader, lang),
+        "ecus": page_ecus(snapshot, getattr(getattr(reader, "elm", None), "busy_modules", set)(), lang),
         "values": [{"pid": f"{pid:02X}", "name": t(LIVE_PIDS[pid][0], lang), "system": car_systems.value_system(pid),
                     "unit": "" if value == "Not reported" else t(LIVE_PIDS[pid][1], lang),
                     "value": value if isinstance(value, (int, float)) else None,
@@ -1230,6 +1232,27 @@ def recheck_hint(freeze, lang=None):
             continue
     return t("To recheck this fault after a repair, drive safely in similar conditions: {conditions}.", lang,
              conditions=t(", ", lang).join(parts)) if parts else None
+
+
+ECU_ROLES = {"7E8": ("Engine computer", "engine"), "7E9": ("Transmission computer", "transmission")}
+
+
+def page_ecus(snapshot, busy=(), lang=None):
+    """Describe each computer that has answered on this car, from what it reports about itself. Nothing here writes to it."""
+    vehicle = snapshot["vehicle"]
+    ecus = []
+    for header in sorted({*known_modules(vehicle), *snapshot["monitors"]}):
+        role, icon = ECU_ROLES.get(header, ("Computer {header}", "ecu"))
+        rows = []
+        for label, field in (("Module name", "Module name"), ("Calibration ID", "Calibration ID"), ("Calibration check", "Calibration check")):
+            text = vehicle.get(field, {}).get(header)
+            if text:
+                rows.append({"label": t(label, lang), "text": text})
+        rows += [{"label": t(item["label"], lang), "text": item["text"]} for item in (snapshot.get("ecu_details") or {}).get(header, [])]
+        faults = sorted({code for modules in snapshot["codes"].values() for code in modules.get(header, [])})
+        state = "busy" if header in busy else "answering" if header in snapshot["monitors"] else "silent"
+        ecus.append({"header": header, "role": t(role, lang, header=header), "icon": icon, "state": state, "rows": rows, "faults": faults})
+    return ecus
 
 
 def page_systems(snapshot, reader, lang=None):

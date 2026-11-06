@@ -63,6 +63,10 @@ DEMO_TESTS = {
 }
 
 
+# What the simulated engine computer reports about itself.
+DEMO_ECU = {"22F187": b"DEMO-PART-1", "22F189": b"DEMO-SW-2.0", "22F191": b"DEMO-HW-1.0"}
+
+
 def frames(header, payload):
     """Format a reply as CAN lines, splitting long ones as a real car does."""
     hexed = lambda data: " ".join(f"{b:02X}" for b in data)
@@ -115,6 +119,12 @@ class DemoTransport:
             return frames("7E8", [response, 0x00]) + frames("7E9", [response, 0x00])
         if command == "1902AF":
             return frames("7E8", [0x59, 0x02, 0xAF, 0x01, 0x71, 0x00, 0x09, 0x04, 0x55, 0x00, 0x20])
+        if command == "0904":
+            return frames("7E8", [0x49, 0x04, 0x01] + list(b"DEMO-CAL-0001".ljust(16, b"\x00")))
+        if command == "0906":
+            return frames("7E8", [0x49, 0x06, 0x01, 0x12, 0x34, 0xAB, 0xCD])
+        if command in DEMO_ECU:
+            return frames("7E8", [0x62, 0xF1, int(command[4:], 16)] + list(DEMO_ECU[command]))
         if command == "190B":
             return frames("7E8", [0x59, 0x0B, 0xAF, 0x04, 0x55, 0x00, 0x20])
         if command == "190D":

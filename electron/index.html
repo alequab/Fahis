@@ -182,6 +182,23 @@
   .unplug p { margin: 0; }
   .unplug-mark { color: var(--good); }
   .unplug svg { width: 36px; height: 36px; color: var(--good); flex: none; }
+  body.at-home .shell { grid-template-columns: minmax(0, 1fr); }
+  body.at-home nav { display: none; }
+  .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; margin-bottom: 16px; }
+  .home-card { display: grid; gap: 10px; align-content: start; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px; color: var(--text); text-decoration: none; transition: border-color .12s, background .12s; }
+  .home-card:hover { border-color: var(--accent); background: #1d2b38; }
+  .home-card svg { width: 44px; height: 44px; color: var(--accent); }
+  .home-card b { font-size: 20px; }
+  .home-card span { color: var(--muted); }
+  .home-links { display: flex; flex-wrap: wrap; gap: 8px; }
+  .clear-box { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .clear-box summary { color: var(--bad); font-weight: 600; }
+  .ecu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; align-items: start; }
+  .ecu-grid section { margin-bottom: 0; }
+  .ecu-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .ecu-head h2 { margin: 0; flex: 1; }
+  .ecu-head svg { width: 26px; height: 26px; color: var(--accent); flex: none; }
+  .ecu-grid .row span:last-child { unicode-bidi: isolate; direction: ltr; overflow-wrap: anywhere; }
   .health { display: grid; gap: 14px; border-inline-start: 4px solid var(--good); }
   .health.attention { border-inline-start-color: var(--bad); }
   .health-title { font-size: 20px; font-weight: 650; }
@@ -250,11 +267,13 @@
       </svg>
       <span data-i18n="Fahis">Fahis</span>
     </div>
+    <a href="#/home" data-page="home"><span data-icon="page_home"></span><span data-i18n="Home">Home</span></a>
     <div class="nav-group" data-i18n="Your car">Your car</div>
     <a href="#/overview" data-page="overview"><span data-icon="page_overview"></span><span data-i18n="Overview">Overview</span></a>
     <a href="#/systems" data-page="systems"><span data-icon="page_systems"></span><span data-i18n="Car systems">Car systems</span></a>
     <a href="#/live" data-page="live"><span data-icon="page_live"></span><span data-i18n="Live data">Live data</span></a>
     <a href="#/faults" data-page="faults"><span data-icon="page_faults"></span><span data-i18n="Fault codes">Fault codes</span></a>
+    <a href="#/ecu" data-page="ecu"><span data-icon="page_ecu"></span><span data-i18n="ECU">ECU</span></a>
     <div class="nav-group" data-i18n="Tools">Tools</div>
     <a href="#/commands" data-page="commands"><span data-icon="page_commands"></span><span data-i18n="Commands">Commands</span></a>
     <a href="#/lookup" data-page="lookup"><span data-icon="page_lookup"></span><span data-i18n="Code lookup">Code lookup</span></a>
@@ -294,6 +313,34 @@
       </ol>
       <p class="dim" data-i18n="This page keeps trying and fills in by itself once the car answers.">This page keeps trying and fills in by itself once the car answers.</p>
     </section>
+
+    <div class="page" id="page-home" hidden>
+      <p class="intro" data-i18n="What would you like to do?">What would you like to do?</p>
+      <div class="home-grid">
+        <a class="home-card" href="#/overview">
+          <span data-icon="page_live"></span>
+          <b data-i18n="Live monitoring and fault clearing">Live monitoring and fault clearing</b>
+          <span data-i18n="Watch live readings and car systems, read fault codes, and clear them when you choose.">Watch live readings and car systems, read fault codes, and clear them when you choose.</span>
+        </a>
+        <a class="home-card" href="#/ecu">
+          <span data-icon="ecu"></span>
+          <b data-i18n="ECU">ECU</b>
+          <span data-i18n="See the car's computers: their names, calibration, software and whether they answer.">See the car's computers: their names, calibration, software and whether they answer.</span>
+        </a>
+      </div>
+      <div class="home-links">
+        <a class="button" href="#/saved" data-i18n="Saved cars">Saved cars</a>
+        <a class="button" href="#/lookup" data-i18n="Code lookup">Code lookup</a>
+        <a class="button" href="#/reports" data-i18n="Reports">Reports</a>
+      </div>
+    </div>
+
+    <div class="page" id="page-ecu" hidden>
+      <div class="needs-car">
+        <p class="intro" data-i18n="Read only. Fahis shows what each computer reports about itself. It doesn't copy or change the ECU's program.">Read only. Fahis shows what each computer reports about itself. It doesn't copy or change the ECU's program.</p>
+        <div class="ecu-grid" id="ecus"></div>
+      </div>
+    </div>
 
     <div class="page" id="page-overview" hidden>
       <div class="needs-car">
@@ -359,6 +406,15 @@
         <div class="columns">
           <section><h2 data-i18n="Fault codes">Fault codes</h2><div id="codes"></div>
             <p><button id="scan-button" type="button" data-i18n="Scan for other modules">Scan for other modules</button></p>
+            <details class="clear-box">
+              <summary data-i18n="Clear fault codes">Clear fault codes</summary>
+              <p data-i18n="Clears fault codes after you type CLEAR. This doesn't fix the fault, and it resets the emissions self-tests. Permanent codes stay until the car's own tests pass.">Clears fault codes after you type CLEAR. This doesn't fix the fault, and it resets the emissions self-tests. Permanent codes stay until the car's own tests pass.</p>
+              <p class="needs" data-i18n="Needs: engine off and ignition ON.">Needs: engine off and ignition ON.</p>
+              <div class="fields">
+                <label><span data-i18n="Type CLEAR to confirm">Type CLEAR to confirm</span><input id="clear-answer" type="text" dir="ltr" autocomplete="off"></label>
+                <button id="clear-button" type="button" class="danger" data-needs-connection="1" data-i18n="Clear fault codes">Clear fault codes</button>
+              </div>
+            </details>
             <div class="explain">
               <span data-i18n="Pending: seen once, and the car is waiting to see it again before confirming it.">Pending: seen once, and the car is waiting to see it again before confirming it.</span>
               <span data-i18n="Stored: confirmed by the car, and it may turn on the warning light.">Stored: confirmed by the car, and it may turn on the warning light.</span>
@@ -470,7 +526,7 @@
 const TILES = ["0C", "0D", "05", "0F", "11", "04"];
 const HISTORY = 60;
 const CATALOG_LIMIT = 200;
-const PAGES = {overview: "Overview", systems: "Car systems", live: "Live data", faults: "Fault codes", commands: "Commands",
+const PAGES = {home: "Home", ecu: "ECU", overview: "Overview", systems: "Car systems", live: "Live data", faults: "Fault codes", commands: "Commands",
                cars: "Supported cars", saved: "Saved cars", lookup: "Code lookup", reports: "Reports", log: "Live log"};
 const ICONS = {
   engine: "M4 10h3l2-3h6v3h3l2 2v4h-2v2h-5l-2 2H8l-2-3H4zM1.5 11v6M9 4h6M12 4v3",
@@ -483,6 +539,9 @@ const ICONS = {
   body: "M3 16v-3l2-5a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 5v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM5.5 12.5h13M7 17v2M17 17v2",
   network: "M12 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM5 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM19 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM12 7v5M12 12l-6 5.3M12 12l6 5.3",
   status: "M8 4h8v3H8zM6 5.5H5a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-1M8 12l2 2 4-4M8 17h8",
+  ecu: "M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4",
+  page_ecu: "M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4",
+  page_home: "M3 11l9-8 9 8M5 9.5V21h14V9.5M10 21v-6h4v6",
   safe: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 12l3 3 5-6",
   page_overview: "M4 18a9.5 9.5 0 1 1 16 0M12 14l4-5M12 14v.01",
   page_systems: "M3 16v-3l2-5a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 5v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM5.5 12.5h13M7 17v2M17 17v2",
@@ -618,7 +677,7 @@ async function setLanguage(value) {
 
 function currentPage() {
   const page = location.hash.replace("#/", "").split("/")[0];
-  return PAGES[page] ? page : "overview";
+  return PAGES[page] ? page : "home";
 }
 
 function openCarKey() {
@@ -633,6 +692,7 @@ function openSystem() {
 
 function showPage() {
   const page = currentPage();
+  document.body.classList.toggle("at-home", page === "home");
   document.querySelectorAll(".page").forEach(node => { node.hidden = node.id !== `page-${page}`; });
   document.querySelectorAll("nav a").forEach(link => {
     if (link.dataset.page === page) link.setAttribute("aria-current", "page");
@@ -656,7 +716,7 @@ function showPage() {
 }
 
 function updateConnectionViews() {
-  const needsCar = ["overview", "systems", "live", "faults"].includes(currentPage());
+  const needsCar = ["overview", "systems", "ecu", "live", "faults"].includes(currentPage());
   const off = lastState && lastState.link === "off";
   document.getElementById("waiting").hidden = connected || !needsCar || off;
   document.querySelectorAll(".needs-car").forEach(node => { node.hidden = !connected; });
@@ -1436,6 +1496,25 @@ function renderSystems(state) {
   document.getElementById("system-hint").hidden = !system.needs_profile;
 }
 
+const ECU_STATES = {answering: ["Answering", "pill good"], busy: ["Busy", "pill warn"], silent: ["Didn't answer this time", "pill"]};
+
+function renderEcus(ecus) {
+  fillIfChanged("ecus", JSON.stringify([ecus, language]), () => ecus.map(ecu => {
+    const card = el("section");
+    const head = el("div", undefined, "ecu-head");
+    const [stateText, tone] = ECU_STATES[ecu.state];
+    head.append(icon(ecu.icon), el("h2", ecu.role), el("span", tr(stateText), tone));
+    card.append(head, row(tr("Address"), ecu.header));
+    for (const item of ecu.rows) card.append(row(item.label, item.text));
+    const faults = el("a", ecu.faults.length ? tr("{count} fault(s)", {count: ecu.faults.length}) : tr("See fault codes"), ecu.faults.length ? "button danger" : "button");
+    faults.href = "#/faults";
+    faults.style.marginTop = "10px";
+    card.append(faults);
+    if (!ecu.rows.length) card.append(el("p", tr("This computer hasn't reported any details."), "dim"));
+    return card;
+  }));
+}
+
 function renderHealth(state) {
   const faults = state.systems.flatMap(system => system.faults).filter(fault => fault.now).length;
   const light = Object.values(state.monitors).some(monitor => monitor.mil);
@@ -1533,6 +1612,7 @@ function render(state) {
   status.className = "";
   document.getElementById("demo-banner").hidden = !state.demo;
   renderHealth(state);
+  renderEcus(state.ecus);
   renderSystems(state);
   renderValueFilter(state);
   renderTiles(state.values);
@@ -1787,6 +1867,12 @@ document.getElementById("lang-toggle").addEventListener("click", () => {
   setLanguage(next);
 });
 document.getElementById("scan-button").addEventListener("click", () => runAction("scan"));
+document.getElementById("clear-button").addEventListener("click", async () => {
+  const answer = document.getElementById("clear-answer");
+  const typed = answer.value.trim();
+  answer.value = "";
+  await runAction("clear", {answer: typed});
+});
 document.getElementById("link-button").addEventListener("click", () => changeLink("/api/disconnect"));
 document.getElementById("connect-button").addEventListener("click", () => changeLink("/api/connect"));
 document.getElementById("value-search").addEventListener("input", () => { if (lastState && lastState.connected) render(lastState); });
