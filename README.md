@@ -56,7 +56,7 @@
 
 <table>
 <tr>
-<td width="50%" valign="top"><b>تطبيق سطح مكتب</b><br>شاشة بداية تختار منها بين المراقبة المباشرة ومسح الأعطال أو حاسوب السيارة، وزر لقطع الاتصال قبل فصل المحوّل بأمان، ثم صفحات: نظرة عامة مع حالة المحوّل، وأنظمة السيارة، وحاسوب السيارة، وبيانات مباشرة، ورموز أعطال، وأوامر، وسيارات مدعومة، وسيارات محفوظة، وبحث عن رمز، وتقارير، وسجل مباشر مع مراجعة تلقائية.</td>
+<td width="50%" valign="top"><b>تطبيق سطح مكتب</b><br>شاشة بداية تختار منها بين المراقبة المباشرة ومسح الأعطال أو حاسوب السيارة، وزر لقطع الاتصال قبل فصل المحوّل بأمان، ونسخ محفوظة من بيانات السيارة لاختبار التطبيق دون سيارة، ثم صفحات: نظرة عامة مع حالة المحوّل، وأنظمة السيارة، وحاسوب السيارة، وبيانات مباشرة، ورموز أعطال، وأوامر، وسيارات مدعومة، وسيارات محفوظة، وبحث عن رمز، وتقارير، وسجل مباشر مع مراجعة تلقائية.</td>
 <td width="50%" valign="top"><b>الأوامر داخل التطبيق</b><br>شغّل فحص البطارية والتقرير والبحث عن الوحدات وغيرها، واقرأ النتيجة في الصفحة نفسها.</td>
 </tr>
 <tr>
@@ -262,7 +262,7 @@ Many ELM327 adapters are Bluetooth LE. Windows gives them no COM port, so most O
 
 <table>
 <tr>
-<td width="50%" valign="top"><b>Desktop app</b><br>A start screen to choose live monitoring and fault clearing or the ECU section, and a Disconnect button for unplugging the adapter safely. Then pages for: overview with adapter status, car systems, ECU details, live data, fault codes, commands, supported cars, saved cars, code lookup, reports, and a live log with an automatic review.</td>
+<td width="50%" valign="top"><b>Desktop app</b><br>A start screen to choose live monitoring and fault clearing or the ECU section, a Disconnect button for unplugging the adapter safely, and saved car copies for testing with no car. Then pages for: overview with adapter status, car systems, ECU details, live data, fault codes, commands, supported cars, saved cars, code lookup, reports, and a live log with an automatic review.</td>
 <td width="50%" valign="top"><b>Commands in the app</b><br>Run a battery check, report, module scan and more, and read the result on the page.</td>
 </tr>
 <tr>

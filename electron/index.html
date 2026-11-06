@@ -68,6 +68,9 @@
   tr:first-child td { border-top: 0; }
   td.dim, .dim { color: var(--muted); }
   .val.stale, .tile.stale .number { color: var(--muted); }
+  .val.warn, .tile.warn .number { color: var(--warn-text); }
+  .tile.bad .number { color: var(--bad); }
+  .val.bad { color: var(--bad); }
   .tile .note { color: var(--muted); font-size: 12px; }
   .values { columns: 2 300px; column-gap: 24px; }
   .row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-top: 1px solid var(--line); break-inside: avoid; }
@@ -190,6 +193,10 @@
   .home-card svg { width: 44px; height: 44px; color: var(--accent); }
   .home-card b { font-size: 20px; }
   .home-card span { color: var(--muted); }
+  #copy-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; font-weight: 600; }
+  .copy-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .copy-row b { display: block; }
+  #copies { margin-top: 14px; }
   .home-links { display: flex; flex-wrap: wrap; gap: 8px; }
   .clear-box { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
   .clear-box summary { color: var(--bad); font-weight: 600; }
@@ -293,6 +300,10 @@
       </div>
     </header>
     <div id="demo-banner" hidden data-i18n="Demo mode: this is simulated data, not your car.">Demo mode: this is simulated data, not your car.</div>
+    <div id="copy-banner" class="notice" role="status" hidden>
+      <span id="copy-text"></span>
+      <button id="copy-close" type="button" data-i18n="Close car copy">Close car copy</button>
+    </div>
     <div id="alerts" role="status"></div>
     <div id="link-error" class="alert" role="alert" hidden></div>
     <section id="unplug" class="unplug" role="status" hidden>
@@ -333,6 +344,15 @@
         <a class="button" href="#/lookup" data-i18n="Code lookup">Code lookup</a>
         <a class="button" href="#/reports" data-i18n="Reports">Reports</a>
       </div>
+      <section id="copies">
+        <div class="section-head">
+          <h2 data-i18n="Car copies">Car copies</h2>
+          <button id="copy-save" type="button" class="primary" disabled data-i18n="Save car copy">Save car copy</button>
+        </div>
+        <p class="needs" data-i18n="A copy keeps what the car reported, so you can test Fahis with no car or adapter. It isn't the ECU's program. It includes the VIN, so keep it private.">A copy keeps what the car reported, so you can test Fahis with no car or adapter. It isn't the ECU's program. It includes the VIN, so keep it private.</p>
+        <p id="copy-note" class="dim" hidden></p>
+        <div id="copy-list"></div>
+      </section>
     </div>
 
     <div class="page" id="page-ecu" hidden>
@@ -709,6 +729,7 @@ function showPage() {
     renderSavedCars(lastState.cars);
   }
   if (page === "log") refreshActivity();
+  if (page === "home") loadCopies();
   if (lastState && lastState.connected) {
     renderSystems(lastState);
     if (openSystem()) document.getElementById("system-detail").scrollIntoView({block: "nearest"});
@@ -752,7 +773,7 @@ function renderTiles(values) {
     const past = history[pid] = history[pid] || [];
     if (newReading && v.value !== null && !v.note) past.push(v.value);
     if (past.length > HISTORY) past.shift();
-    const tile = el("div", undefined, v.note ? "tile stale" : "tile");
+    const tile = el("div", undefined, v.note ? "tile stale" : `tile ${v.tone || ""}`);
     const number = el("div", v.value === null ? "-" : String(Math.round(v.value)), "number");
     number.append(el("span", v.unit, "unit"));
     tile.append(el("div", v.name, "label"), number);
@@ -1505,6 +1526,7 @@ function renderEcus(ecus) {
     const [stateText, tone] = ECU_STATES[ecu.state];
     head.append(icon(ecu.icon), el("h2", ecu.role), el("span", tr(stateText), tone));
     card.append(head, row(tr("Address"), ecu.header));
+    if (ecu.warning) card.append(el("p", ecu.warning, "notice"));
     for (const item of ecu.rows) card.append(row(item.label, item.text));
     const faults = el("a", ecu.faults.length ? tr("{count} fault(s)", {count: ecu.faults.length}) : tr("See fault codes"), ecu.faults.length ? "button danger" : "button");
     faults.href = "#/faults";
@@ -1570,11 +1592,50 @@ function groupedValues(items, makeRow) {
   });
 }
 
+function renderCopyState(state) {
+  document.getElementById("copy-banner").hidden = !state.copy;
+  if (state.copy) {
+    document.getElementById("copy-text").textContent =
+      tr("Car copy: saved data from {time}, not a live car. Nothing here changes your saved cars.", {time: shortTime(state.copy.saved)});
+  }
+  document.getElementById("copy-save").disabled = !state.can_save_copy;
+}
+
+async function loadCopies() {
+  let copies = [];
+  try {
+    copies = await api("GET", "/api/copies", {});
+  } catch (error) { /* keep the page usable without the list */ }
+  fill(document.getElementById("copy-list"), copies.length ? copies.map(copy => {
+    const line = el("div", undefined, "copy-row");
+    const about = el("div");
+    about.append(el("b", copy.name || tr("Car")), el("span", `${shortTime(copy.saved)} · ${maskedVin(copy.vin)}`, "dim"));
+    const open = el("button", tr("Open"));
+    open.type = "button";
+    open.addEventListener("click", async () => {
+      try {
+        await post("/api/copy/open", {file: copy.file, lang: language});
+        location.hash = "#/overview";
+      } catch (error) {
+        showCopyNote(error.message);
+      }
+    });
+    line.append(about, open);
+    return line;
+  }) : [el("p", tr("No car copies yet. Connect to a car, then choose Save car copy."), "dim")]);
+}
+
+function showCopyNote(text) {
+  const note = document.getElementById("copy-note");
+  note.textContent = text;
+  note.hidden = false;
+}
+
 function renderLink(state) {
   const button = document.getElementById("link-button");
   const off = state.link === "off";
   const stopping = state.link === "stopping";
-  button.hidden = off;
+  button.hidden = off || Boolean(state.copy);
   button.disabled = stopping;
   button.textContent = tr(stopping ? "Disconnecting ..." : "Disconnect");
   document.getElementById("unplug").hidden = !off;
@@ -1596,6 +1657,7 @@ function render(state) {
   lastState = state;
   connected = state.connected;
   renderLink(state);
+  renderCopyState(state);
   const status = document.getElementById("status");
   renderSavedCars(state.cars);
   fill(document.getElementById("device"), state.device.map(item => row(item.label, item.text, item.tone)));
@@ -1622,7 +1684,7 @@ function render(state) {
   renderTests(state.test_results || []);
   renderMonitors(state.monitors);
   renderVehicle(state);
-  const shownValues = groupedValues(state.values, v => row(v.name, valueText(v), v.note ? "stale" : ""));
+  const shownValues = groupedValues(state.values, v => row(v.name, valueText(v), v.note ? "stale" : v.tone || ""));
   fill(document.getElementById("values"), shownValues.length ? shownValues : [el("p", tr("No readings match."), "dim")]);
   renderGraphs(state.values);
   renderRecording(state.recording);
@@ -1867,6 +1929,16 @@ document.getElementById("lang-toggle").addEventListener("click", () => {
   setLanguage(next);
 });
 document.getElementById("scan-button").addEventListener("click", () => runAction("scan"));
+document.getElementById("copy-save").addEventListener("click", async () => {
+  try {
+    const saved = await post("/api/copy/save", {lang: language});
+    showCopyNote(tr("Saved {file} in {folder}", {file: saved.file, folder: saved.folder}));
+    await loadCopies();
+  } catch (error) {
+    showCopyNote(error.message);
+  }
+});
+document.getElementById("copy-close").addEventListener("click", () => post("/api/copy/close", {lang: language}));
 document.getElementById("clear-button").addEventListener("click", async () => {
   const answer = document.getElementById("clear-answer");
   const typed = answer.value.trim();

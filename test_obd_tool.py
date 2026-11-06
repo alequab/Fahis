@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import bridge
+import car_copy
 import car_modules
 import car_systems
 import demo
@@ -1808,8 +1809,109 @@ class BookFixTests(unittest.IsolatedAsyncioTestCase):
         lost = parse_can(["7E8 10 10 59 02 AF 04 55 00", "7E8 22 11 11 11 11 11 11 11", "7E8 23 22 22 22 22 22 22 22"])["7E8"]
         self.assertFalse(lost.complete)
         self.assertEqual(lost, bytes.fromhex("5902AF045500"))
-        repeated = parse_can(["7E8 10 0A 59 02 AF 04 55 00", "7E8 21 28 07 41 00", "7E8 21 28 07 41 00"])["7E8"]
+        repeated = parse_can(["7E8 10 10 59 02 AF 04 55 00", "7E8 21 28 07 41 00 00 00 00", "7E8 21 28 07 41 00 00 00 00", "7E8 22 11 11 11"])["7E8"]
         self.assertFalse(repeated.complete)
+
+    def test_frames_outside_a_message_change_nothing(self):
+        late = parse_can(["7E8 10 0A 59 02 AF 04 55 00", "7E8 21 28 07 41 00", "7E8 21 28 07 41 00"])["7E8"]
+        self.assertTrue(late.complete)
+        self.assertEqual(late.hex(), "5902af04550028074100")
+        self.assertEqual(parse_can(["7E8 30 00 00 00 00 00 00 00"]), {})
+        self.assertEqual(parse_can(["7E8 21 28 07 41 00"]), {})
+        self.assertFalse(parse_can(["7E8 00 11 22"])["7E8"].complete)
+
+    def test_unfinished_tests_are_not_called_past_faults(self):
+        reply = bytes.fromhex("5902FF") + bytes.fromhex("04550050") + bytes.fromhex("D1120020") + bytes.fromhex("03000000")
+        self.assertEqual([c["code"] for c in car_modules.decode_uds_codes(reply)], ["U1112-00"])
+
+    def test_severity_and_module_identity_details(self):
+        severity = car_modules.decode_severity(bytes.fromhex("5908AF" "80000171" "0009" "20000455" "0020"))
+        self.assertEqual(severity, {"P0171-00": "Check immediately", "P0455-00": "Needs maintenance"})
+        self.assertEqual(car_modules.decode_severity(bytes.fromhex("7F1931")), {})
+        self.assertEqual(car_modules.readable_date(bytes.fromhex("20260115")), "2026-01-15")
+        self.assertEqual(car_modules.readable_date(bytes.fromhex("260115")), "2026-01-15")
+        self.assertIsNone(car_modules.readable_date(bytes.fromhex("2026FF15")))
+        self.assertIsNone(car_modules.decode_one_record(bytes.fromhex("590DAF04550020"), 0x0B))
+        self.assertEqual(car_modules.refusal_reason(bytes.fromhex("7F2283")), "Needs the engine off")
+
+    def test_a_different_stored_vin_is_pointed_out(self):
+        snapshot = {"vehicle": {"VIN": {"7E8": "AAAAAAAAAAAAAAAAA"}, "Module name": {"7E8": "ECM"}}, "monitors": {"7E8": {}}, "codes": {},
+                    "ecu_details": {"7E8": [{"label": "Stored VIN", "text": "BBBBBBBBBBBBBBBBB"}]}}
+        self.assertIn("different VIN", obd_tool.page_ecus(snapshot, (), "en")[0]["warning"])
+        snapshot["ecu_details"]["7E8"][0]["text"] = "AAAAAAAAAAAAAAAAA"
+        self.assertIsNone(obd_tool.page_ecus(snapshot, (), "en")[0]["warning"])
+
+    async def test_adapter_problems_get_their_own_message(self):
+        transport = FakeTransport({"ATZ": ["ELM327 v2.1"], "0100": ["CAN ERROR"]})
+        with self.assertRaises(OBDError) as caught:
+            await ELM(transport).setup()
+        self.assertEqual(caught.exception.text, obd_tool.BUS_PROBLEM)
+        self.assertEqual(caught.exception.values["problem"], "CAN ERROR")
+
+    async def test_adapter_reset_connects_again(self):
+        elm = ELM(FakeTransport({"010C": ["LV RESET"]}))
+        with self.assertRaises(OBDError) as caught:
+            await elm.transport.send("010C")
+        self.assertEqual(caught.exception.text, obd_tool.ADAPTER_RESTARTED)
+
+    async def test_car_that_hides_its_protocol_number_still_connects(self):
+        transport = FakeTransport({"ATZ": ["ELM327 v2.1"], "0100": ["7E8 06 41 00 98 3B 80 11"], "ATDPN": ["A"]})
+        elm = ELM(transport)
+        await elm.setup()
+        self.assertIn("11-bit", elm.protocol)
+
+    async def test_vin_falls_back_to_asking_the_engine_module(self):
+        vin = list(b"AAAAAAAAAAAAAAAAA")
+        lines = demo.frames("7E8", [0x62, 0xF1, 0x90] + vin)
+
+        class Transport:
+            header = None
+
+            async def send(self, command, wait=5):
+                if command.startswith("ATSH"):
+                    self.header = command[4:]
+                return lines if command == "22F190" and self.header == "7E0" else ["NO DATA"] if not command.startswith("AT") else ["OK"]
+
+        vehicle = await obd_tool.read_identity(ELM(Transport()))
+        self.assertEqual(vehicle["VIN"], {"7E8": "AAAAAAAAAAAAAAAAA"})
+
+    async def test_freeze_frame_stays_on_the_module_with_the_code(self):
+        class Transport:
+            async def send(self, command, wait=5):
+                table = {"020200": ["7E9 05 42 02 00 00 00", "7E8 05 42 02 00 01 71"],
+                         "020000": ["7E8 07 42 00 00 08 00 00 01"], "022000": ["7E8 07 42 20 00 00 00 00 00"],
+                         "020500": ["7E9 04 42 05 00 32", "7E8 04 42 05 00 7D"]}
+                return table.get(command, ["NO DATA"])
+
+        freeze = await obd_tool.read_freeze_frame(ELM(Transport()))
+        self.assertEqual(freeze["code"], "P0171")
+        self.assertEqual([(v["name"], v["text"]) for v in freeze["values"]], [("Coolant temp", "85")])
+
+    def test_this_drive_names_follow_the_engine_type(self):
+        tests = [name for name, _ in obd_tool.decode_monitors(bytes.fromhex("4141000000FF00"[:12]) + b"\x00", True)["tests"]]
+        self.assertEqual(tests, [])
+        spark = obd_tool.decode_monitors(bytes.fromhex("41410000" + "01" + "00"), False)["tests"]
+        diesel = obd_tool.decode_monitors(bytes.fromhex("41410000" + "02" + "00"), True)["tests"]
+        self.assertEqual(spark[0][0], "Catalyst")
+        self.assertEqual(diesel[0][0], "NOx aftertreatment")
+
+    def test_fuel_use_and_warning_colours(self):
+        self.assertAlmostEqual(obd_tool.fuel_use({0x10: 10.0, 0x51: "Gasoline", 0x0D: 100})[0], 3.29, places=1)
+        self.assertEqual(obd_tool.fuel_use({0x10: 10.0, 0x51: "Gasoline", 0x0D: 0})[1], "L/h")
+        self.assertIsNone(obd_tool.fuel_use({0x10: 10.0, 0x51: "Diesel", 0x0D: 50}))
+        self.assertEqual(obd_tool.fuel_use({0x5E: 6.0, 0x51: "Diesel", 0x0D: 100}), (6.0, "L/100km"))
+        self.assertEqual(obd_tool.value_tone(0x05, 106), "warn")
+        self.assertEqual(obd_tool.value_tone(0x05, 120), "bad")
+        self.assertEqual(obd_tool.value_tone(0x05, 90), "")
+        self.assertEqual(obd_tool.value_tone(0x2F, 8.2), "warn")
+        self.assertEqual(obd_tool.value_tone(0x42, 11.0), "bad")
+        self.assertEqual(obd_tool.value_tone(0x05, "Not reported"), "")
+
+    def test_placeholder_temperatures_are_not_shown_as_readings(self):
+        for pid in (0x05, 0x0F, 0x46):
+            self.assertEqual(LIVE_PIDS[pid][2](bytes([0x00])), "Not reported")
+            self.assertEqual(LIVE_PIDS[pid][2](bytes([0xFF])), "Not reported")
+        self.assertEqual(LIVE_PIDS[0x05][2](bytes([0x7D])), 85)
 
     def test_frame_numbers_wrap_after_15(self):
         lines = ["7E8 10 80 " + " ".join(["01"] * 6)]
@@ -1884,6 +1986,101 @@ class EcuSectionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('return PAGES[page] ? page : "home";', page)
         self.assertRegex(page, r'class="home-card" href="#/overview"')
         self.assertRegex(page, r'class="home-card" href="#/ecu"')
+
+
+class CarCopyTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.folder = Path(folder.name) / "copies"
+        patcher = mock.patch.object(car_copy, "copy_folder", return_value=self.folder)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.app = obd_tool.DashboardApp(SimpleNamespace(demo=True, samples=None, interval=0, address=None))
+        self.app.RETRY_SECONDS = 0.2
+
+    async def wait_for(self, check, seconds=30):
+        for _ in range(int(seconds / 0.02)):
+            if check():
+                return
+            await asyncio.sleep(0.02)
+        self.fail("timed out")
+
+    def test_recorder_files_replies_by_module_and_keeps_out_changes(self):
+        recorder = car_copy.CarRecorder()
+        recorder.record("ATSH7E0", ["OK"])
+        recorder.record("22F187", ["7E8 03 62 F1 87"])
+        recorder.record("ATSH7DF", ["OK"])
+        recorder.record("010C1", ["7E8 04 41 0C 0D 4C"])
+        recorder.record("04", ["7E8 01 44"])
+        recorder.record("ATE0", ["OK"])
+        recorder.record("0100", None)
+        self.assertEqual(set(recorder.as_data()), {"7E0|22F187", "7DF|010C"})
+
+    async def test_copy_plays_replies_in_turn_and_never_clears(self):
+        copy = {"replies": {"7DF|010C": [["7E8 04 41 0C 0D 4C"], ["7E8 04 41 0C 10 00"]], "7DF|0D": [], "7DF|04": [["7E8 01 44"]]}}
+        transport = car_copy.CopyTransport(copy)
+        self.assertEqual(await transport.send("010C1"), ["7E8 04 41 0C 0D 4C"])
+        self.assertEqual(await transport.send("010C"), ["7E8 04 41 0C 10 00"])
+        self.assertEqual(await transport.send("010C"), ["7E8 04 41 0C 0D 4C"])
+        self.assertEqual(await transport.send("04"), ["NO DATA"])
+        self.assertEqual(await transport.send("0999"), ["NO DATA"])
+        self.assertEqual(await transport.send("ATE0"), ["OK"])
+
+    async def test_copy_builds_a_list_reply_from_single_answers(self):
+        copy = {"replies": {"7DF|010C": [["7E8 04 41 0C 0D 4C"]], "7DF|010D": [["7E8 03 41 0D 32"]]}}
+        lines = await car_copy.CopyTransport(copy).send("010C0D")
+        self.assertEqual(obd_tool.parse_can(lines)["7E8"], bytes.fromhex("410C0D4C0D32"))
+
+    def test_only_real_copies_can_be_opened(self):
+        self.folder.mkdir(parents=True)
+        good = {"format": car_copy.COPY_FORMAT, "version": 1, "replies": {"7DF|0100": [["NO DATA"]]}}
+        (self.folder / "car_20260101_000000.json").write_text(json.dumps(good), encoding="utf-8")
+        (self.folder / "car_20260101_000001.json").write_text("{not json", encoding="utf-8")
+        (self.folder / "car_20260101_000002.json").write_text(json.dumps({**good, "replies": {"a": "b"}}), encoding="utf-8")
+        self.assertEqual(car_copy.load_copy(self.folder, "car_20260101_000000.json")["file"], "car_20260101_000000.json")
+        for name in ("car_20260101_000001.json", "car_20260101_000002.json", "../car_20260101_000000.json", "missing.json", None):
+            with self.assertRaises(ValueError):
+                car_copy.load_copy(self.folder, name)
+        self.assertEqual([copy["file"] for copy in car_copy.list_copies(self.folder)], ["car_20260101_000000.json"])
+
+    async def test_saved_copy_runs_the_app_without_touching_saved_cars(self):
+        running = asyncio.create_task(self.app.run())
+        try:
+            await self.wait_for(lambda: self.app.elm is not None and self.app.reader is not None)
+            await self.wait_for(lambda: self.app.reader.updates >= 3)
+            status, saved = await self.app.api("POST", "/api/copy/save", {}, {"lang": "en"})
+            self.assertEqual(status, 200)
+            with mock.patch.object(garage, "save_car") as saving:
+                status, _ = await self.app.api("POST", "/api/copy/open", {}, {"file": saved["file"], "lang": "en"})
+                self.assertEqual(status, 200)
+                await self.wait_for(lambda: self.app.elm is not None and self.app.elm.transport.transport.__class__ is car_copy.CopyTransport and self.app.reader is not None)
+                await self.wait_for(lambda: self.app.reader.updates >= 3)
+                state = self.app.state("en")
+                self.assertTrue(state["connected"])
+                self.assertEqual(state["copy"]["name"], None)
+                self.assertFalse(state["can_save_copy"])
+                self.assertEqual(state["vehicle"]["VIN"]["7E8"], demo.DEMO_VIN)
+                self.assertIn("P0171", [c["code"] for c in state["codes"]["Stored"]["7E8"]])
+                self.assertIn("Engine RPM", [v["name"] for v in state["values"]])
+                saving.assert_not_called()
+            status, reply = await self.app.api("POST", "/api/run", {}, {"action": "clear", "params": {"answer": "CLEAR"}, "lang": "en"})
+            self.assertEqual(status, 400)
+            self.assertIn("no car to clear", reply["error"])
+            await self.app.api("POST", "/api/copy/close", {}, {})
+            await self.wait_for(lambda: self.app.elm is not None and self.app.elm.transport.transport.__class__ is demo.DemoTransport)
+            self.assertIsNone(self.app.state("en")["copy"])
+        finally:
+            running.cancel()
+            await asyncio.gather(running, return_exceptions=True)
+
+    async def test_save_waits_for_a_finished_read(self):
+        status, reply = await self.app.api("POST", "/api/copy/save", {}, {"lang": "en"})
+        self.assertEqual(status, 409)
+        self.assertIn("Connect to a car", reply["error"])
+
+    def test_copies_stay_out_of_the_repo(self):
+        self.assertIn("car_copies/", (ROOT / ".gitignore").read_text(encoding="utf-8"))
 
 
 class DisconnectTests(unittest.IsolatedAsyncioTestCase):

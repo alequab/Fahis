@@ -18,6 +18,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import bridge
+import car_copy
 import car_modules
 import car_systems
 import garage
@@ -75,12 +76,17 @@ def catalyst_temp(d):
     return "Not reported" if celsius <= 0 else celsius
 
 
+def temperature(d):
+    """00 and FF are the ends of the range, which sensors and modules use when they have no reading."""
+    return "Not reported" if d[0] in (0x00, 0xFF) else d[0] - 40
+
+
 # pid: (name, unit, formula taking the data bytes)
 LIVE_PIDS = {
     0x0C: ("Engine RPM", "rpm", lambda d: (256 * d[0] + d[1]) / 4),
     0x0D: ("Speed", "km/h", lambda d: d[0]),
-    0x05: ("Coolant temp", "C", lambda d: d[0] - 40),
-    0x0F: ("Intake air temp", "C", lambda d: d[0] - 40),
+    0x05: ("Coolant temp", "C", temperature),
+    0x0F: ("Intake air temp", "C", temperature),
     0x04: ("Engine load", "%", lambda d: d[0] * 100 / 255),
     0x11: ("Throttle", "%", lambda d: d[0] * 100 / 255),
     0x0E: ("Ignition timing", "deg", lambda d: d[0] / 2 - 64),
@@ -92,7 +98,7 @@ LIVE_PIDS = {
     0x2F: ("Fuel level", "%", lambda d: d[0] * 100 / 255),
     0x33: ("Barometric pressure", "kPa", lambda d: d[0]),
     0x42: ("Module voltage", "V", lambda d: (256 * d[0] + d[1]) / 1000),
-    0x46: ("Ambient temp", "C", lambda d: d[0] - 40),
+    0x46: ("Ambient temp", "C", temperature),
     # A tested diesel always sends 00 here with a warm engine, which means no sensor rather than -40.
     0x5C: ("Oil temp", "C", lambda d: "Not reported" if d[0] == 0 else d[0] - 40),
     0x5E: ("Fuel rate", "L/h", lambda d: (256 * d[0] + d[1]) / 20),
@@ -135,7 +141,15 @@ LIVE_PIDS = {
     0x61: ("Driver demand torque", "%", lambda d: d[0] - 125),
     0x62: ("Actual engine torque", "%", lambda d: d[0] - 125),
     0x63: ("Engine reference torque", "Nm", word),
+    0x08: ("Short fuel trim B2", "%", trim),
+    0x09: ("Long fuel trim B2", "%", trim),
+    0x22: ("Fuel rail pressure (relative)", "kPa", lambda d: word(d) * 0.079),
+    0x5A: ("Relative pedal", "%", percent),
+    0x5B: ("Hybrid battery charge", "%", percent),
 }
+for _base in (0x24, 0x34):  # Cars use one range or the other for wideband oxygen sensors.
+    for _index in range(8):
+        LIVE_PIDS[_base + _index] = (f"Wideband lambda {_index + 1}", "", lambda d: word(d) / 32768)
 for _index, _pid in enumerate(range(0x14, 0x1C)):
     LIVE_PIDS[_pid] = (f"O2 voltage B{_index // 4 + 1}S{_index % 4 + 1}", "V", lambda d: d[0] / 200)
 
@@ -178,9 +192,9 @@ CHARGING_HIGH_VOLTS = 15.5
 
 COMMON_MONITORS = ["Misfire", "Fuel system", "Components"]
 SPARK_MONITORS = ["Catalyst", "Heated catalyst", "Evaporative system", "Secondary air",
-                  "A/C refrigerant", "Oxygen sensor", "Oxygen sensor heater", "EGR"]
+                  "A/C refrigerant", "Oxygen sensor", "Oxygen sensor heater", "EGR or VVT"]
 DIESEL_MONITORS = ["NMHC catalyst", "NOx aftertreatment", None, "Boost pressure",
-                   None, "Exhaust gas sensor", "Particulate filter", "EGR"]
+                   None, "Exhaust gas sensor", "Particulate filter", "EGR or VVT"]
 
 
 class OBDError(Exception):
@@ -212,6 +226,8 @@ def parse_can(lines):
         payload, length, next_number, broken = bytearray(), None, None, False
         for frame in frames[header]:
             kind = frame[0] >> 4
+            if kind == 2 and (next_number is None or (length is not None and len(payload) >= length)):
+                continue  # Not part of a message in progress, so it changes nothing.
             if kind == 0:
                 # A new message replaces an earlier one, such as "please wait" before the answer.
                 length, next_number, broken = frame[0] & 0x0F, None, False
@@ -227,8 +243,10 @@ def parse_can(lines):
                 else:
                     broken = True
                     next_number = -1
+        if length is None:
+            continue  # only flow control or stray frames, so this module sent no message
         reply = Reply(payload[:length])
-        reply.complete = not broken and (length is None or len(payload) >= length)
+        reply.complete = not broken and length > 0 and len(payload) >= length
         replies[header] = reply
     return replies
 
@@ -258,14 +276,18 @@ def describe_dtc(code, lang=None):
     return t("{system}: generic code not in this tool's table, look it up online", lang, system=system)
 
 
-def decode_monitors(payload):
-    """Decode a mode 01 PID 01 reply into light state, code count and self-tests."""
+def decode_monitors(payload, diesel=None):
+    """Decode a mode 01 PID 01 reply into light state, code count and self-tests.
+
+    Only PID 01 says whether the engine is diesel, so other replies in this shape need to be told.
+    """
     a, b, c, d = payload[2:6]
+    diesel = bool(b & 0x08) if diesel is None else diesel
     tests = []
     for bit, name in enumerate(COMMON_MONITORS):
         if b & (1 << bit):
             tests.append((name, not b & (1 << (bit + 4))))
-    for bit, name in enumerate(DIESEL_MONITORS if b & 0x08 else SPARK_MONITORS):
+    for bit, name in enumerate(DIESEL_MONITORS if diesel else SPARK_MONITORS):
         if name and c & (1 << bit):
             tests.append((name, not d & (1 << bit)))
     return {"mil": bool(a & 0x80), "count": a & 0x7F, "tests": tests}
@@ -325,7 +347,7 @@ class BleTransport:
             await asyncio.wait_for(self.prompt.wait(), wait)
         except asyncio.TimeoutError:
             return None
-        text = self.buffer.decode("ascii", "replace").replace(">", "")
+        text = self.buffer.decode("ascii", "replace").replace(">", "").replace("\x00", "")  # some adapters send stray NULs
         return [line.strip() for line in re.split(r"[\r\n]+", text) if line.strip()]
 
 
@@ -334,7 +356,12 @@ ADAPTER_SILENT_LIMIT = 3
 ACTIVITY_KEPT = 400
 # Replies that identify the car stay out of the live log, since people share screenshots of it.
 IDENTITY_COMMANDS = ("0902", "0904", "0906", "22F190", "22F18C")
-TROUBLE_REPLY = re.compile(r"NO DATA|ERROR|UNABLE|STOPPED|BUFFER FULL|^\?$")
+TROUBLE_REPLY = re.compile(r"NO DATA|ERROR|UNABLE|STOPPED|BUFFER FULL|BUS BUSY|LV RESET|LP ALERT|ERR\d\d|^\?$")
+# What the adapter says when the fault is in the connection to the car, rather than the car being quiet.
+BUS_PROBLEM_REPLY = re.compile(r"BUS BUSY|BUS ERROR|CAN ERROR|DATA ERROR|FB ERROR|RX ERROR|ERR\d\d|LP ALERT|UNABLE TO CONNECT")
+ADAPTER_RESET_REPLY = "LV RESET"
+BUS_PROBLEM = "The adapter reported '{problem}' on its connection to the car. Check it's firmly in the port, with the ignition ON, then try again."
+ADAPTER_RESTARTED = "The adapter restarted after a voltage drop, which is normal while the engine cranks. Connecting again."
 SLOW_REPLY_MS = 400
 TROUBLE_SHARE_PERCENT = 10
 
@@ -408,11 +435,19 @@ class MeasuredTransport:
         self.silent_in_a_row = 0
         self.total_seconds = 0.0
         self.last_reply = None
+        self.recorder = car_copy.CarRecorder()
+        self.last_problem = None
 
     async def send(self, command, wait=5):
         started = time.monotonic()
         self.sent += 1
         reply = await self.transport.send(command, wait)
+        self.recorder.record(command, reply)
+        for line in reply or []:
+            found = BUS_PROBLEM_REPLY.search(line)
+            self.last_problem = found.group() if found else self.last_problem
+            if ADAPTER_RESET_REPLY in line and command.upper() != "ATZ":
+                raise OBDError(ADAPTER_RESTARTED)  # It lost its settings, so they must be sent again.
         if self.activity is not None:
             self.activity.command(command, reply, round((time.monotonic() - started) * 1000))
         if reply is None:
@@ -455,6 +490,7 @@ class ELM:
         self.use_counts = True
         self.reply_counts = {}
         self.reads_seen = {}
+        self.addressed = None
         self.busy = {}  # when each module last said it needs more time
         self.calibration = {}  # filled in when asked, or whenever a slow module finally answers
 
@@ -490,10 +526,17 @@ class ELM:
         if description and description[0] not in ("?", "OK", "NO DATA"):
             self.description = description[0]
 
+        self.transport.last_problem = None
         if not await self.request(0x01, 0x00, wait=25):
+            if self.transport.last_problem:
+                raise OBDError(BUS_PROBLEM, problem=self.transport.last_problem)
             raise OBDError(CAR_SILENT)
 
         number = "".join(await self.transport.send("ATDPN", 2) or []).lstrip("A")
+        if number in ("", "0"):
+            # Some adapters don't say, but only a car on 11-bit CAN could have given the reply just read.
+            self.protocol = "ISO 15765-4 CAN 11-bit"
+            return
         if number not in SUPPORTED_PROTOCOLS:
             raise OBDError("This tool handles 11-bit CAN only; the car uses protocol '{number}'.", number=number)
         self.protocol = SUPPORTED_PROTOCOLS[number]
@@ -531,12 +574,18 @@ class ELM:
                 await asyncio.sleep(1 if missing & self.busy_modules() else 0.2)
         return dict(sorted(replies.items()))
 
-    async def module_request(self, hdr, rax, request, fc=False, wait=2):
-        """Send a read request to one module. Returns its reply or refusal, or None if silent."""
+    async def module_request(self, hdr, rax, request, fc=False, wait=2, keep_address=False):
+        """Send a read request to one module. Returns its reply or refusal, or None if silent.
+
+        keep_address skips setting the address again when the last request went to the same module, which saves two
+        adapter commands. Only use it in a run of requests that ends with restore_addressing.
+        """
         if request[:2] not in car_modules.READ_ONLY_SERVICES:
             raise OBDError("Refusing to send '{request}': only read requests are allowed.", request=request)
-        for command in (f"ATSH{hdr}", f"ATCRA{rax}"):
-            await self.transport.send(command, 2)
+        if not (keep_address and self.addressed == (hdr, rax)):
+            for command in (f"ATSH{hdr}", f"ATCRA{rax}"):
+                await self.transport.send(command, 2)
+        self.addressed = (hdr, rax)
         if fc:
             for command in (f"ATFCSH{hdr}", "ATFCSD300000", "ATFCSM1"):
                 await self.transport.send(command, 2)
@@ -557,6 +606,7 @@ class ELM:
 
     async def restore_addressing(self):
         """Go back to asking all modules, so standard requests work again."""
+        self.addressed = None
         for command in ("ATCRA", "ATFCSM0", "ATSH7DF"):
             await self.transport.send(command, 2)
 
@@ -759,6 +809,10 @@ TEST_UNITS = {
     0xAF: (True, 0.01, "%"), 0xB0: (True, 0.003052, "%"), 0xB1: (True, 2, "mV/s"), 0xFC: (True, 0.01, "kPa"),
     0xFD: (True, 0.001, "kPa"), 0xFE: (True, 0.25, "Pa"),
 }
+# What the standard test numbers mean for oxygen sensor monitors. Higher numbers are defined by each maker.
+O2_TEST_NAMES = {0x01: "Rich to lean threshold", 0x02: "Lean to rich threshold", 0x03: "Low voltage for switch time", 0x04: "High voltage for switch time",
+                 0x05: "Rich to lean switch time", 0x06: "Lean to rich switch time", 0x07: "Lowest sensor voltage", 0x08: "Highest sensor voltage",
+                 0x09: "Time between switches", 0x0A: "Sensor period"}
 TEST_RESULT_BYTES = 9
 MAX_MONITORS = 40
 
@@ -844,7 +898,8 @@ def page_test_results(results, lang=None):
     for result in results or []:
         group = groups.setdefault(result["monitor"], {"monitor": f"{result['monitor']:02X}", "name": monitor_name(result["monitor"], lang), "tests": []})
         unit = t(result["unit"], lang) if result["unit"] else ""
-        group["tests"].append({"module": result["module"], "test": t("Test {number}", lang, number=f"{result['test']:02X}"),
+        known_name = O2_TEST_NAMES.get(result["test"]) if 0x01 <= result["monitor"] <= 0x10 else None
+        group["tests"].append({"module": result["module"], "test": t(known_name, lang) if known_name else t("Test {number}", lang, number=f"{result['test']:02X}"),
                                "value": f"{test_number(result['value'])} {unit}".strip(),
                                "limits": f"{test_number(result['low'])} - {test_number(result['high'])}", "state": result["state"]})
     return sorted(groups.values(), key=lambda g: (not any(test["state"] == "fail" for test in g["tests"]), g["monitor"]))
@@ -889,19 +944,29 @@ async def run_codes(elm, _):
 async def read_freeze_frame(elm):
     """Return what the car saved when a stored code was set, or None if nothing was saved."""
     replies = await elm.request(0x02, 0x02, frame=0)
-    code = next((c for p in replies.values() for c in decode_dtcs(bytes(2) + p[3:5])), None)
+    module, code = next(((h, c) for h, p in replies.items() for c in decode_dtcs(bytes(2) + p[3:5])), (None, None))
     if code is None:
         return None
-    supported = set()
-    for payload in (await elm.request(0x02, 0x00, frame=0)).values():
-        supported |= bits_to_pids(payload[3:7], 0x00)
+    supported, base = set(), 0x00
+    while base <= 0x40:
+        payload = (await elm.request(0x02, base, frame=0)).get(module)
+        if not payload:
+            break
+        supported |= bits_to_pids(payload[3:7], base)
+        if base + 0x20 not in supported:
+            break
+        base += 0x20
     values = []
     for pid in (p for p in LIVE_PIDS if p in supported):
-        for payload in (await elm.request(0x02, pid, frame=0)).values():
-            name, unit, formula = LIVE_PIDS[pid]
+        payload = (await elm.request(0x02, pid, frame=0)).get(module)  # only this module's values describe its fault
+        if not payload:
+            continue
+        name, unit, formula = LIVE_PIDS[pid]
+        try:
             value = formula(payload[3:])
-            values.append({"name": name, "unit": "" if value == "Not reported" else unit, "text": format_value(value)})
-            break
+        except IndexError:
+            continue
+        values.append({"name": name, "unit": "" if value == "Not reported" else unit, "text": format_value(value)})
     return {"code": code, "values": values}
 
 
@@ -912,6 +977,12 @@ async def read_identity(elm):
         replies = await elm.request_all(0x09, pid)  # a module missed here would be forgotten for the session
         vehicle[label] = {h: decode_text(p) for h, p in replies.items()}
     vehicle["Calibration check"] = elm.calibration
+    if not vehicle["VIN"]:
+        # Some cars only give the VIN when the engine module is asked directly.
+        reply = await elm.module_request("7E0", "7E8", "22F190")
+        await elm.restore_addressing()
+        if reply and reply.startswith(bytes.fromhex("62F190")) and reply.complete:
+            vehicle["VIN"] = {"7E8": "".join(chr(b) for b in reply[3:] if 32 < b < 127)}
     set_car_make(make_from_vin(next(iter(vehicle["VIN"].values()), None)))
     return vehicle
 
@@ -930,9 +1001,11 @@ async def read_calibration_check(elm):
 
 async def read_this_drive(elm):
     """Read which self-tests have finished this drive. In this data a set bit means not finished."""
+    status = await elm.request(0x01, 0x01)
+    diesel = any(len(payload) >= 4 and payload[3] & 0x08 for payload in status.values())
     for payload in (await elm.request(0x01, THIS_DRIVE_PID)).values():
         if len(payload) >= 6:
-            return decode_monitors(payload)["tests"]
+            return decode_monitors(payload, diesel)["tests"]
     return None
 
 
@@ -1209,16 +1282,47 @@ def dashboard_state(snapshot, reader, demo=False, lang=None, cars=()):
                        for v in freeze["values"]]},
         "systems": page_systems(snapshot, reader, lang),
         "ecus": page_ecus(snapshot, getattr(getattr(reader, "elm", None), "busy_modules", set)(), lang),
-        "values": [{"pid": f"{pid:02X}", "name": t(LIVE_PIDS[pid][0], lang), "system": car_systems.value_system(pid),
+        "values": [*[{"pid": f"{pid:02X}", "name": t(LIVE_PIDS[pid][0], lang), "system": car_systems.value_system(pid), "tone": value_tone(pid, value),
                     "unit": "" if value == "Not reported" else t(LIVE_PIDS[pid][1], lang),
                     "value": value if isinstance(value, (int, float)) else None,
                     "text": "-" if value is None else t(format_value(value), lang),
                     "note": reader.age_note(pid, lang)}
-                   for pid, value in reader.values.items()],
+                   for pid, value in reader.values.items()], *page_fuel_use(reader.values, lang)],
         "this_drive": [[t(name, lang), done] for name, done in snapshot["this_drive"] or []],
         "more": [{**item, "system": car_systems.more_system(item.get("path", ""), item["name"])} for item in snapshot["more"]],
         "raw": [{"pid": f"{pid:02X}", "text": text or t("no reply", lang)} for pid, text in snapshot["raw"].items()],
     }
+
+
+# Roughly stoichiometric air to fuel ratio, and grams per litre, for gasoline.
+GASOLINE_AIR_RATIO = 14.7
+GASOLINE_GRAMS_PER_LITRE = 745
+MOVING_KMH = 5
+
+
+def fuel_use(values):
+    """Estimate fuel use as (number, unit), or None. The air flow method only suits gasoline, as diesels run with spare air."""
+    litres_per_hour = number(values.get(0x5E))
+    if litres_per_hour is None and values.get(0x51) == "Gasoline" and number(values.get(0x10)) is not None:
+        litres_per_hour = values[0x10] * 3600 / (GASOLINE_AIR_RATIO * GASOLINE_GRAMS_PER_LITRE)
+    if litres_per_hour is None:
+        return None
+    speed = number(values.get(0x0D))
+    return (litres_per_hour / speed * 100, "L/100km") if speed is not None and speed > MOVING_KMH else (litres_per_hour, "L/h")
+
+
+def value_tone(pid, value):
+    """Say whether a reading deserves attention. These are cautious road car limits, not a diagnosis."""
+    reading = number(value)
+    if reading is None:
+        return ""
+    if pid == 0x05:
+        return "bad" if reading >= 115 else "warn" if reading >= 105 else ""
+    if pid == 0x42:
+        return "bad" if reading < 11.5 or reading > 15.5 else ""
+    if pid == 0x2F:
+        return "warn" if reading < 10 else ""
+    return ""
 
 
 def recheck_hint(freeze, lang=None):
@@ -1250,9 +1354,19 @@ def page_ecus(snapshot, busy=(), lang=None):
                 rows.append({"label": t(label, lang), "text": text})
         rows += [{"label": t(item["label"], lang), "text": item["text"]} for item in (snapshot.get("ecu_details") or {}).get(header, [])]
         faults = sorted({code for modules in snapshot["codes"].values() for code in modules.get(header, [])})
+        car_vin = next(iter(vehicle.get("VIN", {}).values()), None)
+        stored_vin = next((item["text"] for item in (snapshot.get("ecu_details") or {}).get(header, []) if item["label"] == "Stored VIN"), None)
+        warning = t("This computer stores a different VIN from the car's. It may have been replaced, which isn't always a problem.", lang) \
+            if car_vin and stored_vin and stored_vin != car_vin else None
         state = "busy" if header in busy else "answering" if header in snapshot["monitors"] else "silent"
-        ecus.append({"header": header, "role": t(role, lang, header=header), "icon": icon, "state": state, "rows": rows, "faults": faults})
+        ecus.append({"header": header, "role": t(role, lang, header=header), "icon": icon, "state": state, "rows": rows, "faults": faults, "warning": warning})
     return ecus
+
+
+def page_fuel_use(values, lang=None):
+    use = fuel_use(values)
+    return [] if use is None else [{"pid": "FUEL", "name": t("Fuel use (estimate)", lang), "system": "fuel_air", "tone": "", "unit": t(use[1], lang),
+                                    "value": use[0], "text": f"{use[0]:.1f}", "note": None}]
 
 
 def page_systems(snapshot, reader, lang=None):
@@ -1272,6 +1386,8 @@ def page_systems(snapshot, reader, lang=None):
             "name": t(LIVE_PIDS[pid][0], lang), "text": f"{'-' if value is None else t(format_value(value), lang)} {unit}".strip(),
             "note": reader.age_note(pid, lang)})
     systems["electrical"]["values"].append({"name": t("Voltage at adapter (approximate)", lang), "text": t(reader.voltage, lang), "note": None})
+    for item in page_fuel_use(reader.values, lang):
+        systems["fuel_air"]["values"].append({"name": item["name"], "text": f"{item['text']} {item['unit']}", "note": None})
     for item in snapshot["more"]:
         systems[car_systems.more_system(item.get("path", ""), item["name"])]["values"].append(
             {"name": item["name"], "text": item["text"], "note": None})
@@ -1419,6 +1535,48 @@ class DashboardApp:
         self.stay_disconnected = False
         self.connect_again = asyncio.Event()
         self.connecting = None
+        self.copy = None  # the saved car copy being run instead of a car
+        self.skip_wait = False
+
+    def save_car_copy(self, lang=None):
+        """Save what this car has answered. Returns (file name, None), or (None, why it can't)."""
+        if self.copy:
+            return None, t("This is already a car copy.", lang)
+        if self.snapshot is None or self.elm is None:
+            return None, t("Connect to a car and wait for it to finish reading first.", lang)
+        vin = next(iter(self.snapshot["vehicle"].get("VIN", {}).values()), None)
+        name = None
+        if not self.args.demo:
+            with contextlib.suppress(OSError, ValueError):
+                name = garage.load_car(garage.car_key(self.snapshot["vehicle"])).get("name")
+        year = garage.model_year(vin)
+        name = name or " ".join(str(part) for part in (make_from_vin(vin), year) if part) or None
+        try:
+            return car_copy.save_copy(car_copy.copy_folder(self.args.demo), self.elm.transport.recorder, name, vin), None
+        except OSError as error:
+            return None, t("Could not save the car copy: {error}", lang, error=error)
+
+    def switch_connection(self):
+        """Let go of whatever is connected, and connect again straight away to the car or the copy."""
+        self.skip_wait = True
+        self.reconnect()
+        if self.connecting is not None:
+            self.connecting.cancel()
+
+    def open_car_copy(self, file_name, lang=None):
+        """Run the app from a saved copy. Returns why it can't, or None."""
+        if self.job_changing_car():
+            return t("Fault codes are being cleared. Wait for that to finish, then disconnect.", lang)
+        try:
+            self.copy = car_copy.load_copy(car_copy.copy_folder(self.args.demo), file_name)
+        except ValueError as error:
+            return t(str(error), lang)
+        self.switch_connection()
+        return None
+
+    def close_car_copy(self):
+        self.copy = None
+        self.switch_connection()
 
     def job_changing_car(self):
         """A clear must finish once it has started, or the driver can't tell whether it happened."""
@@ -1430,6 +1588,7 @@ class DashboardApp:
             return t("Fault codes are being cleared. Wait for that to finish, then disconnect.", lang)
         if self.link_state == "off":
             return None
+        self.copy = None
         self.stay_disconnected = True
         self.link_state = "stopping"
         if self.connecting is not None:
@@ -1536,6 +1695,8 @@ class DashboardApp:
             return rows
 
         elm = self.link
+        if self.copy:
+            return [row("Status", t("Running from a saved car copy", lang), "good")]
         if self.link_state == "off":
             return [row("Status", t("Disconnected. It's safe to unplug the adapter.", lang), "good")]
         if elm is None:
@@ -1577,6 +1738,8 @@ class DashboardApp:
             return None, t("That command isn't available here.", lang)
         if self.elm is None:
             return None, t("Not connected to a car", lang)
+        if self.copy and action == "clear":
+            return None, t("A car copy has no car to clear. Connect to the car to do this.", lang)
         if len(self.waiting) >= MAX_JOBS_WAITING:
             return None, t("Too many commands are waiting. Try again when they finish.", lang)
         if action == "profile":
@@ -1671,6 +1834,17 @@ class DashboardApp:
             params = body.get("params") if isinstance(body.get("params"), dict) else {}
             job, refusal = self.submit(body.get("action"), params, lang)
             return (400, {"error": refusal}) if refusal else (200, job.view())
+        if method == "GET" and path == "/api/copies":
+            return 200, car_copy.list_copies(car_copy.copy_folder(self.args.demo))
+        if method == "POST" and path == "/api/copy/save":
+            name, refusal = self.save_car_copy(lang)
+            return (409, {"error": refusal}) if refusal else (200, {"file": name, "folder": str(car_copy.copy_folder(self.args.demo))})
+        if method == "POST" and path == "/api/copy/open":
+            refusal = self.open_car_copy(body.get("file"), lang)
+            return (409, {"error": refusal}) if refusal else (200, {"file": body.get("file")})
+        if method == "POST" and path == "/api/copy/close":
+            self.close_car_copy()
+            return 200, {}
         if method == "POST" and path == "/api/disconnect":
             refusal = self.disconnect(lang)
             return (409, {"error": refusal}) if refusal else (200, {"link": self.link_state})
@@ -1739,15 +1913,20 @@ class DashboardApp:
         if self.snapshot is None:
             text, values = self.message
             return {"connected": False, "message": t(text, lang, **values), "cars": self.cars,
-                    "device": self.device_status(lang), "link": self.link_state}
-        state = dashboard_state(self.snapshot, self.reader, self.args.demo, lang, self.cars)
+                    "device": self.device_status(lang), "link": self.link_state, "copy": self.copy_status(), "can_save_copy": False}
+        state = dashboard_state(self.snapshot, self.reader, self.args.demo and not self.copy, lang, self.cars)
         state["device"] = self.device_status(lang)
         state["alerts"] = car_alerts(self.snapshot, self.reader.values, lang, self.charging_lasting())
         state["alerts"] += [t("Module {header} says it's busy, so its readings are paused. They usually return within a minute.", lang, header=header)
                             for header in sorted(self.elm.busy_modules())] if self.elm else []
         state["recording"] = self.recording_status(lang)
         state["link"] = self.link_state
+        state["copy"] = self.copy_status()
+        state["can_save_copy"] = not self.copy and self.elm is not None
         return state
+
+    def copy_status(self):
+        return self.copy and {"name": self.copy.get("name"), "saved": self.copy.get("saved")}
 
     def start_recording(self, lang=None):
         """Start saving live values to a CSV file. Returns why it can't start, or None."""
@@ -1762,7 +1941,7 @@ class DashboardApp:
         pids = list(self.reader.values)
         writer.writerow([t("time", lang)] + [column_title(p, lang) for p in pids])
         self.recording = {"path": path, "file": log_file, "writer": writer, "pids": pids, "rows": 0,
-                          "started": time.monotonic(), "highest": {}, "speed_total": 0.0, "speed_rows": 0}
+                          "started": time.monotonic(), "highest": {}, "speed_total": 0.0, "speed_rows": 0, "written": {}}
         self.last_summary = None
         return None
 
@@ -1770,9 +1949,11 @@ class DashboardApp:
         recording = self.recording
         if not recording or self.reader is None:
             return
-        values = self.reader.values
-        recording["writer"].writerow([datetime.now().isoformat(timespec="milliseconds")]
-                                     + ["" if values.get(p) is None else format_value(values[p]) for p in recording["pids"]])
+        values, read_at, written = self.reader.values, self.reader.read_at, recording["written"]
+        # A blank cell means no new reading came, so a value held from earlier isn't mistaken for a measurement.
+        cells = ["" if values.get(p) is None or read_at.get(p) == written.get(p) else format_value(values[p]) for p in recording["pids"]]
+        written.update({p: read_at.get(p) for p in recording["pids"]})
+        recording["writer"].writerow([datetime.now().isoformat(timespec="milliseconds")] + cells)
         recording["file"].flush()
         recording["rows"] += 1
         for pid in (0x0C, 0x0D, 0x05):
@@ -1868,7 +2049,14 @@ class DashboardApp:
         self.activity.event("Adapter found, talking to it now.")
 
     async def connect(self):
-        if self.args.demo:
+        if self.copy:
+            elm = ELM(car_copy.CopyTransport(self.copy))
+            elm.demo = True  # keeps it out of the saved cars, as it isn't a new visit to the car
+            elm.device_name = t("Saved car copy")
+            elm.transport.activity = self.activity
+            await elm.setup()
+            await self.session(elm, self.args)
+        elif self.args.demo:
             elm = ELM(DemoTransport())
             elm.demo = True
             elm.device_name = "Demo"
@@ -1889,6 +2077,7 @@ class DashboardApp:
                 self.connect_again.clear()
                 await self.connect_again.wait()
                 continue
+            self.skip_wait = False
             self.connecting = asyncio.create_task(self.connect())
             try:
                 await self.connecting
@@ -1896,11 +2085,12 @@ class DashboardApp:
             except asyncio.CancelledError:
                 if asyncio.current_task().cancelling():
                     raise  # the app itself is closing
-                continue  # only the connection was stopped, by the Disconnect button
+                self.snapshot = self.reader = self.link = self.elm = None
+                continue  # only the connection was stopped, by the Disconnect button or a car copy
             except Exception as error:
                 self.snapshot = self.reader = self.link = None
                 # Only a silent car proves the adapter is still there; any other failure may mean it's gone.
-                if not (isinstance(error, OBDError) and error.text == CAR_SILENT):
+                if not (isinstance(error, OBDError) and error.text in (CAR_SILENT, BUS_PROBLEM, ADAPTER_RESTARTED)):
                     self.adapter = None
                 if isinstance(error, OBDError):
                     self.message = (error.text, error.values)
@@ -1916,7 +2106,7 @@ class DashboardApp:
     async def retry_wait(self):
         """Wait before trying again, but stop waiting at once if the Disconnect button is pressed."""
         waited = 0.0
-        while waited < self.RETRY_SECONDS and not self.stay_disconnected:
+        while waited < self.RETRY_SECONDS and not self.stay_disconnected and not self.skip_wait:
             await asyncio.sleep(0.2)
             waited += 0.2
 

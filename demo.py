@@ -64,7 +64,8 @@ DEMO_TESTS = {
 
 
 # What the simulated engine computer reports about itself.
-DEMO_ECU = {"22F187": b"DEMO-PART-1", "22F189": b"DEMO-SW-2.0", "22F191": b"DEMO-HW-1.0"}
+DEMO_ECU = {"22F187": b"DEMO-PART-1", "22F189": b"DEMO-SW-2.0", "22F191": b"DEMO-HW-1.0", "22F195": b"DEMO-SUP-1",
+            "22F197": b"Engine", "22F199": bytes.fromhex("20260115"), "22F190": DEMO_VIN.encode(), "22F100": b"DEMO PLATFORM 1.0"}
 
 
 def frames(header, payload):
@@ -125,6 +126,8 @@ class DemoTransport:
             return frames("7E8", [0x49, 0x06, 0x01, 0x12, 0x34, 0xAB, 0xCD])
         if command in DEMO_ECU:
             return frames("7E8", [0x62, 0xF1, int(command[4:], 16)] + list(DEMO_ECU[command]))
+        if command == "1908E0AF":
+            return frames("7E8", [0x59, 0x08, 0xAF, 0x40, 0x00, 0x01, 0x71, 0x00, 0x09])
         if command == "190B":
             return frames("7E8", [0x59, 0x0B, 0xAF, 0x04, 0x55, 0x00, 0x20])
         if command == "190D":

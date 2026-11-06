@@ -34,18 +34,24 @@ UDS_READ_CODES = "1902AF"
 KWP_READ_CODES = "1800FF00"
 FIRST_FAULT_REQUEST, LATEST_FAULT_REQUEST = "190B", "190D"
 # Standard identity values a computer can report about itself.
-ECU_DETAILS = (("22F187", "Part number"), ("22F189", "Software version"), ("22F191", "Hardware version"))
+ECU_DETAILS = (("22F187", "Part number"), ("22F189", "Software version"), ("22F191", "Hardware number"), ("22F195", "Supplier software version"),
+               ("22F197", "System name"), ("22F199", "Last programmed"), ("22F190", "Stored VIN"), ("22F100", "Maker's description"))
+SEVERITY_REQUEST = "1908E0AF"
+SEVERITIES = ((0x80, "Check immediately"), (0x40, "Check at next stop"), (0x20, "Needs maintenance"))
 
 # Why a module refused a request, from its reply 7F <service> <reason>.
 REFUSALS = {
     0x10: "General refusal", 0x11: "Request type not supported", 0x12: "Request option not supported",
     0x13: "Request not understood", 0x14: "Reply would be too long", 0x21: "Busy", 0x22: "Conditions not right, such as engine state",
     0x24: "Requests in the wrong order", 0x25: "A connected part didn't answer", 0x26: "A fault prevents this request",
-    0x31: "Value not available", 0x33: "Locked by the maker's security", 0x37: "Asked again too soon", 0x78: "Still working",
-    0x7E: "Not available in normal mode", 0x7F: "Not available in normal mode",
+    0x31: "Value not available", 0x33: "Locked by the maker's security", 0x34: "Locked by the maker's security", 0x37: "Asked again too soon",
+    0x78: "Still working", 0x7E: "Not available in normal mode", 0x7F: "Not available in normal mode",
+    0x81: "Engine speed too high", 0x82: "Engine speed too low", 0x83: "Needs the engine off", 0x84: "Needs the engine running",
+    0x88: "Vehicle speed too high", 0x89: "Vehicle speed too low", 0x8F: "Needs the brake pressed", 0x90: "Needs the shifter in park",
+    0x92: "Voltage too high", 0x93: "Voltage too low", 0x94: "Temporarily unavailable",
 }
 # Reasons that mean ask again, with the seconds to wait first.
-TRY_AGAIN = {0x21: 0.2, 0x78: 1}
+TRY_AGAIN = {0x21: 0.2, 0x78: 1, 0x94: 1}
 
 # What the other status bits of a UDS fault record mean. See ISO 15765-3 for the bits.
 STATUS_DETAILS = ((0x80, "Asking for the warning light"), (0x02, "Failed on this drive"),
@@ -290,7 +296,9 @@ def decode_uds_codes(payload):
     body = payload[3:]
     for i in range(0, len(body) - 3, 4):
         status = body[i + 3]
-        if body[i] or body[i + 1]:
+        if any(body[i:i + 3]):
+            if not status & 0xAF:
+                continue  # It reports tests that haven't finished, not a fault that happened.
             state = "active" if status & 0x01 else "stored" if status & 0x08 else "pending" if status & 0x04 else "history"
             code = f"{dtc_name(body[i], body[i + 1])}-{body[i + 2]:02X}"
             if order.index(state) >= order.index(worst.get(code, "history")):
@@ -307,9 +315,24 @@ def refusal_reason(reply):
     return REFUSALS.get(reply[2], "Reason not known")
 
 
-def decode_one_record(reply):
+def decode_severity(payload):
+    """Decode a 59 08 reply into {code: how urgent}: availability byte, then severity, unit, 3-byte code and status."""
+    found = {}
+    if not payload or payload[:2] != bytes([0x59, 0x08]):
+        return found
+    body = payload[3:]
+    for i in range(0, len(body) - 5, 6):
+        label = next((text for bit, text in SEVERITIES if body[i] & bit), None)
+        if label:
+            found[f"{dtc_name(body[i + 2], body[i + 3])}-{body[i + 4]:02X}"] = label
+    return found
+
+
+def decode_one_record(reply, subfunction=None):
     """Decode a 59 reply holding a single fault, such as the first or latest. None if there's no such fault."""
-    if reply and reply[0] == 0x59 and len(reply) >= 7 and (reply[3] or reply[4]):
+    if subfunction is not None and (not reply or len(reply) < 2 or reply[1] != subfunction):
+        return None
+    if reply and reply[0] == 0x59 and len(reply) >= 7 and any(reply[3:6]):
         return f"{dtc_name(reply[3], reply[4])}-{reply[5]:02X}"
     return None
 
@@ -380,6 +403,16 @@ def format_scan(modules, descriptions):
     return "\n".join(lines)
 
 
+def readable_date(data):
+    """Read a date stored as digits, such as 20 26 01 15 or 26 01 15. None if it isn't one."""
+    digits = bytes(data).hex()
+    if len(digits) == 6:
+        digits = "20" + digits
+    if len(digits) == 8 and digits.isdigit() and 1 <= int(digits[4:6]) <= 12 and 1 <= int(digits[6:8]) <= 31:
+        return f"{digits[:4]}-{digits[4:6]}-{digits[6:8]}"
+    return None
+
+
 def readable_detail(data):
     """Show a reported value as text when it is text, and as hex when it isn't."""
     text = bytes(data).rstrip(b"\x00\xff ").decode("ascii", "replace")
@@ -396,11 +429,15 @@ async def read_ecu_details(elm, headers):
             found = details.setdefault(header, [])
             request_id = f"{int(header, 16) - 8:03X}"
             for request, label in ECU_DETAILS:
-                reply = await elm.module_request(request_id, header, request)
+                reply = await elm.module_request(request_id, header, request, keep_address=True)
                 if reply is None:
                     break  # a silent computer won't answer the rest either
+                if not getattr(reply, "complete", True):
+                    # A long reply needs the adapter to tell the module to carry on, which isn't automatic for every address.
+                    reply = await elm.module_request(request_id, header, request, fc=True, keep_address=True) or reply
                 if reply.startswith(b"\x62" + bytes.fromhex(request[2:])) and getattr(reply, "complete", True):
-                    text = readable_detail(reply[3:])
+                    text = readable_date(reply[3:]) if request == "22F199" else None
+                    text = text or readable_detail(reply[3:])
                     if text:
                         found.append({"label": label, "text": text})
     finally:
@@ -416,7 +453,12 @@ async def read_fault_order(elm, records):
             if not record["codes"]:
                 continue
             for key, request in (("first", FIRST_FAULT_REQUEST), ("latest", LATEST_FAULT_REQUEST)):
-                record[key] = decode_one_record(await elm.module_request(record["hdr"], record["reply_id"], request))
+                reply = await elm.module_request(record["hdr"], record["reply_id"], request, keep_address=True)
+                record[key] = decode_one_record(reply, int(request[2:], 16))
+            severity = decode_severity(await elm.module_request(record["hdr"], record["reply_id"], SEVERITY_REQUEST, keep_address=True))
+            for item in record["codes"]:
+                if item["code"] in severity:
+                    item["details"] = [severity[item["code"]], *item.get("details", [])]
     finally:
         if any(record["codes"] for record in records):
             await elm.restore_addressing()

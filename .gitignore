@@ -12,6 +12,7 @@ dist/
 logs/
 reports/
 cars/
+car_copies/
 settings.json
 
 # Profiles fetched on demand
