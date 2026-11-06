@@ -679,6 +679,136 @@ def known_modules(vehicle):
     return sorted((vehicle or {}).get("Module name", {}))
 
 
+async def read_module_records(elm, vehicle=None):
+    """Read the fault records kept inside each known module, which can include faults no longer active."""
+    ids = [int(header, 16) - 8 for header in known_modules(vehicle or elm.vehicle) if re.fullmatch(r"7E[89A-F]", header)]
+    return await car_modules.scan_modules(elm, ids=ids) if ids else []
+
+
+# Mode 06 units from SAE J1979: unit ID: (signed, scale, unit, offset)
+TEST_UNITS = {
+    0x01: (False, 1, ""), 0x02: (False, 0.1, ""), 0x03: (False, 0.01, ""), 0x04: (False, 0.001, ""),
+    0x05: (False, 0.0000305, ""), 0x06: (False, 0.000305, ""), 0x07: (False, 0.25, "rpm"), 0x08: (False, 0.01, "km/h"),
+    0x09: (False, 1, "km/h"), 0x0A: (False, 0.122, "mV"), 0x0B: (False, 0.001, "V"), 0x0C: (False, 0.01, "V"),
+    0x0D: (False, 0.00390625, "mA"), 0x0E: (False, 0.001, "A"), 0x0F: (False, 0.01, "A"), 0x10: (False, 1, "ms"),
+    0x11: (False, 100, "ms"), 0x12: (False, 1, "s"), 0x13: (False, 1, "mOhm"), 0x14: (False, 1, "Ohm"),
+    0x15: (False, 1, "kOhm"), 0x16: (False, 0.1, "C", -40), 0x17: (False, 0.01, "kPa"), 0x18: (False, 0.0117, "kPa"),
+    0x19: (False, 0.079, "kPa"), 0x1A: (False, 1, "kPa"), 0x1B: (False, 10, "kPa"), 0x1C: (False, 0.01, "deg"),
+    0x1D: (False, 0.5, "deg"), 0x1E: (False, 0.0000305, ""), 0x1F: (False, 0.05, ""), 0x20: (False, 0.00390625, ""),
+    0x21: (False, 1, "mHz"), 0x22: (False, 1, "Hz"), 0x23: (False, 1, "kHz"), 0x24: (False, 1, ""), 0x25: (False, 1, "km"),
+    0x26: (False, 0.1, "mV/ms"), 0x27: (False, 0.01, "g/s"), 0x28: (False, 1, "g/s"), 0x29: (False, 0.25, "Pa/s"),
+    0x2A: (False, 0.001, "kg/h"), 0x2B: (False, 1, ""), 0x2C: (False, 0.01, "g/cyl"), 0x2D: (False, 0.01, "mg/stroke"),
+    0x2E: (False, 1, ""), 0x2F: (False, 0.01, "%"), 0x30: (False, 0.001526, "%"), 0x31: (False, 0.001, "L"),
+    0x32: (False, 0.0000305, "in"), 0x33: (False, 0.00024414, ""), 0x34: (False, 1, "min"), 0x35: (False, 10, "ms"),
+    0x36: (False, 0.01, "g"), 0x37: (False, 0.1, "g"), 0x38: (False, 1, "g"), 0x39: (False, 0.01, "%", -327.68),
+    0x3A: (False, 0.001, "g"), 0x3B: (False, 0.0001, "g"), 0x3C: (False, 0.1, "us"), 0x3D: (False, 0.01, "mA"),
+    0x3E: (False, 0.00006103516, "mm2"), 0x3F: (False, 0.01, "L"), 0x40: (False, 1, "ppm"), 0x41: (False, 0.01, "uA"),
+    0x81: (True, 1, ""), 0x82: (True, 0.1, ""), 0x83: (True, 0.01, ""), 0x84: (True, 0.001, ""), 0x85: (True, 0.0000305, ""),
+    0x86: (True, 0.000305, ""), 0x87: (True, 1, "ppm"), 0x8A: (True, 0.122, "mV"), 0x8B: (True, 0.001, "V"),
+    0x8C: (True, 0.01, "V"), 0x8D: (True, 0.00390625, "mA"), 0x8E: (True, 0.001, "A"), 0x90: (True, 1, "ms"),
+    0x96: (True, 0.1, "C"), 0x99: (True, 0.1, "kPa"), 0x9C: (True, 0.01, "deg"), 0x9D: (True, 0.5, "deg"),
+    0xA8: (True, 1, "g/s"), 0xA9: (True, 0.25, "Pa/s"), 0xAD: (True, 0.01, "mg/stroke"), 0xAE: (True, 0.1, "mg/stroke"),
+    0xAF: (True, 0.01, "%"), 0xB0: (True, 0.003052, "%"), 0xB1: (True, 2, "mV/s"), 0xFC: (True, 0.01, "kPa"),
+    0xFD: (True, 0.001, "kPa"), 0xFE: (True, 0.25, "Pa"),
+}
+TEST_RESULT_BYTES = 9
+MAX_MONITORS = 40
+
+
+def monitor_name(monitor, lang=None):
+    """Name a mode 06 monitor from its standard ID."""
+    if 0x01 <= monitor <= 0x10:
+        return t("Oxygen sensor B{bank}S{sensor}", lang, bank=(monitor - 1) // 4 + 1, sensor=(monitor - 1) % 4 + 1)
+    if 0x41 <= monitor <= 0x50:
+        return t("Oxygen sensor heater B{bank}S{sensor}", lang, bank=(monitor - 0x41) // 4 + 1, sensor=(monitor - 0x41) % 4 + 1)
+    if 0xA2 <= monitor <= 0xAD:
+        return t("Misfire, cylinder {number}", lang, number=monitor - 0xA1)
+    single = {0x39: "Evaporative leak, 0.150 inch", 0x3A: "Evaporative leak, 0.090 inch", 0x3B: "Evaporative leak, 0.040 inch",
+              0x3C: "Evaporative leak, 0.020 inch", 0x3D: "Evaporative purge flow", 0xA1: "Misfire, all cylinders"}
+    if monitor in single:
+        return t(single[monitor], lang)
+    banks = ((0x21, 0x24, "Catalyst, bank {bank}"), (0x31, 0x34, "EGR, bank {bank}"), (0x35, 0x38, "Variable valve timing, bank {bank}"),
+             (0x61, 0x64, "Heated catalyst, bank {bank}"), (0x71, 0x74, "Secondary air, bank {bank}"), (0x81, 0x84, "Fuel system, bank {bank}"),
+             (0x85, 0x88, "Boost pressure, bank {bank}"), (0x90, 0x91, "NOx adsorber, bank {bank}"), (0x98, 0x99, "NOx catalyst, bank {bank}"),
+             (0xB2, 0xB3, "Particulate filter, bank {bank}"))
+    for first, last, text in banks:
+        if first <= monitor <= last:
+            return t(text, lang, bank=monitor - first + 1)
+    return t("Monitor {number}", lang, number=f"{monitor:02X}")
+
+
+def scaled_test_value(unit_id, data):
+    """Turn a 2-byte mode 06 value into its real number, or None if its unit isn't in the standard list."""
+    unit = TEST_UNITS.get(unit_id)
+    if unit is None:
+        return None
+    value = int.from_bytes(data, "big", signed=unit[0]) * unit[1]
+    return value + unit[3] if len(unit) > 3 else value
+
+
+def decode_test_results(header, payload):
+    """Split a mode 06 reply into results. Each is a monitor, a test, a unit, then value, lowest and highest allowed."""
+    if not getattr(payload, "complete", True):
+        return []
+    results = []
+    body = payload[1:]
+    for start in range(0, len(body) - TEST_RESULT_BYTES + 1, TEST_RESULT_BYTES):
+        monitor, test, unit_id, *rest = body[start:start + TEST_RESULT_BYTES]
+        data = bytes(rest)
+        value, low, high = (scaled_test_value(unit_id, data[i:i + 2]) for i in (0, 2, 4))
+        if value is None:
+            state = "unknown"
+        elif not any(data):
+            state = "not_run"  # A test that hasn't run yet reports nothing but zeros.
+        else:
+            state = "pass" if low <= value <= high else "fail"
+        results.append({"module": header, "monitor": monitor, "test": test, "value": value, "low": low, "high": high,
+                        "unit": TEST_UNITS.get(unit_id, (False, 1, ""))[2], "state": state})
+    return results
+
+
+async def read_test_results(elm):
+    """Read the car's detailed self-test results, if it offers them."""
+    supported, base = set(), 0x00
+    while base <= 0xE0:
+        replies = await elm.request(0x06, base)
+        if not replies:
+            break
+        for payload in replies.values():
+            supported |= bits_to_pids(payload[2:6], base)
+        if base + 0x20 not in supported:
+            break
+        base += 0x20
+    results = []
+    for monitor in sorted(supported - set(range(0, 0x100, 0x20)))[:MAX_MONITORS]:
+        for header, payload in (await elm.request(0x06, monitor)).items():
+            results += decode_test_results(header, payload)
+    return results
+
+
+def test_number(value):
+    return "-" if value is None else f"{value:.3f}".rstrip("0").rstrip(".")
+
+
+def page_test_results(results, lang=None):
+    """Group self-test results by monitor for the page, with any outside their limits first."""
+    groups = {}
+    for result in results or []:
+        group = groups.setdefault(result["monitor"], {"monitor": f"{result['monitor']:02X}", "name": monitor_name(result["monitor"], lang), "tests": []})
+        unit = t(result["unit"], lang) if result["unit"] else ""
+        group["tests"].append({"module": result["module"], "test": t("Test {number}", lang, number=f"{result['test']:02X}"),
+                               "value": f"{test_number(result['value'])} {unit}".strip(),
+                               "limits": f"{test_number(result['low'])} - {test_number(result['high'])}", "state": result["state"]})
+    return sorted(groups.values(), key=lambda g: (not any(test["state"] == "fail" for test in g["tests"]), g["monitor"]))
+
+
+def page_module_records(records, lang=None):
+    return [{"module": record["hdr"], "name": t(record["name"], lang), "read_codes": record["read_codes"], "complete": record["complete"],
+             "codes": [{"code": item["code"], "short": item["code"][:5], "state": item["state"], "description": describe_dtc(item["code"][:5], lang)}
+                       for item in record["codes"]]}
+            for record in records or []]
+
+
 def code_lines(codes, indent="", known=()):
     lines = []
     for label, modules in codes.items():
@@ -771,6 +901,8 @@ async def read_snapshot(elm):
             else:
                 raw[pid] = payload[2:].hex(" ").upper() if payload else None
     return {
+        "module_records": await read_module_records(elm, vehicle),
+        "test_results": await read_test_results(elm),
         "this_drive": this_drive,
         "more": more,
         "adapter": elm.version,
@@ -842,6 +974,8 @@ def remember_snapshot(elm, snapshot):
         "codes": codes,
         "monitors": snapshot["monitors"],
         "freeze": snapshot["freeze"],
+        "module_records": snapshot.get("module_records", []),
+        "test_results": snapshot.get("test_results", []),
         "supported_pids": sorted(f"{pid:02X}" for pid in snapshot["supported"]),
         "values": {LIVE_PIDS[pid][0]: f"{'-' if value is None else format_value(value)} {LIVE_PIDS[pid][1]}".strip()
                    for pid, value in snapshot["values"].items()},
@@ -990,6 +1124,8 @@ def dashboard_state(snapshot, reader, demo=False, lang=None, cars=()):
         "cars": list(cars),
         "time": datetime.now().strftime("%H:%M:%S"),
         "reading": reader.updates,
+        "module_records": page_module_records(snapshot.get("module_records"), lang),
+        "test_results": page_test_results(snapshot.get("test_results"), lang),
         "adapter": snapshot["adapter"],
         "protocol": snapshot["protocol"],
         "voltage": t(reader.voltage, lang),

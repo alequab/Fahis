@@ -53,6 +53,16 @@ def supported_bytes(base):
     return list(bits.to_bytes(4, "big"))
 
 
+# Detailed self-tests: one inside its limits, one outside them, and one that hasn't run.
+DEMO_TESTS = {
+    "0600": [0x46, 0x00, 0xC0, 0x00, 0x00, 0x01],
+    "0620": [0x46, 0x20, 0x80, 0x00, 0x00, 0x00],
+    "0601": [0x46, 0x01, 0x85, 0x0B, 0x02, 0xBC, 0x00, 0x64, 0x03, 0xE8],
+    "0602": [0x46, 0x02, 0x85, 0x0B, 0x04, 0xB0, 0x00, 0x64, 0x03, 0xE8],
+    "0621": [0x46, 0x21, 0xA9, 0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+}
+
+
 def frames(header, payload):
     """Format a reply as CAN lines, splitting long ones as a real car does."""
     hexed = lambda data: " ".join(f"{b:02X}" for b in data)
@@ -103,6 +113,10 @@ class DemoTransport:
         if command in ("07", "0A"):
             response = int(command, 16) + 0x40
             return frames("7E8", [response, 0x00]) + frames("7E9", [response, 0x00])
+        if command == "1902AF":
+            return frames("7E8", [0x59, 0x02, 0xAF, 0x01, 0x71, 0x00, 0x09, 0x04, 0x55, 0x00, 0x20])
+        if command in DEMO_TESTS:
+            return frames("7E8", DEMO_TESTS[command])
         if command == "0902":
             return frames("7E8", [0x49, 0x02, 0x01] + list(DEMO_VIN.encode()))
         if command == "090A":

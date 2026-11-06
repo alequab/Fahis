@@ -371,6 +371,57 @@ class EverythingTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_quiet_log_says_so(self):
         self.assertIn("Nothing has been sent", obd_tool.Activity().review("en")["findings"][0]["text"])
 
+    def test_self_test_results_are_decoded_with_their_limits(self):
+        payload = obd_tool.Reply(bytes([0x46, 0x01, 0x85, 0x0B, 0x02, 0xBC, 0x00, 0x64, 0x03, 0xE8,
+                                        0x01, 0x86, 0x0B, 0x04, 0xB0, 0x00, 0x64, 0x03, 0xE8,
+                                        0x21, 0xA9, 0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                        0x31, 0x01, 0x77, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02]))
+        results = obd_tool.decode_test_results("7E8", payload)
+        self.assertEqual([r["state"] for r in results], ["pass", "fail", "not_run", "unknown"])
+        self.assertAlmostEqual(results[0]["value"], 0.7)
+        self.assertEqual((results[0]["low"], results[0]["high"], results[0]["unit"]), (0.1, 1.0, "V"))
+        cut = obd_tool.Reply(bytes(payload))
+        cut.complete = False
+        self.assertEqual(obd_tool.decode_test_results("7E8", cut), [])
+
+    def test_self_test_values_follow_their_sign_and_offset(self):
+        self.assertEqual(obd_tool.scaled_test_value(0x81, bytes([0xFF, 0xFE])), -2)
+        self.assertEqual(obd_tool.scaled_test_value(0x01, bytes([0xFF, 0xFE])), 65534)
+        self.assertAlmostEqual(obd_tool.scaled_test_value(0x16, bytes([0x01, 0x90])), 0.0)
+        self.assertIsNone(obd_tool.scaled_test_value(0x77, bytes([0, 1])))
+
+    def test_monitors_are_named_from_their_ids(self):
+        self.assertEqual(obd_tool.monitor_name(0x02, "en"), "Oxygen sensor B1S2")
+        self.assertEqual(obd_tool.monitor_name(0x06, "en"), "Oxygen sensor B2S2")
+        self.assertEqual(obd_tool.monitor_name(0x42, "en"), "Oxygen sensor heater B1S2")
+        self.assertEqual(obd_tool.monitor_name(0xA3, "en"), "Misfire, cylinder 2")
+        self.assertEqual(obd_tool.monitor_name(0x22, "en"), "Catalyst, bank 2")
+        self.assertEqual(obd_tool.monitor_name(0xF0, "en"), "Monitor F0")
+        self.assertIn("الأكسجين", obd_tool.monitor_name(0x01, "ar"))
+
+    async def test_records_and_self_tests_reach_the_page(self):
+        elm = ELM(demo.DemoTransport())
+        elm.vehicle = {"Module name": {"7E8": "ECM", "7E9": "TCM"}}
+        await elm.setup()
+        records = await obd_tool.read_module_records(elm)
+        self.assertEqual([r["hdr"] for r in records], ["7E0"])  # the demo's transmission keeps no records
+        page = obd_tool.page_module_records(records, "en")
+        states = {item["short"]: item["state"] for item in page[0]["codes"]}
+        self.assertEqual(states, {"P0171": "active", "P0455": "history"})
+        results = await obd_tool.read_test_results(elm)
+        groups = obd_tool.page_test_results(results, "en")
+        self.assertEqual(groups[0]["name"], "Oxygen sensor B1S2")  # the one outside its limits comes first
+        self.assertEqual(groups[0]["tests"][0]["state"], "fail")
+        self.assertEqual(groups[0]["tests"][0]["value"], "1.2 V")
+        self.assertEqual(groups[0]["tests"][0]["limits"], "0.1 - 1")
+
+    async def test_a_car_offering_no_records_or_tests_is_fine(self):
+        elm = ELM(FakeTransport({}))
+        self.assertEqual(await obd_tool.read_module_records(elm), [])
+        self.assertEqual(await obd_tool.read_test_results(elm), [])
+        self.assertEqual(obd_tool.page_module_records(None), [])
+        self.assertEqual(obd_tool.page_test_results(None), [])
+
     async def test_a_value_stays_with_its_module_after_a_miss(self):
         both = ["7E8 03 41 1C 1E", "7E9 03 41 1C 01"]
         transport = FakeTransport({"011C": Sequence([both, ["7E9 03 41 1C 01"], ["7E9 03 41 1C 01"], both])})

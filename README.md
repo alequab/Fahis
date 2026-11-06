@@ -60,7 +60,7 @@
 <td width="50%" valign="top"><b>الأوامر داخل التطبيق</b><br>شغّل فحص البطارية والتقرير والبحث عن الوحدات وغيرها، واقرأ النتيجة في الصفحة نفسها.</td>
 </tr>
 <tr>
-<td valign="top"><b>رموز الأعطال</b><br>المخزّنة والمعلّقة والدائمة، مع أوصاف لنحو 9,500 رمز عام.</td>
+<td valign="top"><b>رموز الأعطال</b><br>المخزّنة والمعلّقة والدائمة، مع أوصاف لنحو 9,500 رمز عام، إضافة إلى السجلات داخل الوحدات والنتائج التفصيلية للفحوصات الذاتية.</td>
 <td valign="top"><b>سيارات كثيرة</b><br>قائمة قابلة للبحث تضم نحو 880 ملف سيارة من المجتمع، وتُنزَّل عند الحاجة.</td>
 </tr>
 <tr>
@@ -266,7 +266,7 @@ Many ELM327 adapters are Bluetooth LE. Windows gives them no COM port, so most O
 <td width="50%" valign="top"><b>Commands in the app</b><br>Run a battery check, report, module scan and more, and read the result on the page.</td>
 </tr>
 <tr>
-<td valign="top"><b>Fault codes</b><br>Stored, pending and permanent, with descriptions for about 9,500 generic codes.</td>
+<td valign="top"><b>Fault codes</b><br>Stored, pending and permanent, with descriptions for about 9,500 generic codes, plus the records inside modules and detailed self-test results.</td>
 <td valign="top"><b>Many cars</b><br>A searchable catalog of about 880 community car profiles, downloaded when you need one.</td>
 </tr>
 <tr>

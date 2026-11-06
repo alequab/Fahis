@@ -158,6 +158,11 @@
   .log-line.event { grid-template-columns: 96px minmax(0, 1fr); font-family: inherit; }
   .log-line.event.good span:last-child { color: var(--good); }
   .log-line.event.bad span:last-child { color: var(--bad); }
+  .test-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  .test-row .num { unicode-bidi: isolate; direction: ltr; text-align: start; }
+  .test-group summary { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; color: var(--text); padding: 3px 0; }
+  .test-group { margin: 0; padding: 5px 0; border-top: 1px solid var(--line); }
+  .record-state { flex: none; }
   .finding { font-weight: 600; margin: 0 0 8px; }
   .finding.good { color: var(--good); }
   .finding.bad { color: var(--bad); }
@@ -273,6 +278,17 @@
           </section>
         </div>
         <section id="freeze-section" hidden><h2 id="freeze-title" data-i18n="Freeze frame">Freeze frame</h2><div class="values" id="freeze"></div></section>
+        <section id="records-section" hidden>
+          <h2 data-i18n="Records inside the modules">Records inside the modules</h2>
+          <p class="needs" data-i18n="Each module keeps its own fault records, which can include faults that are no longer active and don't appear in the codes above. Read when connecting.">Each module keeps its own fault records, which can include faults that are no longer active and don't appear in the codes above. Read when connecting.</p>
+          <div id="records"></div>
+        </section>
+        <section id="tests-section" hidden>
+          <h2 data-i18n="Detailed self-test results">Detailed self-test results</h2>
+          <p class="needs" data-i18n="The car's own measurements against its maker's limits. A result outside them is worth checking, but it isn't a diagnosis. Read when connecting.">The car's own measurements against its maker's limits. A result outside them is worth checking, but it isn't a diagnosis. Read when connecting.</p>
+          <div id="tests-summary"></div>
+          <div id="tests"></div>
+        </section>
       </div>
     </div>
 
@@ -557,6 +573,73 @@ function codeNodes(state) {
   return nodes;
 }
 
+const RECORD_STATES = {active: "Active", stored: "Stored", pending: "Pending", history: "Past"};
+const RECORD_TONES = {active: "pill bad", stored: "pill bad", pending: "pill warn", history: "pill"};
+const TEST_STATES = {pass: "Inside limits", fail: "Outside limits", not_run: "Not run yet", unknown: "Unit not known"};
+const TEST_TONES = {pass: "pill good", fail: "pill bad", not_run: "pill", unknown: "pill"};
+const openTests = new Set();
+let lastRecords = "";
+let lastTests = "";
+
+function recordLine(module, item) {
+  const line = el("div", undefined, "fault");
+  const link = el("button", item.code, "link");
+  link.type = "button";
+  link.addEventListener("click", () => openLookup(item.short));
+  line.append(link, el("span", item.description), el("span", tr(RECORD_STATES[item.state] || item.state), `${RECORD_TONES[item.state] || "pill"} record-state`),
+              el("span", tr("Module {header}", {header: module}), "sub"));
+  return line;
+}
+
+function renderRecords(records) {
+  const signature = JSON.stringify(records) + language;
+  if (signature === lastRecords) return;
+  lastRecords = signature;
+  document.getElementById("records-section").hidden = !records.length;
+  const nodes = [];
+  for (const record of records) {
+    nodes.push(...record.codes.map(item => recordLine(record.module, item)));
+    if (!record.codes.length) {
+      nodes.push(row(record.name, tr(record.read_codes ? "No records" : "This module refused the request"), record.read_codes ? "good" : "dim"));
+    }
+    if (!record.complete) nodes.push(el("p", tr("Module {header}'s reply was cut off, so its list may be incomplete.", {header: record.module}), "dim"));
+  }
+  fill(document.getElementById("records"), nodes);
+}
+
+function renderTests(groups) {
+  const signature = JSON.stringify(groups) + language;
+  if (signature === lastTests) return;
+  lastTests = signature;
+  document.getElementById("tests-section").hidden = !groups.length;
+  const all = groups.flatMap(group => group.tests);
+  const count = state => all.filter(test => test.state === state).length;
+  const outside = count("fail");
+  fill(document.getElementById("tests-summary"), [el("p",
+    tr("{inside} inside limits, {outside} outside, {waiting} not run yet", {inside: count("pass"), outside, waiting: count("not_run")}),
+    `finding ${outside ? "bad" : "good"}`)]);
+  fill(document.getElementById("tests"), groups.map(group => {
+    const failed = group.tests.some(test => test.state === "fail");
+    const details = el("details", undefined, "test-group");
+    details.open = failed || openTests.has(group.monitor);
+    details.addEventListener("toggle", () => {
+      if (details.open) openTests.add(group.monitor);
+      else openTests.delete(group.monitor);
+    });
+    const head = el("summary");
+    head.append(el("span", group.name, "entry-kind"));
+    if (failed) head.append(el("span", tr("Outside limits"), "pill bad"));
+    details.append(head);
+    for (const test of group.tests) {
+      const line = el("div", undefined, "test-row");
+      line.append(el("span", `${test.test} (${test.module})`, "dim"), el("span", test.value, "num"),
+                  el("span", test.limits, "num dim"), el("span", tr(TEST_STATES[test.state]), TEST_TONES[test.state]));
+      details.append(line);
+    }
+    return details;
+  }));
+}
+
 function renderMonitors(monitors) {
   const nodes = [];
   for (const [header, status] of Object.entries(monitors)) {
@@ -809,6 +892,22 @@ async function renderCarPage(key, summary) {
   past.append(head, body);
 
   const sections = [top, tiles, faults, past];
+  const records = record.status ? record.status.module_records || [] : [];
+  const kept = records.flatMap(item => item.codes.map(code => ({...code, module: item.hdr})));
+  if (kept.length) {
+    const inside = el("section");
+    inside.append(el("h2", tr("Records inside the modules")));
+    for (const item of kept) {
+      const line = el("div", undefined, "fault");
+      const link = el("button", item.code, "link");
+      link.type = "button";
+      link.addEventListener("click", () => openLookup(item.code.slice(0, 5)));
+      line.append(link, el("span", tr("Module {header}", {header: item.module})),
+                  el("span", tr(RECORD_STATES[item.state] || item.state), `${RECORD_TONES[item.state] || "pill"} record-state`));
+      inside.append(line);
+    }
+    sections.push(inside);
+  }
   const values = record.status ? record.status.values : null;
   if (values) {
     const latest = el("section");
@@ -1091,6 +1190,8 @@ function render(state) {
   renderTiles(state.values);
   fill(document.getElementById("codes"), codeNodes(state));
   fill(document.getElementById("codes-summary"), codeNodes(state));
+  renderRecords(state.module_records || []);
+  renderTests(state.test_results || []);
   renderMonitors(state.monitors);
   renderVehicle(state);
   fill(document.getElementById("values"), state.values.map(v => row(v.name, valueText(v), v.note ? "stale" : "")));
