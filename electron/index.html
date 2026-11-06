@@ -888,7 +888,7 @@ function renderMonitors(monitors) {
   for (const [header, status] of Object.entries(monitors)) {
     nodes.push(el("div", tr("Module {header}", {header}), "dim"));
     for (const [name, done] of status.tests) {
-      nodes.push(row(name, tr(done ? "Finished" : "Not finished"), done ? "good" : "bad"));
+      nodes.push(row(name, tr(done ? "Finished" : "Not finished"), done ? "good" : "dim"));
     }
   }
   fill(document.getElementById("monitors"), nodes);
@@ -1502,7 +1502,7 @@ function renderSystems(state) {
     const nodes = [];
     if (system.checks.length) {
       nodes.push(part(tr("Emissions self-tests"), system.checks.map(check =>
-        row(`${check.name} (${check.module})`, tr(check.done ? "Finished" : "Not finished"), check.done ? "good" : "bad"))));
+        row(`${check.name} (${check.module})`, tr(check.done ? "Finished" : "Not finished"), check.done ? "good" : "dim"))));
     }
     if (system.results.length) {
       nodes.push(part(tr("Detailed self-test results"), system.results.flatMap(group => group.tests.map(test => {
@@ -1690,7 +1690,7 @@ function render(state) {
   renderRecording(state.recording);
   document.getElementById("this-drive-section").hidden = !state.this_drive.length;
   fill(document.getElementById("this-drive"), state.this_drive.map(([name, done]) =>
-    row(name, tr(done ? "Finished" : "Not finished"), done ? "good" : "bad")));
+    row(name, tr(done ? "Finished" : "Not finished"), done ? "good" : "dim")));
   document.getElementById("more-section").hidden = !state.more.length;
   fill(document.getElementById("more"), groupedValues(state.more, item => row(item.name, item.text)));
   document.getElementById("raw-section").hidden = !state.raw.length;
