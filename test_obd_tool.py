@@ -1957,6 +1957,34 @@ class BookFixTests(unittest.IsolatedAsyncioTestCase):
 
 
 class EcuSectionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_details_carry_on_after_one_silence_and_stop_after_two(self):
+        class Transport:
+            """Silent on the requests listed, like a real transmission computer that skipped one."""
+
+            def __init__(self, silent):
+                self.silent, self.asked = silent, []
+
+            async def send(self, command, wait=5):
+                if command.startswith("AT"):
+                    return ["OK"]
+                self.asked.append(command)
+                if command in self.silent:
+                    return ["NO DATA"]
+                return [f"7E9 06 62 {command[2:4]} {command[4:6]} 41 42 43"]
+
+        skipped_one = Transport({"22F191"})
+        details = await car_modules.read_ecu_details(ELM(skipped_one), ["7E9"])
+        self.assertEqual(skipped_one.asked, [request for request, _ in car_modules.ECU_DETAILS])
+        self.assertEqual([item["label"] for item in details["7E9"]][:3], ["Part number", "Software version", "Supplier software version"])
+
+        apart = Transport({"22F191", "22F197"})
+        await car_modules.read_ecu_details(ELM(apart), ["7E9"])
+        self.assertEqual(apart.asked, [request for request, _ in car_modules.ECU_DETAILS])
+
+        stops = Transport({"22F191", "22F195"})
+        await car_modules.read_ecu_details(ELM(stops), ["7E9"])
+        self.assertEqual(stops.asked, ["22F187", "22F189", "22F191", "22F195"])
+
     async def test_details_are_read_only_and_stop_at_a_silent_computer(self):
         elm = ELM(demo.DemoTransport())
         details = await car_modules.read_ecu_details(elm, ["7E8", "7E9"])
@@ -1968,6 +1996,10 @@ class EcuSectionTests(unittest.IsolatedAsyncioTestCase):
     def test_binary_details_show_as_hex(self):
         self.assertEqual(car_modules.readable_detail(b"AB-12\x00\xff"), "AB-12")
         self.assertEqual(car_modules.readable_detail(bytes.fromhex("01FE")), "01 FE")
+
+    def test_details_holding_only_filler_are_left_out(self):
+        for filler in (b"\xff" * 46, b"\x00" * 8, b"   ", b""):
+            self.assertIsNone(car_modules.readable_detail(filler))
 
     def test_page_lists_each_computer_with_its_state(self):
         snapshot = {"vehicle": {"Module name": {"7E8": "ECM", "7E9": "TCM", "7EA": "OLD"}, "Calibration ID": {"7E8": "CAL"}, "Calibration check": {}},

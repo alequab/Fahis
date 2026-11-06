@@ -33,6 +33,8 @@ MAX_SILENT = 3
 UDS_READ_CODES = "1902AF"
 KWP_READ_CODES = "1800FF00"
 FIRST_FAULT_REQUEST, LATEST_FAULT_REQUEST = "190B", "190D"
+# Stop asking a computer about itself after this many silent replies in a row.
+ECU_SILENT_LIMIT = 2
 # Standard identity values a computer can report about itself.
 ECU_DETAILS = (("22F187", "Part number"), ("22F189", "Software version"), ("22F191", "Hardware number"), ("22F195", "Supplier software version"),
                ("22F197", "System name"), ("22F199", "Last programmed"), ("22F190", "Stored VIN"), ("22F100", "Maker's description"))
@@ -414,11 +416,13 @@ def readable_date(data):
 
 
 def readable_detail(data):
-    """Show a reported value as text when it is text, and as hex when it isn't."""
+    """Show a reported value as text when it is text, and as hex when it isn't. Only filler bytes means nothing is stored."""
     text = bytes(data).rstrip(b"\x00\xff ").decode("ascii", "replace")
-    if text and all(32 <= ord(character) < 127 for character in text):
+    if not text:
+        return None  # A real transmission computer filled its part number with FF.
+    if all(32 <= ord(character) < 127 for character in text):
         return text
-    return bytes(data).hex(" ").upper() if data else None
+    return bytes(data).hex(" ").upper()
 
 
 async def read_ecu_details(elm, headers):
@@ -428,10 +432,16 @@ async def read_ecu_details(elm, headers):
         for header in headers:
             found = details.setdefault(header, [])
             request_id = f"{int(header, 16) - 8:03X}"
+            silent = 0
             for request, label in ECU_DETAILS:
                 reply = await elm.module_request(request_id, header, request, keep_address=True)
                 if reply is None:
-                    break  # a silent computer won't answer the rest either
+                    # A real transmission computer answered two of these, skipped one, and could still have answered more.
+                    silent += 1
+                    if silent >= ECU_SILENT_LIMIT:
+                        break
+                    continue
+                silent = 0
                 if not getattr(reply, "complete", True):
                     # A long reply needs the adapter to tell the module to carry on, which isn't automatic for every address.
                     reply = await elm.module_request(request_id, header, request, fc=True, keep_address=True) or reply
