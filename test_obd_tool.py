@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import bridge
+import car_analysis
 import car_copy
 import car_modules
 import car_systems
@@ -1029,7 +1030,7 @@ class LocalizationTests(unittest.TestCase):
 
     def test_every_translatable_string_has_arabic(self):
         missing = set()
-        for name in ("obd_tool.py", "car_modules.py"):
+        for name in ("obd_tool.py", "car_modules.py", "car_analysis.py"):
             source = (ROOT / name).read_text(encoding="utf-8")
             found = re.findall(r'\b(?:t|OBDError)\(\s*"((?:[^"\\]|\\.)+)"', source)
             found += re.findall(r"\bt\(\s*'([^']+)'", source)
@@ -2114,6 +2115,179 @@ class CarCopyTests(unittest.IsolatedAsyncioTestCase):
 
     def test_copies_stay_out_of_the_repo(self):
         self.assertIn("car_copies/", (ROOT / ".gitignore").read_text(encoding="utf-8"))
+
+
+class AnalysisTests(unittest.TestCase):
+    """Patterns over a whole connection."""
+
+    SNAPSHOT = {"codes": {"Stored": {}, "Pending": {}}, "test_results": []}
+
+    def drive(self, seconds, step=0.5, **change):
+        """Feed a run of readings. Each keyword is a pid name mapped to a value or a function of the time."""
+        pids = {"rpm": 0x0C, "speed": 0x0D, "coolant": 0x05, "short": 0x06, "long": 0x07, "front": 0x14, "rear": 0x15,
+                "volts": 0x42, "air": 0x10, "map": 0x0B, "baro": 0x33, "fuel": 0x2F}
+        base = {"rpm": 800, "speed": 0, "coolant": 90, "short": 0.0, "long": 0.0, "volts": 14.0, **change}
+        stats = car_analysis.DriveStats()
+        ticks = int(seconds / step)
+        for tick in range(ticks):
+            now = tick * step
+            values = {pids[name]: (value(now) if callable(value) else value) for name, value in base.items()}
+            values.update({0x03: "Closed loop", 0x51: "Gasoline"})
+            stats.update(values, {pid: now for pid in values}, now)
+        return stats, values
+
+    def by_id(self, stats, values, snapshot=None, previous=None):
+        found = car_analysis.findings(stats, values, snapshot or self.SNAPSHOT, previous or {}, lambda monitor: f"M{monitor:02X}")
+        return {item["id"]: item for item in found}
+
+    def test_healthy_idle_is_reported_as_fine(self):
+        stats, values = self.drive(60, front=lambda now: 0.1 + 0.7 * (int(now) % 2), rear=0.7)
+        found = self.by_id(stats, values)
+        self.assertEqual({found[key]["state"] for key in ("mixture", "idle", "temperature", "front_o2", "rear_o2", "charging")}, {"good"})
+        self.assertNotIn("fuel_cap", found)
+        self.assertEqual(found["trend"]["state"], "unknown")
+
+    def test_lean_at_idle_only_points_to_an_air_leak(self):
+        stats, values = self.drive(120, long=lambda now: 18.0 if now < 60 else 2.0, speed=lambda now: 0 if now < 60 else 60, air=10.0)
+        item = self.by_id(stats, values)["mixture"]
+        self.assertEqual(item["state"], "warn")
+        self.assertIn("air leak after", item["text"])
+
+    def test_rich_mixture_and_very_lean_mixture(self):
+        stats, values = self.drive(60, long=-14.0)
+        self.assertIn("removing", self.by_id(stats, values)["mixture"]["text"])
+        stats, values = self.drive(60, long=20.0, short=8.0)
+        self.assertEqual(self.by_id(stats, values)["mixture"]["state"], "bad")
+
+    def test_mixture_text_names_only_what_was_seen(self):
+        stats, values = self.drive(60, long=-3.0)
+        item = self.by_id(stats, values)["mixture"]
+        self.assertEqual((item["state"], item["values"]), ("good", {"value": "-3.0"}))
+
+    def test_cold_engine_gives_no_mixture_verdict(self):
+        stats, values = self.drive(60, coolant=40, long=20.0)
+        found = self.by_id(stats, values)
+        self.assertEqual(found["mixture"]["state"], "unknown")
+        self.assertEqual(found["temperature"]["state"], "unknown")
+
+    def test_rough_idle_and_stuck_sensors(self):
+        stats, values = self.drive(60, rpm=lambda now: 800 + 220 * (int(now * 2) % 2), front=0.45, rear=1.2)
+        found = self.by_id(stats, values)
+        self.assertEqual((found["idle"]["state"], found["front_o2"]["state"], found["rear_o2"]["state"]), ("warn", "warn", "warn"))
+        self.assertIn("above the 0 to 1 V", found["rear_o2"]["text"])
+
+    def test_rear_sensor_is_judged_only_on_its_range(self):
+        swing = lambda now: 0.1 + 0.8 * (int(now) % 2)
+        stats, values = self.drive(60, front=swing, rear=swing)
+        self.assertEqual(self.by_id(stats, values)["rear_o2"]["state"], "good")
+        stats, values = self.drive(10, front=swing, rear=1.2)
+        self.assertEqual(self.by_id(stats, values)["rear_o2"]["state"], "unknown")
+
+    def test_revving_while_parked_is_not_a_rough_idle(self):
+        stats = car_analysis.DriveStats()
+        for tick in range(120):
+            now = tick * 0.5
+            rpm = 3000 if 20 <= now < 30 else 800
+            values = {0x0C: rpm, 0x0D: 0, 0x05: 90, 0x49: 60.0 if rpm > 1000 else 14.9, 0x03: "Closed loop"}
+            stats.update(values, {pid: now for pid in values}, now)
+        self.assertEqual(car_analysis.check_idle(stats)["state"], "good")
+
+    def test_pressure_is_only_compared_once_the_engine_has_settled(self):
+        stats = car_analysis.DriveStats()
+        for now, rpm, pressure, read in ((0, 800, 35, 0), (1, 0, 35, 0), (2, 0, 60, 2), (8, 0, 99, 8)):
+            values = {0x0C: rpm, 0x0B: pressure, 0x33: 100}
+            stats.update(values, {0x0C: now, 0x0B: read, 0x33: now}, now)
+        self.assertEqual((stats.engine_off_gap.count, stats.engine_off_gap.average), (1, -1))
+
+    def test_implausible_fuel_estimate_is_hidden(self):
+        stats, _ = self.drive(3600, step=1, speed=60, air=0.5, rpm=2000)
+        summary = {label: number for label, number, _ in car_analysis.drive_summary(stats)}
+        self.assertIsNone(summary["Average fuel use (estimate)"])
+        self.assertIsNone(summary["Fuel used (estimate)"])
+
+    def test_thermostat_overheating_and_charging(self):
+        stats, values = self.drive(1000, step=2, coolant=55, speed=50, air=10.0)
+        self.assertIn("thermostat", self.by_id(stats, values)["temperature"]["text"])
+        stats, values = self.drive(30, coolant=118)
+        self.assertEqual(self.by_id(stats, values)["temperature"]["state"], "bad")
+        stats, values = self.drive(700, step=2, volts=12.4)
+        self.assertEqual(self.by_id(stats, values)["charging"]["state"], "warn")
+        stats, values = self.drive(30, volts=lambda now: 12.6 if now < 15 else 14.1)
+        self.assertEqual(self.by_id(stats, values)["charging"]["state"], "good")
+
+    def test_engine_off_pressure_check(self):
+        stats, values = self.drive(20, rpm=0, map=80, baro=100)
+        self.assertEqual(self.by_id(stats, values)["map"]["state"], "warn")
+        stats, values = self.drive(20, rpm=0, map=99, baro=100)
+        self.assertEqual(self.by_id(stats, values)["map"]["state"], "good")
+        stats, values = self.drive(10)
+        self.assertNotIn("map", self.by_id(stats, values))
+
+    def test_leak_code_after_refuelling_points_to_the_fuel_cap(self):
+        snapshot = {"codes": {"Stored": {"7E8": []}, "Pending": {"7E8": ["P0455"]}}, "test_results": []}
+        stats, values = self.drive(5, fuel=31.4)
+        found = self.by_id(stats, values, snapshot, {"fuel": [8.2, 7.8]})
+        self.assertIn("fuel was added recently", found["fuel_cap"]["text"])
+        self.assertEqual((found["fuel_cap"]["values"]["before"], found["fuel_cap"]["values"]["now"]), (8, 31))
+        self.assertEqual(found["pending"]["values"]["codes"], "P0455")
+        self.assertIn("fuel cap is tight", self.by_id(stats, values, snapshot, {})["fuel_cap"]["text"])
+        self.assertEqual([item["state"] for item in car_analysis.findings(stats, values, snapshot, {}, str)][:2], ["warn", "warn"])
+
+    def test_self_test_margins_and_misfire_counts(self):
+        result = lambda monitor, value, low, high, state="pass", **more: {"monitor": monitor, "test": 1, "value": value, "low": low, "high": high, "state": state, **more}
+        check = lambda *results: {item["id"]: item for item in car_analysis.check_self_tests({"test_results": list(results)}, lambda monitor: f"M{monitor:02X}")}
+        self.assertEqual(check(result(0x21, 0.5, 0, 1))["margins"]["state"], "good")
+        self.assertEqual(check(result(0x21, 0.95, 0, 1))["margins"]["state"], "warn")
+        self.assertEqual(check(result(0x21, 0, 0, 1))["margins"]["state"], "good", "zero against a top limit is the best result")
+        self.assertEqual(check(result(0x21, 0.11, 0.1, 6553.5, open_high=True, open_low=False))["margins"]["state"], "warn")
+        self.assertEqual(check(result(0x21, 5, 0.1, 6553.5, open_high=True, open_low=False))["margins"]["state"], "good")
+        self.assertEqual(check(result(0x21, 2, 0, 1, "fail"))["margins"]["state"], "bad")
+        found = check(result(0xA3, 4, 0, 100, open_low=True))
+        self.assertEqual(found["misfires"]["values"]["names"], "MA3")
+        self.assertEqual(car_analysis.check_self_tests({"test_results": []}, str), [])
+
+    def test_change_since_earlier_visits_is_noticed(self):
+        stats, values = self.drive(60, long=9.0)
+        earlier = {"sessions": [{"averages": {"trim_idle": -3.0, "idle_rpm": 790}}, {"averages": {"trim_idle": -2.0, "idle_rpm": 800}}]}
+        item = self.by_id(stats, values, previous=earlier)["trend"]
+        self.assertEqual(item["state"], "warn")
+        self.assertEqual((item["values"]["before"], item["values"]["now"]), ("-2.5", "9"))
+        same = {"sessions": [{"averages": {"trim_idle": 8.0}}, {"averages": {"trim_idle": 9.5}}, {"averages": None}]}
+        self.assertEqual(self.by_id(stats, values, previous=same)["trend"]["state"], "good")
+
+    def test_drive_summary_adds_up(self):
+        stats, values = self.drive(3600, step=1, speed=60, air=10.0, rpm=2000)
+        summary = {label: number for label, number, _ in car_analysis.drive_summary(stats)}
+        self.assertAlmostEqual(summary["Distance (estimate)"], 60, delta=0.1)
+        self.assertAlmostEqual(summary["Average fuel use (estimate)"], 5.48, delta=0.05)
+        self.assertEqual((summary["Hard accelerations"], summary["Hard brakings"]), (0, 0))
+        stats, _ = self.drive(20, step=0.5, speed=lambda now: 0 if now < 5 else 40 if now < 10 else 0)
+        self.assertEqual((stats.hard_accelerations, stats.hard_brakings), (1, 1))
+
+    def test_held_values_and_long_gaps_are_not_counted(self):
+        stats = car_analysis.DriveStats()
+        values = {0x0C: 800, 0x0D: 60, 0x05: 90}
+        stats.update(values, {0x0C: 1, 0x0D: 1, 0x05: 1}, 0)
+        stats.update(values, {0x0C: 1, 0x0D: 1, 0x05: 1}, 600)
+        self.assertEqual(stats.ranges[0x0C].count, 1)
+        self.assertAlmostEqual(stats.distance_km, 60 * car_analysis.LONGEST_GAP_SECONDS / 3600)
+
+    def test_page_shows_translated_findings_for_the_demo_car(self):
+        app = obd_tool.DashboardApp(SimpleNamespace(demo=True, samples=3, interval=0, address=None))
+        asyncio.run(app.connect())
+        app.snapshot["codes"]["Pending"] = {"7E8": ["P0455"]}
+        app.elm = app.reader.elm
+        for lang in ("en", "ar"):
+            analysis = obd_tool.page_analysis(app.stats, app.reader.values, app.snapshot, {"fuel": [10]}, lang)
+            self.assertGreaterEqual(analysis["attention"], 2)
+            self.assertNotIn("{", " ".join(item["text"] for item in analysis["findings"]))
+            self.assertEqual(len(analysis["drive"]), 10)
+        self.assertIn("غطاء خزان الوقود", [item["title"] for item in analysis["findings"]])
+
+    def test_earlier_visits_include_fuel_from_older_records(self):
+        record = {"sessions": [{"fuel": 40.0, "averages": {}}, "damaged"], "status": {"values": {"Fuel level": "7.8 %"}}}
+        self.assertEqual(obd_tool.earlier_visits(record)["fuel"], [40.0, 7.8])
+        self.assertEqual(obd_tool.earlier_visits({}), {"sessions": [], "fuel": []})
 
 
 class RobustnessTests(unittest.IsolatedAsyncioTestCase):

@@ -60,7 +60,7 @@
 
 <table>
 <tr>
-<td width="50%" valign="top"><b>تطبيق سطح مكتب</b><br>شاشة بداية تختار منها بين المراقبة المباشرة ومسح الأعطال أو حاسوب السيارة، وزر لقطع الاتصال قبل فصل المحوّل بأمان، ونسخ محفوظة من بيانات السيارة لاختبار التطبيق دون سيارة، ثم صفحات: نظرة عامة مع حالة المحوّل، وأنظمة السيارة، وحاسوب السيارة، وبيانات مباشرة، ورموز أعطال، وأوامر، وسيارات مدعومة، وسيارات محفوظة، وبحث عن رمز، وتقارير، وسجل مباشر مع مراجعة تلقائية.</td>
+<td width="50%" valign="top"><b>تطبيق سطح مكتب</b><br>شاشة بداية تختار منها بين المراقبة المباشرة ومسح الأعطال أو حاسوب السيارة، وزر لقطع الاتصال قبل فصل المحوّل بأمان، ونسخ محفوظة من بيانات السيارة لاختبار التطبيق دون سيارة، ثم صفحات: نظرة عامة مع حالة المحوّل، وأنظمة السيارة، وتحليل يرصد الأنماط في القراءات ويقارن الزيارات، وحاسوب السيارة، وبيانات مباشرة، ورموز أعطال، وأوامر، وسيارات مدعومة، وسيارات محفوظة، وبحث عن رمز، وتقارير، وسجل مباشر مع مراجعة تلقائية.</td>
 <td width="50%" valign="top"><b>الأوامر داخل التطبيق</b><br>شغّل فحص البطارية والتقرير والبحث عن الوحدات وغيرها، واقرأ النتيجة في الصفحة نفسها.</td>
 </tr>
 <tr>
@@ -223,6 +223,7 @@ flowchart LR
 | `garage.py` | سجلات السيارات المحفوظة |
 | `car_systems.py` | توزيع القراءات والأعطال على أنظمة السيارة |
 | `car_copy.py` | حفظ نسخة من بيانات السيارة وتشغيل التطبيق منها |
+| `car_analysis.py` | رصد الأنماط في القراءات طوال الاتصال |
 | `i18n.py` | النصوص العربية والإنجليزية |
 | `bridge.py` | القناة الخاصة بين النافذة والخدمة الخلفية |
 | `electron/` | نافذة سطح المكتب وصفحات التطبيق والأيقونة |
@@ -273,7 +274,7 @@ Many ELM327 adapters are Bluetooth LE. Windows gives them no COM port, so most O
 
 <table>
 <tr>
-<td width="50%" valign="top"><b>Desktop app</b><br>A start screen to choose live monitoring and fault clearing or the ECU section, a Disconnect button for unplugging the adapter safely, and saved car copies for testing with no car. Then pages for: overview with adapter status, car systems, ECU details, live data, fault codes, commands, supported cars, saved cars, code lookup, reports, and a live log with an automatic review.</td>
+<td width="50%" valign="top"><b>Desktop app</b><br>A start screen to choose live monitoring and fault clearing or the ECU section, a Disconnect button for unplugging the adapter safely, and saved car copies for testing with no car. Then pages for: overview with adapter status, car systems, an analysis that spots patterns in the readings and compares visits, ECU details, live data, fault codes, commands, supported cars, saved cars, code lookup, reports, and a live log with an automatic review.</td>
 <td width="50%" valign="top"><b>Commands in the app</b><br>Run a battery check, report, module scan and more, and read the result on the page.</td>
 </tr>
 <tr>
@@ -424,6 +425,7 @@ Run the offline tests, which don't need a car or adapter:
 | `garage.py` | Saved car records |
 | `car_systems.py` | Sorts readings and faults into car systems |
 | `car_copy.py` | Saves a copy of a car's data and runs the app from it |
+| `car_analysis.py` | Spots patterns in the readings over a connection |
 | `i18n.py` | English and Arabic text |
 | `bridge.py` | Private pipe between the window and the backend |
 | `electron/` | Desktop window, the app's pages and the icon |

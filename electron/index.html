@@ -206,6 +206,14 @@
   .ecu-head h2 { margin: 0; flex: 1; }
   .ecu-head svg { width: 26px; height: 26px; color: var(--accent); flex: none; }
   .ecu-grid .row span:last-child { unicode-bidi: isolate; direction: ltr; overflow-wrap: anywhere; }
+  .finding-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--line); }
+  .finding-row:first-child { border-top: 0; }
+  .finding-row .pill { justify-self: start; }
+  .finding-row b { display: block; }
+  .finding-row .fault-tags { grid-column: 2; }
+  .range-row { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  .range-row span:not(:first-child) { text-align: end; unicode-bidi: isolate; }
+  .range-row.head { color: var(--muted); font-size: 13px; border-top: 0; }
   .health { display: grid; gap: 14px; border-inline-start: 4px solid var(--good); }
   .health.attention { border-inline-start-color: var(--bad); }
   .health-title { font-size: 20px; font-weight: 650; }
@@ -280,6 +288,7 @@
     <a href="#/systems" data-page="systems"><span data-icon="page_systems"></span><span data-i18n="Car systems">Car systems</span></a>
     <a href="#/live" data-page="live"><span data-icon="page_live"></span><span data-i18n="Live data">Live data</span></a>
     <a href="#/faults" data-page="faults"><span data-icon="page_faults"></span><span data-i18n="Fault codes">Fault codes</span></a>
+    <a href="#/analysis" data-page="analysis"><span data-icon="page_analysis"></span><span data-i18n="Analysis">Analysis</span></a>
     <a href="#/ecu" data-page="ecu"><span data-icon="page_ecu"></span><span data-i18n="ECU">ECU</span></a>
     <div class="nav-group" data-i18n="Tools">Tools</div>
     <a href="#/commands" data-page="commands"><span data-icon="page_commands"></span><span data-i18n="Commands">Commands</span></a>
@@ -355,6 +364,25 @@
         <p id="copy-note" class="dim" role="status" hidden></p>
         <div id="copy-list"></div>
       </section>
+    </div>
+
+    <div class="page" id="page-analysis" hidden>
+      <div class="needs-car">
+        <p class="intro" data-i18n="Fahis watches the readings over the whole connection and points out patterns. These are hints from general rules of thumb, not your car maker's limits, and they aren't a diagnosis. Some need a few minutes of running to appear.">Fahis watches the readings over the whole connection and points out patterns. These are hints from general rules of thumb, not your car maker's limits, and they aren't a diagnosis. Some need a few minutes of running to appear.</p>
+        <section>
+          <h2 data-i18n="What Fahis noticed">What Fahis noticed</h2>
+          <div id="findings"></div>
+        </section>
+        <section>
+          <h2 data-i18n="This connection">This connection</h2>
+          <div class="stat-tiles" id="drive-stats"></div>
+          <p class="needs" data-i18n="Distance and fuel are worked out from speed and air flow readings, so treat them as rough.">Distance and fuel are worked out from speed and air flow readings, so treat them as rough.</p>
+        </section>
+        <section>
+          <h2 data-i18n="Lowest, average and highest">Lowest, average and highest</h2>
+          <div id="value-ranges"></div>
+        </section>
+      </div>
     </div>
 
     <div class="page" id="page-ecu" hidden>
@@ -548,7 +576,7 @@
 const TILES = ["0C", "0D", "05", "0F", "11", "04"];
 const HISTORY = 60;
 const CATALOG_LIMIT = 200;
-const PAGES = {home: "Home", ecu: "ECU", overview: "Overview", systems: "Car systems", live: "Live data", faults: "Fault codes", commands: "Commands",
+const PAGES = {home: "Home", ecu: "ECU", analysis: "Analysis", overview: "Overview", systems: "Car systems", live: "Live data", faults: "Fault codes", commands: "Commands",
                cars: "Supported cars", saved: "Saved cars", lookup: "Code lookup", reports: "Reports", log: "Live log"};
 const ICONS = {
   engine: "M4 10h3l2-3h6v3h3l2 2v4h-2v2h-5l-2 2H8l-2-3H4zM1.5 11v6M9 4h6M12 4v3",
@@ -563,6 +591,7 @@ const ICONS = {
   status: "M8 4h8v3H8zM6 5.5H5a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-1M8 12l2 2 4-4M8 17h8",
   ecu: "M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4",
   page_ecu: "M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4",
+  page_analysis: "M4 20V10M10 20V4M16 20v-7M22 20H2",
   page_home: "M3 11l9-8 9 8M5 9.5V21h14V9.5M10 21v-6h4v6",
   safe: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 12l3 3 5-6",
   page_overview: "M4 18a9.5 9.5 0 1 1 16 0M12 14l4-5M12 14v.01",
@@ -747,7 +776,7 @@ function showPage() {
 }
 
 function updateConnectionViews() {
-  const needsCar = ["overview", "systems", "ecu", "live", "faults"].includes(currentPage());
+  const needsCar = ["overview", "systems", "ecu", "analysis", "live", "faults"].includes(currentPage());
   const off = lastState && lastState.link === "off";
   document.getElementById("waiting").hidden = connected || !needsCar || off;
   document.querySelectorAll(".needs-car").forEach(node => { node.hidden = !connected; });
@@ -1011,6 +1040,9 @@ function connectionEntry(item) {
   if (item.method !== null && item.method !== undefined) {
     list.append(row(tr("Reading method"), tr(item.method ? "Several values per request" : "One value per request")));
   }
+  if (item.distance) list.append(row(tr("Distance (estimate)"), shown(item.distance, "km")));
+  if (item.fuel_used) list.append(row(tr("Fuel used (estimate)"), shown(item.fuel_used, "L")));
+  if (item.checks && item.checks.length) list.append(row(tr("Things worth a look"), item.checks.map(title => tr(title)).join(", ")));
   details.append(head, list);
   if (item.codes && item.codes.length) details.append(codeChips(item.codes));
   return details;
@@ -1563,6 +1595,33 @@ function renderEcus(ecus) {
   }));
 }
 
+const FINDING_STATES = {bad: ["Check this", "pill bad"], warn: ["Worth a look", "pill warn"], good: ["Looks fine", "pill good"], unknown: ["Not enough data yet", "pill"]};
+
+function renderAnalysis(analysis) {
+  fillIfChanged("findings", JSON.stringify([analysis.findings, language]), () => analysis.findings.map(item => {
+    const line = el("div", undefined, "finding-row");
+    const [label, tone] = FINDING_STATES[item.state];
+    const about = el("div");
+    about.append(el("b", item.title), el("span", item.text, item.state === "unknown" ? "dim" : ""));
+    const tags = el("div", undefined, "fault-tags");
+    tags.append(systemTag(item.system));
+    line.append(el("span", tr(label), tone), about, tags);
+    return line;
+  }));
+  fill(document.getElementById("drive-stats"), analysis.drive.map(item => {
+    const node = el("div", undefined, "tile");
+    node.append(el("div", item.label, "label"), el("b", item.text));
+    return node;
+  }));
+  const head = el("div", undefined, "range-row head");
+  head.append(el("span", tr("Reading")), el("span", tr("Lowest")), el("span", tr("Average")), el("span", tr("Highest")));
+  fill(document.getElementById("value-ranges"), analysis.ranges.length ? [head, ...analysis.ranges.map(item => {
+    const line = el("div", undefined, "range-row");
+    line.append(el("span", item.unit ? `${item.name} (${item.unit})` : item.name), el("span", item.low), el("span", item.average), el("span", item.high));
+    return line;
+  })] : [el("p", tr("Readings appear here after a few updates."), "dim")]);
+}
+
 function renderHealth(state) {
   const faults = state.systems.flatMap(system => system.faults).filter(fault => fault.now).length;
   const light = Object.values(state.monitors).some(monitor => monitor.mil);
@@ -1575,15 +1634,17 @@ function renderHealth(state) {
   };
   const box = document.getElementById("health");
   box.classList.toggle("attention", attention);
-  const signature = JSON.stringify([attention, light, faults, tests.filter(test => test[1]).length, tests.length, state.voltage, language]);
+  const noticed = state.analysis.attention;
+  const signature = JSON.stringify([attention, light, faults, tests.filter(test => test[1]).length, tests.length, state.voltage, noticed, language]);
   fillIfChanged("health", signature, () => {
     const facts = el("div", undefined, "health-facts");
     facts.append(fact(tr(light ? "ON" : "off"), tr("Check engine light")), fact(String(faults), tr("Faults reported now")),
-                 fact(`${tests.filter(test => test[1]).length} / ${tests.length}`, tr("Self-tests finished")), fact(state.voltage, tr("Voltage at adapter (approximate)")));
+                 fact(`${tests.filter(test => test[1]).length} / ${tests.length}`, tr("Self-tests finished")), fact(state.voltage, tr("Voltage at adapter (approximate)")),
+                 fact(String(noticed), tr("Things worth a look")));
     const actions = el("div", undefined, "health-actions");
     const faultsLink = Object.assign(el("a", tr("See fault codes"), attention ? "button primary" : "button"), {href: "#/faults"});
     const systemsLink = Object.assign(el("a", tr("Explore car systems"), attention ? "button" : "button primary"), {href: "#/systems"});
-    actions.append(faultsLink, systemsLink);
+    actions.append(faultsLink, systemsLink, Object.assign(el("a", tr("See the analysis"), "button"), {href: "#/analysis"}));
     return [el("div", tr(attention ? "Needs attention" : "No faults reported"), "health-title"), facts, actions];
   });
 }
@@ -1735,6 +1796,7 @@ function render(state) {
   status.className = "";
   document.getElementById("demo-banner").hidden = !state.demo;
   renderHealth(state);
+  renderAnalysis(state.analysis);
   renderEcus(state.ecus);
   renderSystems(state);
   renderValueFilter(state);

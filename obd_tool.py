@@ -18,6 +18,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import bridge
+import car_analysis
 import car_copy
 import car_modules
 import car_systems
@@ -865,7 +866,9 @@ def decode_test_results(header, payload):
         else:
             state = "pass" if low <= value <= high else "fail"
         results.append({"module": header, "monitor": monitor, "test": test, "value": value, "low": low, "high": high,
-                        "unit": TEST_UNITS.get(unit_id, (False, 1, ""))[2], "state": state})
+                        "unit": TEST_UNITS.get(unit_id, (False, 1, ""))[2], "state": state,
+                        # A limit of all zeros or all ones is the end of the range, so it isn't really a limit.
+                        "open_low": not any(data[2:4]), "open_high": data[4:6] == b"\xff\xff"})
     return results
 
 
@@ -1099,6 +1102,19 @@ def format_report(snapshot):
     return "\n".join(lines)
 
 
+EARLIER_VISITS = 6
+
+
+def earlier_visits(record):
+    """Pick out what earlier visits to a car showed, for comparing with this one."""
+    sessions = [visit for visit in record.get("sessions", []) if isinstance(visit, dict)][-EARLIER_VISITS:]
+    fuel = [visit.get("fuel") for visit in sessions]
+    match = re.match(r"[\d.]+", str(record.get("status", {}).get("values", {}).get("Fuel level", "")))
+    if match:
+        fuel.append(float(match.group()))  # visits saved before fuel was kept per visit
+    return {"sessions": sessions, "fuel": [level for level in fuel if number(level) is not None]}
+
+
 def remember_snapshot(elm, snapshot):
     """Save the latest full reading to this car's record on this laptop."""
     if elm.demo:
@@ -1294,17 +1310,12 @@ def dashboard_state(snapshot, reader, demo=False, lang=None, cars=()):
     }
 
 
-# Roughly stoichiometric air to fuel ratio, and grams per litre, for gasoline.
-GASOLINE_AIR_RATIO = 14.7
-GASOLINE_GRAMS_PER_LITRE = 745
 MOVING_KMH = 5
 
 
 def fuel_use(values):
     """Estimate fuel use as (number, unit), or None. The air flow method only suits gasoline, as diesels run with spare air."""
-    litres_per_hour = number(values.get(0x5E))
-    if litres_per_hour is None and values.get(0x51) == "Gasoline" and number(values.get(0x10)) is not None:
-        litres_per_hour = values[0x10] * 3600 / (GASOLINE_AIR_RATIO * GASOLINE_GRAMS_PER_LITRE)
+    litres_per_hour = car_analysis.litres_per_hour(values)
     if litres_per_hour is None:
         return None
     speed = number(values.get(0x0D))
@@ -1339,6 +1350,26 @@ def recheck_hint(freeze, lang=None):
 
 
 ECU_ROLES = {"7E8": ("Engine computer", "engine"), "7E9": ("Transmission computer", "transmission")}
+
+
+def page_analysis(stats, values, snapshot, previous, lang=None):
+    """Describe what this connection's readings show over time, for the Analysis page."""
+    found = car_analysis.findings(stats, values, snapshot, previous, lambda monitor: monitor_name(monitor, lang))
+    shown = lambda number_, unit: "-" if number_ is None else f"{number_:.0f}" if unit in ("", "rpm", "km/h") else f"{number_:.1f}"
+    ranges = []
+    for pid, tally in stats.ranges.items():
+        if pid in LIVE_PIDS and tally.count >= 2:
+            ranges.append({"name": t(LIVE_PIDS[pid][0], lang), "unit": t(LIVE_PIDS[pid][1], lang), "system": car_systems.value_system(pid),
+                           "low": format_value(float(tally.low)), "average": format_value(float(tally.average)), "high": format_value(float(tally.high))})
+    return {
+        "findings": [{"id": item["id"], "title": t(item["title"], lang), "state": item["state"], "system": item["system"],
+                      "text": t(item["text"], lang, **{key: t(value, lang) if key == "what" else value for key, value in item["values"].items()})}
+                     for item in found],
+        "attention": sum(item["state"] in car_analysis.ATTENTION for item in found),
+        "drive": [{"label": t(label, lang), "text": f"{shown(number_, unit)} {t(unit, lang) if number_ is not None else ''}".strip()}
+                  for label, number_, unit in car_analysis.drive_summary(stats)],
+        "ranges": ranges,
+    }
 
 
 def page_ecus(snapshot, busy=(), lang=None):
@@ -1536,6 +1567,8 @@ class DashboardApp:
         self.connect_again = asyncio.Event()
         self.connecting = None
         self.copy = None  # the saved car copy being run instead of a car
+        self.stats = car_analysis.DriveStats()
+        self.previous = {}  # what earlier visits to this car showed, for comparing
         self.was_disconnected = False  # whether Disconnect had been pressed before a copy was opened
         self.skip_wait = False
 
@@ -1658,7 +1691,11 @@ class DashboardApp:
         self.drive.update(ended=garage.now(), seconds=round(time.monotonic() - self.drive_began),
                           light=any(status["mil"] for status in snapshot["monitors"].values()),
                           codes=sorted({c for label in ("Stored", "Pending") for found in codes[label].values() for c in found}),
-                          method=elm.can_group)
+                          method=elm.can_group, averages=self.stats.averages(), fuel=self.stats.fuel_at_start,
+                          distance=round(self.stats.distance_km, 1), fuel_used=round(self.stats.fuel_litres, 2),
+                          checks=[item["title"] for item in car_analysis.findings(self.stats, self.reader.values if self.reader else {}, snapshot,
+                                                                                    self.previous, monitor_name)
+                                  if item["state"] in car_analysis.ATTENTION])
         self.drive_saved_at = time.monotonic()
         try:
             garage.save_session(elm.vehicle or snapshot["vehicle"], self.drive)
@@ -1966,6 +2003,7 @@ class DashboardApp:
         state["link"] = self.link_state
         state["copy"] = self.copy_status()
         state["can_save_copy"] = not self.copy and self.elm is not None
+        state["analysis"] = page_analysis(self.stats, self.reader.values, self.snapshot, self.previous, lang)
         state["session"] = self.connections  # changes with every new connection, so the page can drop the last car's graphs
         return state
 
@@ -2058,6 +2096,11 @@ class DashboardApp:
         self.message = ("Connected. Reading everything from the car, this takes about 20 seconds ...", {})
         elm.transport.activity = self.activity
         snapshot = await read_snapshot(elm)
+        self.stats = car_analysis.DriveStats()
+        self.previous = {}
+        if not self.args.demo and not elm.demo:
+            with contextlib.suppress(OSError, ValueError, AttributeError):
+                self.previous = earlier_visits(garage.load_car(garage.car_key(elm.vehicle or snapshot["vehicle"])))
         if not self.args.demo:
             remember_snapshot(elm, snapshot)
             self.cars = garage.summaries()
@@ -2074,6 +2117,7 @@ class DashboardApp:
             while self.args.samples is None or count < self.args.samples:
                 await self.run_waiting_jobs(elm)
                 await self.reader.step()
+                self.stats.update(self.reader.values, self.reader.read_at, time.monotonic())
                 self.track_charging()
                 self.record_row()
                 self.track_drive(elm, self.snapshot)
