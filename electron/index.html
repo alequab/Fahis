@@ -294,7 +294,7 @@
     <header>
       <h1 id="page-title" data-i18n="Overview">Overview</h1>
       <div class="header-end">
-        <span id="status" role="status" data-i18n="Connecting ...">Connecting ...</span>
+        <span id="status" data-i18n="Connecting ...">Connecting ...</span>
         <button id="link-button" type="button" class="danger" hidden></button>
         <button id="lang-toggle" type="button">العربية</button>
       </div>
@@ -343,6 +343,7 @@
         <a class="button" href="#/saved" data-i18n="Saved cars">Saved cars</a>
         <a class="button" href="#/lookup" data-i18n="Code lookup">Code lookup</a>
         <a class="button" href="#/reports" data-i18n="Reports">Reports</a>
+        <a class="button" href="#/faults/clear" data-i18n="Clear fault codes">Clear fault codes</a>
       </div>
       <section id="copies">
         <div class="section-head">
@@ -350,7 +351,8 @@
           <button id="copy-save" type="button" class="primary" disabled data-i18n="Save car copy">Save car copy</button>
         </div>
         <p class="needs" data-i18n="A copy keeps what the car reported, so you can test Fahis with no car or adapter. It isn't the ECU's program. It includes the VIN, so keep it private.">A copy keeps what the car reported, so you can test Fahis with no car or adapter. It isn't the ECU's program. It includes the VIN, so keep it private.</p>
-        <p id="copy-note" class="dim" hidden></p>
+        <p id="copy-why" class="dim" hidden></p>
+        <p id="copy-note" class="dim" role="status" hidden></p>
         <div id="copy-list"></div>
       </section>
     </div>
@@ -729,7 +731,15 @@ function showPage() {
     renderSavedCars(lastState.cars);
   }
   if (page === "log") refreshActivity();
-  if (page === "home") loadCopies();
+  if (page === "home") {
+    document.getElementById("copy-note").hidden = true;
+    loadCopies();
+  }
+  if (location.hash === "#/faults/clear") {
+    const box = document.querySelector(".clear-box");
+    box.open = true;
+    box.scrollIntoView({block: "center"});
+  }
   if (lastState && lastState.connected) {
     renderSystems(lastState);
     if (openSystem()) document.getElementById("system-detail").scrollIntoView({block: "nearest"});
@@ -1084,10 +1094,20 @@ async function renderCarPage(key, summary) {
   rename.addEventListener("submit", async event => {
     event.preventDefault();
     nameInput.blur();
-    await post("/api/car/name", {key, name: nameInput.value});
+    try {
+      await post("/api/car/name", {key, name: nameInput.value});
+      saveName.textContent = tr("Saved");
+    } catch (problem) {
+      saveName.textContent = problem.message;
+    }
     lastCars = "";
   });
-  top.append(back, titles, rename);
+  const remove = confirmButton(tr("Delete this car"), async () => {
+    await post("/api/car/delete", {key});
+    lastCars = "";
+    location.hash = "#/saved";
+  });
+  top.append(back, titles, rename, remove);
 
   const tiles = el("div", undefined, "stat-tiles");
   const statusTile = el("div", undefined, "tile");
@@ -1288,7 +1308,7 @@ function renderGraphs(values) {
   fill(document.getElementById("graphs"), chosenGraphs.map(pid => {
     const v = numeric.find(item => item.pid === pid);
     if (!v) return el("div");
-    const past = graphData[pid];
+    const past = graphData[pid].length ? graphData[pid] : [v.value];
     const low = Math.min(...past), high = Math.max(...past), span = high - low || 1;
     const node = el("div", undefined, "graph");
     const head = el("div", undefined, "action-head");
@@ -1419,12 +1439,18 @@ async function runLookup(code) {
 
 const drawn = new Map();
 let valueFilter = "all";
+let shownSession;
 
 // Clickable things shouldn't be rebuilt under the pointer each second, so only redraw what changed.
 function fillIfChanged(id, signature, build) {
   if (drawn.get(id) === signature) return;
   drawn.set(id, signature);
-  fill(document.getElementById(id), build());
+  const parent = document.getElementById(id);
+  const focusable = "a, button, input, select, summary";
+  // Keep keyboard focus on the same control when the thing it's in has to be rebuilt.
+  const focused = parent.contains(document.activeElement) ? [...parent.querySelectorAll(focusable)].indexOf(document.activeElement) : -1;
+  fill(parent, build());
+  if (focused >= 0) parent.querySelectorAll(focusable)[focused]?.focus();
 }
 
 function systemStatus(system) {
@@ -1599,6 +1625,9 @@ function renderCopyState(state) {
       tr("Car copy: saved data from {time}, not a live car. Nothing here changes your saved cars.", {time: shortTime(state.copy.saved)});
   }
   document.getElementById("copy-save").disabled = !state.can_save_copy;
+  const why = document.getElementById("copy-why");
+  why.hidden = Boolean(state.can_save_copy);
+  why.textContent = tr(state.copy ? "You're viewing a copy, so there's no car to save." : "Connect to a car and wait for it to finish reading, then you can save a copy.");
 }
 
 async function loadCopies() {
@@ -1620,9 +1649,35 @@ async function loadCopies() {
         showCopyNote(error.message);
       }
     });
-    line.append(about, open);
+    const buttons = el("div", undefined, "car-actions");
+    buttons.append(open, confirmButton(tr("Delete"), async () => {
+      await post("/api/copy/delete", {file: copy.file, lang: language});
+      await loadCopies();
+    }));
+    line.append(about, buttons);
     return line;
   }) : [el("p", tr("No car copies yet. Connect to a car, then choose Save car copy."), "dim")]);
+}
+
+// Deleting can't be undone, so the first press only asks and the second one does it.
+function confirmButton(label, action) {
+  const button = el("button", label, "danger small");
+  button.type = "button";
+  let armed = false;
+  button.addEventListener("click", async () => {
+    if (!armed) {
+      armed = true;
+      button.textContent = tr("Press again to delete");
+      setTimeout(() => { armed = false; button.textContent = label; }, 4000);
+      return;
+    }
+    try {
+      await action();
+    } catch (problem) {
+      button.textContent = problem.message;
+    }
+  });
+  return button;
 }
 
 function showCopyNote(text) {
@@ -1662,7 +1717,13 @@ function render(state) {
   renderSavedCars(state.cars);
   fill(document.getElementById("device"), state.device.map(item => row(item.label, item.text, item.tone)));
   updateConnectionViews();
-  fill(document.getElementById("alerts"), (state.alerts || []).map(text => el("div", text, "alert")));
+  // Only changed when the alerts change, so a screen reader announces each one once rather than every second.
+  fillIfChanged("alerts", JSON.stringify([state.alerts, language]), () => (state.alerts || []).map(text => el("div", text, "alert")));
+  if (state.session !== shownSession) {
+    // A different car or copy, so the last one's history mustn't run on into its graphs.
+    shownSession = state.session;
+    for (const store of [history, graphData]) for (const key of Object.keys(store)) delete store[key];
+  }
   if (!state.connected) {
     status.textContent = tr(state.link === "off" ? "Disconnected" : "Not connected");
     status.className = state.link === "off" ? "off" : "lost";
@@ -1678,8 +1739,9 @@ function render(state) {
   renderSystems(state);
   renderValueFilter(state);
   renderTiles(state.values);
-  fill(document.getElementById("codes"), codeNodes(state));
-  fill(document.getElementById("codes-summary"), codeNodes(state));
+  const codesShown = JSON.stringify([state.codes, state.known_modules, Object.values(state.monitors).map(monitor => monitor.mil), language]);
+  fillIfChanged("codes", codesShown, () => codeNodes(state));
+  fillIfChanged("codes-summary", codesShown, () => codeNodes(state));
   renderRecords(state.module_records || []);
   renderTests(state.test_results || []);
   renderMonitors(state.monitors);
@@ -1848,9 +1910,14 @@ function renderCatalog() {
       get.type = "button";
       get.addEventListener("click", async () => {
         get.disabled = true;
-        await post("/api/download", {name: car.name});
-        location.hash = "#/commands";
-        refreshJobs();
+        try {
+          await post("/api/download", {name: car.name});
+          location.hash = "#/commands";
+          refreshJobs();
+        } catch (problem) {
+          get.disabled = false;
+          get.textContent = problem.message;
+        }
       });
       actions.append(get);
     }
@@ -1883,8 +1950,13 @@ async function loadReports() {
       const open = el("button", tr("Open"), "small");
       open.type = "button";
       open.addEventListener("click", async () => {
-        const data = await api("GET", "/api/report", {name: report.name});
         const text = document.getElementById("report-text");
+        let data;
+        try {
+          data = await api("GET", "/api/report", {name: report.name});
+        } catch (problem) {
+          data = {text: problem.message};
+        }
         text.textContent = data.text;
         text.dir = /[؀-ۿ]/.test(data.text) ? "rtl" : "ltr";
         text.hidden = false;
@@ -1899,9 +1971,18 @@ const ASK_MS = 150, REDRAW_MS = 1000;
 let lastShown = null, lastReading = null, lastDrawn = 0, newReading = false;
 
 async function update() {
+  const asked = language;
+  let state;
   try {
-    const asked = language;
-    const state = (await window.fahis.request("state", {lang: asked})).data;
+    state = (await window.fahis.request("state", {lang: asked})).data;
+  } catch (error) {
+    const status = document.getElementById("status");
+    status.textContent = tr("Could not reach the app. Is it still running?");
+    status.className = "lost";
+    setTimeout(update, ASK_MS);
+    return;
+  }
+  try {
     // Asking often keeps the delay short, but redrawing is only worth it when something changed.
     // The once-a-second redraw keeps details such as "last reply" true if readings stop.
     const shown = `${state.reading}/${asked}`;
@@ -1916,9 +1997,7 @@ async function update() {
     if (["commands", "cars"].includes(currentPage())) await refreshJobs();
     if (currentPage() === "log") refreshActivity();
   } catch (error) {
-    const status = document.getElementById("status");
-    status.textContent = tr("Could not reach the app. Is it still running?");
-    status.className = "lost";
+    console.error(error);  // a fault in drawing the page, which the next update may get past
   }
   setTimeout(update, ASK_MS);
 }
@@ -1938,7 +2017,13 @@ document.getElementById("copy-save").addEventListener("click", async () => {
     showCopyNote(error.message);
   }
 });
-document.getElementById("copy-close").addEventListener("click", () => post("/api/copy/close", {lang: language}));
+document.getElementById("copy-close").addEventListener("click", async () => {
+  try {
+    await post("/api/copy/close", {lang: language});
+  } catch (problem) {
+    document.getElementById("copy-text").textContent = problem.message;
+  }
+});
 document.getElementById("clear-button").addEventListener("click", async () => {
   const answer = document.getElementById("clear-answer");
   const typed = answer.value.trim();

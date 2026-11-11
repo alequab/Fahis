@@ -158,6 +158,17 @@ def load_copy(folder, file_name):
     return data
 
 
+def delete_copy(folder, file_name):
+    """Remove a saved copy. Returns whether there was one."""
+    if not COPY_NAME.fullmatch(str(file_name)):
+        return False
+    path = folder / file_name
+    if not path.is_file():
+        return False
+    path.unlink()
+    return True
+
+
 def list_copies(folder):
     """Describe the saved copies, newest first, leaving out any file that isn't one."""
     copies = []

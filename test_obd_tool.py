@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -2113,6 +2114,164 @@ class CarCopyTests(unittest.IsolatedAsyncioTestCase):
 
     def test_copies_stay_out_of_the_repo(self):
         self.assertIn("car_copies/", (ROOT / ".gitignore").read_text(encoding="utf-8"))
+
+
+class RobustnessTests(unittest.IsolatedAsyncioTestCase):
+    """Rare failures that used to leave the app stuck or the records wrong."""
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.folder = Path(folder.name)
+        for target, name, value in ((garage, "CARS_DIR", self.folder / "cars"), (obd_tool, "LOG_DIR", self.folder / "logs")):
+            patcher = mock.patch.object(target, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        copies = mock.patch.object(car_copy, "copy_folder", return_value=self.folder / "copies")
+        copies.start()
+        self.addCleanup(copies.stop)
+        self.app = obd_tool.DashboardApp(SimpleNamespace(demo=True, samples=None, interval=0, address=None))
+        self.app.RETRY_SECONDS = 0.2
+
+    async def wait_for(self, check, seconds=30):
+        for _ in range(int(seconds / 0.02)):
+            if check():
+                return
+            await asyncio.sleep(0.02)
+        self.fail("timed out")
+
+    async def test_bridge_answers_even_when_a_request_fails(self):
+        self.app.api = mock.AsyncMock(side_effect=OSError("disk full"))
+        reply = await bridge.answer(self.app, '{"id": 5, "kind": "api", "payload": {"method": "POST", "path": "/api/x"}}')
+        self.assertEqual((reply["id"], reply["status"], reply["data"]["error"]), (5, 500, "disk full"))
+
+    def test_car_file_that_is_not_a_record_is_set_aside(self):
+        garage.CARS_DIR.mkdir(parents=True)
+        (garage.CARS_DIR / "CAR1.json").write_text("null", encoding="utf-8")
+        self.assertEqual(garage.load_car("CAR1"), {})
+        self.assertTrue((garage.CARS_DIR / "CAR1.damaged").exists())
+        self.assertEqual(garage.summaries(), [])
+
+    async def test_saved_cars_and_copies_can_be_deleted(self):
+        garage.save_car("CAR1", {"vehicle": {}})
+        self.app.args.demo = False
+        status, _ = await self.app.api("POST", "/api/car/delete", {}, {"key": "CAR1"})
+        self.assertEqual(status, 200)
+        self.assertFalse((garage.CARS_DIR / "CAR1.json").exists())
+        for key in ("CAR1", "../CAR1", ""):
+            self.assertEqual((await self.app.api("POST", "/api/car/delete", {}, {"key": key}))[0], 404)
+        self.app.args.demo = True
+        name = car_copy.save_copy(self.folder / "copies", car_copy.CarRecorder(), None, None)
+        self.app.copy = {"file": name}
+        status, reply = await self.app.api("POST", "/api/copy/delete", {}, {"file": name, "lang": "en"})
+        self.assertEqual(status, 409)
+        self.app.copy = None
+        self.assertEqual((await self.app.api("POST", "/api/copy/delete", {}, {"file": name}))[0], 200)
+        self.assertEqual(car_copy.list_copies(self.folder / "copies"), [])
+        self.assertEqual((await self.app.api("POST", "/api/copy/delete", {}, {"file": "../x.json"}))[0], 409)
+
+    async def test_closing_a_copy_after_disconnect_stays_disconnected(self):
+        running = asyncio.create_task(self.app.run())
+        try:
+            await self.wait_for(lambda: self.app.elm is not None and self.app.reader is not None)
+            _, saved = await self.app.api("POST", "/api/copy/save", {}, {})
+            self.app.disconnect("en")
+            await self.wait_for(lambda: self.app.link_state == "off")
+            await self.app.api("POST", "/api/copy/open", {}, {"file": saved["file"]})
+            await self.wait_for(lambda: self.app.elm is not None and self.app.reader is not None)
+            await self.app.api("POST", "/api/copy/close", {}, {})
+            await self.wait_for(lambda: self.app.link_state == "off")
+            await asyncio.sleep(0.6)
+            self.assertIsNone(self.app.elm)
+            self.assertEqual(self.app.state("en")["link"], "off")
+        finally:
+            running.cancel()
+            await asyncio.gather(running, return_exceptions=True)
+
+    async def test_short_refusal_does_not_crash(self):
+        class Transport:
+            async def send(self, command, wait=5):
+                return ["7E8 02 7F 22"] if command == "22F187" else ["OK"]
+
+        reply = await ELM(Transport()).module_request("7E0", "7E8", "22F187")
+        self.assertEqual(reply, bytes.fromhex("7F22"))
+        self.assertIsNone(car_modules.refusal_reason(reply))
+
+    async def test_clear_stays_done_when_the_car_goes_quiet_afterwards(self):
+        elm = ELM(demo.DemoTransport())
+        elm.demo = True
+        job = self.app.new_job("clear", {"answer": "CLEAR"}, "en")
+        with mock.patch.object(obd_tool, "run_clear", mock.AsyncMock()), \
+                mock.patch.object(obd_tool, "read_snapshot", mock.AsyncMock(side_effect=OBDError(obd_tool.CAR_SILENT))):
+            with self.assertRaises(OBDError):
+                await self.app.run_job(elm, job)
+        self.assertEqual(job.status, "done")
+
+    async def test_adapter_restart_during_a_command_reconnects(self):
+        elm = ELM(demo.DemoTransport())
+        elm.demo = True
+        job = self.app.new_job("info", {}, "en")
+        with mock.patch.object(obd_tool, "run_info", mock.AsyncMock(side_effect=OBDError(obd_tool.ADAPTER_RESTARTED))):
+            with self.assertRaises(OBDError):
+                await self.app.run_job(elm, job)
+        self.assertEqual(job.status, "failed")
+        ordinary = self.app.new_job("info", {}, "en")
+        with mock.patch.object(obd_tool, "run_info", mock.AsyncMock(side_effect=OBDError("Not clearing: the engine must be off with the ignition ON."))):
+            await self.app.run_job(elm, ordinary)
+        self.assertEqual(ordinary.status, "failed")
+
+    async def test_failed_download_fails_the_command_not_the_connection(self):
+        elm = ELM(demo.DemoTransport())
+        elm.demo = True
+        job = self.app.new_job("profile", {"name": "kia-nothere", "year": None}, "en")
+        with mock.patch.object(car_modules, "local_profile_files", return_value=[]), \
+                mock.patch.object(car_modules, "download_profile", side_effect=OSError("no internet")):
+            await self.app.run_job(elm, job)
+        self.assertEqual(job.status, "failed")
+        self.assertIn("no internet", job.output)
+
+    async def test_recording_keeps_earlier_files_and_starts_with_new_readings_only(self):
+        now = time.monotonic()
+        self.app.elm = object()
+        self.app.reader = SimpleNamespace(values={0x0C: 800.0, 0x0D: 0}, read_at={0x0C: now, 0x0D: now})
+        fixed = mock.Mock(wraps=obd_tool.datetime)
+        fixed.now.return_value = obd_tool.datetime(2026, 1, 1, 12, 0, 0)
+        with mock.patch.object(obd_tool, "datetime", fixed):
+            self.assertIsNone(self.app.start_recording("en"))
+            first = self.app.recording["path"]
+            self.app.record_row()
+            self.app.reader.read_at[0x0C] = now + 1
+            self.app.record_row()
+            self.app.stop_recording()
+            self.assertIsNone(self.app.start_recording("en"))
+            second = self.app.recording["path"]
+            self.app.stop_recording()
+        self.assertNotEqual(first, second)
+        rows = first.read_text(encoding="utf-8-sig").splitlines()
+        self.assertEqual(rows[1].split(",")[1:], ["", ""])
+        self.assertEqual(rows[2].split(",")[1:], ["800.0", ""])
+
+    async def test_freeze_frame_goes_when_the_stored_code_goes(self):
+        self.app.snapshot = {"monitors": {}, "codes": {"Stored": {"7E8": ["P0171"]}, "Pending": {}, "Permanent": {}}, "supported": set(),
+                             "this_drive": None, "freeze": {"code": "P0171", "values": []}, "vehicle": {}}
+        elm = SimpleNamespace(demo=True, vehicle=None,
+                              request_all=mock.AsyncMock(side_effect=[{}, {"7E8": bytes.fromhex("4300")}, {}, {}]))
+        with mock.patch.object(obd_tool, "remember_snapshot"):
+            await self.app.refresh_status(elm)
+        self.assertIsNone(self.app.snapshot["freeze"])
+
+    async def test_refresh_does_not_save_over_a_newer_reading(self):
+        old = {"monitors": {}, "codes": {"Stored": {"7E8": ["P0171"]}, "Pending": {}, "Permanent": {}}, "supported": set(),
+               "this_drive": None, "freeze": None, "vehicle": {}}
+        self.app.snapshot = old
+        elm = SimpleNamespace(demo=True, vehicle=None, request_all=mock.AsyncMock(return_value={"7E8": bytes.fromhex("4300")}))
+        with mock.patch.object(obd_tool, "remember_snapshot") as remember:
+            parts = self.app.refresh_parts(elm)
+            await parts.__anext__()
+            self.app.snapshot = dict(old)
+            async for _ in parts:
+                pass
+            remember.assert_not_called()
 
 
 class DisconnectTests(unittest.IsolatedAsyncioTestCase):

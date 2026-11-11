@@ -48,6 +48,10 @@
 <td width="50%"><img src="docs/commands-ar.png" alt="صفحة الأوامر وفيها نتيجة أمر ببيانات محاكاة"><p align="center"><b>الأوامر والنتائج</b></p></td>
 <td width="50%"><img src="docs/cars-ar.png" alt="صفحة السيارات المدعومة"><p align="center"><b>السيارات المدعومة</b></p></td>
 </tr>
+<tr>
+<td width="50%"><img src="docs/home-ar.png" alt="شاشة البداية وفيها الخياران ونسخ السيارات"><p align="center"><b>شاشة البداية</b></p></td>
+<td width="50%"><img src="docs/systems-ar.png" alt="صفحة أنظمة السيارة ببيانات محاكاة"><p align="center"><b>أنظمة السيارة</b></p></td>
+</tr>
 </table>
 
 <p align="center"><i>الصور من الوضع التجريبي، فالبيانات المعروضة محاكاة.</i></p>
@@ -118,7 +122,7 @@ npm start
 3. أقرن المحوّل من إعدادات Bluetooth في Windows. إذا طلب رمز PIN فجرّب `1234` أو `0000` أو `6789`.
 4. أوقف Bluetooth في أي هاتف اتصل بالمحوّل من قبل.
 
-يواصل التطبيق البحث عن المحوّل حتى تستجيب السيارة، وعند إغلاق النافذة ينقطع الاتصال بالمحوّل.
+يواصل التطبيق البحث عن المحوّل حتى تستجيب السيارة. قبل فصل المحوّل اضغط **قطع الاتصال** وانتظر رسالة أن الفصل آمن، وبعدها لا يعيد التطبيق الاتصال حتى تطلب ذلك. وإغلاق النافذة يقطع الاتصال أيضًا.
 
 ### كيف يعمل
 
@@ -140,6 +144,7 @@ flowchart LR
 - **مسح الرموز لا يصلح العطل.** وهو يمحو أيضًا بيانات الأعطال المحفوظة ويعيد ضبط اختبارات الانبعاثات الذاتية.
 - **كل الأوامر ما عدا `clear` تقرأ البيانات فقط.**
 - **بياناتك على جهازك.** تتصل النافذة بخدمتها الخلفية عبر قناة خاصة دون خادم ويب أو منفذ شبكة مفتوح. وتنزيل ملف سيارة هو المرة الوحيدة التي يتصل فيها التطبيق نفسه بالإنترنت.
+- **نسخ السيارات والسيارات المحفوظة تتضمن رقم الهيكل.** تبقى على جهازك، فلا تشاركها مع من لا تثق به، ويمكنك حذفها من التطبيق.
 
 ### ما يجب معرفته
 
@@ -184,7 +189,7 @@ flowchart LR
 
 <br>
 
-- يعمل التطبيق من الشيفرة المصدرية دون برنامج تثبيت حتى الآن.
+- لم يُنشر برنامج التثبيت الجاهز بعد، لذلك يعمل التطبيق من الشيفرة المصدرية.
 - قيم ملفات السيارات مصدرها بيانات المجتمع، وقد لا تطابق سنة سيارتك بالضبط، وقد لا ينطبق بعضها على سيارتك أصلًا.
 - يتخطى `profile` الأوامر التي لا يستطيع إرسالها بأمان أو لا يدعمها: وهي التي تفتح جلسة تشخيص خاصة، والتي تستخدم عناوين 29 بت أو العناوين الموسّعة.
 - يدعم CAN بعناوين 11 بت فقط، ولا يدعم المحوّلات التي تعمل بتقنية Bluetooth التقليدية أو USB أو Wi-Fi.
@@ -216,6 +221,8 @@ flowchart LR
 | `obd_tool.py` | الاتصال بالمحوّل وتفسير بيانات OBD-II والأوامر |
 | `car_modules.py` | البحث عن الوحدات وتفسير ملفات السيارات |
 | `garage.py` | سجلات السيارات المحفوظة |
+| `car_systems.py` | توزيع القراءات والأعطال على أنظمة السيارة |
+| `car_copy.py` | حفظ نسخة من بيانات السيارة وتشغيل التطبيق منها |
 | `i18n.py` | النصوص العربية والإنجليزية |
 | `bridge.py` | القناة الخاصة بين النافذة والخدمة الخلفية |
 | `electron/` | نافذة سطح المكتب وصفحات التطبيق والأيقونة |
@@ -253,6 +260,10 @@ Many ELM327 adapters are Bluetooth LE. Windows gives them no COM port, so most O
 <tr>
 <td width="50%"><img src="docs/commands-en.png" alt="The Commands page showing a command result with simulated data"><p align="center"><b>Commands and results</b></p></td>
 <td width="50%"><img src="docs/cars-en.png" alt="The Supported cars page"><p align="center"><b>Supported cars</b></p></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/home-en.png" alt="The start screen with its two choices and car copies"><p align="center"><b>Start screen</b></p></td>
+<td width="50%"><img src="docs/systems-en.png" alt="The Car systems page with simulated data"><p align="center"><b>Car systems</b></p></td>
 </tr>
 </table>
 
@@ -320,7 +331,7 @@ To try it with simulated data and no car, run `npm run demo`.
 3. Pair the adapter in Windows Bluetooth settings. If it asks for a PIN, try `1234`, `0000` or `6789`.
 4. Turn off Bluetooth on any phone that has connected to the adapter.
 
-The app keeps looking for the adapter until the car answers. Closing the window disconnects from the adapter.
+The app keeps looking for the adapter until the car answers. Before unplugging the adapter, press **Disconnect** and wait for the message that it's safe. After that the app doesn't reconnect until you ask. Closing the window disconnects too.
 
 ### How it works
 
@@ -338,6 +349,7 @@ flowchart LR
 - **Clearing codes doesn't fix a fault.** It also erases saved fault data and resets the emissions self-tests.
 - **Every command except `clear` only reads data.**
 - **Your data stays on your laptop.** The window talks to its backend through a private pipe, with no web server or open network port. Downloading a car profile is the only time the app itself goes online.
+- **Car copies and saved cars include the VIN.** They stay on your laptop, so don't share them with anyone you don't trust. You can delete them in the app.
 
 ### Good to know
 
@@ -382,7 +394,7 @@ Close the app before running a command in a terminal, because the adapter serves
 
 <br>
 
-- The app is run from source, with no installer yet.
+- The ready-made installer isn't published yet, so the app is run from source.
 - Profile values come from community data and may not match your car's exact year, and some may not apply to your car at all.
 - `profile` skips commands it can't send safely or doesn't support: those that open a special diagnostic session, and those using 29-bit or extended addressing.
 - Only 11-bit CAN is supported. Classic Bluetooth, USB and Wi-Fi adapters aren't.
@@ -410,6 +422,8 @@ Run the offline tests, which don't need a car or adapter:
 | `obd_tool.py` | Adapter connection, OBD-II decoding and commands |
 | `car_modules.py` | Module scan and car profile decoding |
 | `garage.py` | Saved car records |
+| `car_systems.py` | Sorts readings and faults into car systems |
+| `car_copy.py` | Saves a copy of a car's data and runs the app from it |
 | `i18n.py` | English and Arabic text |
 | `bridge.py` | Private pipe between the window and the backend |
 | `electron/` | Desktop window, the app's pages and the icon |

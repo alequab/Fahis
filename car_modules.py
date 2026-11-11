@@ -1,5 +1,6 @@
 """Read other modules: find which ones answer, read their codes, and read profile values."""
 import json
+import os
 import re
 import urllib.error
 from functools import lru_cache
@@ -142,7 +143,10 @@ def download_profile(name):
     folder = DOWNLOAD_DIR / profile_key(repo)
     folder.mkdir(parents=True, exist_ok=True)
     for file, profile in downloaded.items():
-        (folder / file).write_text(json.dumps(profile), encoding="utf-8")
+        # Written whole or not at all, as a half-written profile would fail every time and never be fetched again.
+        temporary = folder / f"{file}.tmp"
+        temporary.write_text(json.dumps(profile), encoding="utf-8")
+        os.replace(temporary, folder / file)
     (folder / "source.json").write_text(json.dumps({
         "source": f"https://github.com/OBDb/{repo}", "authors": "OBDb editors and contributors",
         "licence": "CC BY-SA 4.0", "retrieved": date.today().isoformat()}, indent=2), encoding="utf-8")

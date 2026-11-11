@@ -8,6 +8,14 @@ LANGUAGES = ("en", "ar")
 
 ARABIC = {
     # Car systems and fault details
+    'Fault codes are being cleared. Wait for that to finish, then open the copy.': 'يجري مسح رموز الأعطال. انتظر حتى ينتهي ثم افتح النسخة.',
+    'Close this car copy before deleting it.': 'أغلق نسخة السيارة هذه قبل حذفها.',
+    'Saved': 'تم الحفظ',
+    'Delete': 'حذف',
+    'Delete this car': 'حذف هذه السيارة',
+    'Press again to delete': 'اضغط مجددًا للحذف',
+    "You're viewing a copy, so there's no car to save.": 'أنت تعرض نسخة، فلا توجد سيارة لحفظها.',
+    'Connect to a car and wait for it to finish reading, then you can save a copy.': 'اتصل بسيارة وانتظر حتى تنتهي القراءة، ثم يمكنك حفظ نسخة.',
     'EGR or VVT': 'تدوير العادم أو توقيت الصمامات',
     'Short fuel trim B2': 'تعديل الوقود القصير للضفة 2',
     'Long fuel trim B2': 'تعديل الوقود الطويل للضفة 2',

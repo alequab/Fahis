@@ -25,15 +25,18 @@ async def answer(app, line):
         return {"id": None, "status": 400, "data": {"error": "Bad request"}}
 
     lang = i18n.normalize(payload.get("lang"))
-    if kind == "state":
-        return {"id": request_id, "status": 200, "data": app.state(lang)}
-    if kind == "i18n":
-        return {"id": request_id, "status": 200, "data": {"default": i18n.current_language(), "text": i18n.page_text(lang)}}
-    if kind == "api":
-        query = payload.get("query") if isinstance(payload.get("query"), dict) else {}
-        body = payload.get("body") if isinstance(payload.get("body"), dict) else {}
-        status, data = await app.api(payload.get("method"), payload.get("path"), query, body)
-        return {"id": request_id, "status": status, "data": data}
+    try:
+        if kind == "state":
+            return {"id": request_id, "status": 200, "data": app.state(lang)}
+        if kind == "i18n":
+            return {"id": request_id, "status": 200, "data": {"default": i18n.current_language(), "text": i18n.page_text(lang)}}
+        if kind == "api":
+            query = payload.get("query") if isinstance(payload.get("query"), dict) else {}
+            body = payload.get("body") if isinstance(payload.get("body"), dict) else {}
+            status, data = await app.api(payload.get("method"), payload.get("path"), query, body)
+            return {"id": request_id, "status": status, "data": data}
+    except Exception as error:  # The page waits for every answer, so a failure must still send one.
+        return {"id": request_id, "status": 500, "data": {"error": str(error) or type(error).__name__}}
     return {"id": request_id, "status": 404, "data": {"error": "Not found"}}
 
 

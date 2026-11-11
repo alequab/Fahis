@@ -32,12 +32,24 @@ def car_key(vehicle):
 def load_car(key):
     path = CARS_DIR / f"{key}.json"
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(record, dict):
+            raise ValueError
+        return record
     except FileNotFoundError:
         return {}
     except ValueError:
         path.replace(path.with_suffix(".damaged"))  # keep it for inspection and start fresh
         return {}
+
+
+def delete_car(key):
+    """Remove a saved car's record. Returns whether there was one."""
+    path = CARS_DIR / f"{key}.json"
+    if not path.is_file():
+        return False
+    path.unlink()
+    return True
 
 
 def save_car(key, record):

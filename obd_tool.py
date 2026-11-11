@@ -594,7 +594,7 @@ class ELM:
         for attempt in range(MODULE_BUSY_ATTEMPTS):
             lines = await self.transport.send(request, wait)
             reply = self.parsed(lines).get(rax)
-            if not reply or reply[:2] != bytes([0x7F, service]) or reply[2] not in car_modules.TRY_AGAIN:
+            if not reply or len(reply) < 3 or reply[:2] != bytes([0x7F, service]) or reply[2] not in car_modules.TRY_AGAIN:
                 break
             if attempt + 1 < MODULE_BUSY_ATTEMPTS:
                 await asyncio.sleep(car_modules.TRY_AGAIN[reply[2]])
@@ -1012,7 +1012,7 @@ async def read_this_drive(elm):
 async def read_snapshot(elm):
     """Read everything the car offers through standard OBD-II, once."""
     vehicle = elm.vehicle or await read_identity(elm)
-    monitors = {h: decode_monitors(p) for h, p in (await elm.request_all(0x01, 0x01)).items()}
+    monitors = {h: decode_monitors(p) for h, p in (await elm.request_all(0x01, 0x01)).items() if len(p) >= 6}
     codes = await read_codes(elm)
     has_stored = any(codes["Stored"].values())
     supported = await elm.supported_pids()
@@ -1536,6 +1536,7 @@ class DashboardApp:
         self.connect_again = asyncio.Event()
         self.connecting = None
         self.copy = None  # the saved car copy being run instead of a car
+        self.was_disconnected = False  # whether Disconnect had been pressed before a copy was opened
         self.skip_wait = False
 
     def save_car_copy(self, lang=None):
@@ -1566,17 +1567,37 @@ class DashboardApp:
     def open_car_copy(self, file_name, lang=None):
         """Run the app from a saved copy. Returns why it can't, or None."""
         if self.job_changing_car():
-            return t("Fault codes are being cleared. Wait for that to finish, then disconnect.", lang)
+            return t("Fault codes are being cleared. Wait for that to finish, then open the copy.", lang)
         try:
-            self.copy = car_copy.load_copy(car_copy.copy_folder(self.args.demo), file_name)
+            copy = car_copy.load_copy(car_copy.copy_folder(self.args.demo), file_name)
         except ValueError as error:
             return t(str(error), lang)
+        if not self.copy:
+            self.was_disconnected = self.stay_disconnected or self.link_state != "on"
+        self.copy = copy
         self.switch_connection()
         return None
 
     def close_car_copy(self):
+        if not self.copy:
+            return
         self.copy = None
-        self.switch_connection()
+        if self.was_disconnected:
+            # The driver was told the adapter is safe to unplug, so closing a copy mustn't start looking for it again.
+            self.stay_disconnected = True
+            self.link_state = "stopping"
+            if self.connecting is not None:
+                self.connecting.cancel()
+        else:
+            self.switch_connection()
+
+    def delete_car_copy(self, file_name, lang=None):
+        """Delete a saved copy. Returns why it can't, or None."""
+        if self.copy and self.copy.get("file") == file_name:
+            return t("Close this car copy before deleting it.", lang)
+        if not car_copy.delete_copy(car_copy.copy_folder(self.args.demo), file_name):
+            return t("That isn't a car copy.", lang)
+        return None
 
     def job_changing_car(self):
         """A clear must finish once it has started, or the driver can't tell whether it happened."""
@@ -1664,16 +1685,22 @@ class DashboardApp:
         snapshot = self.snapshot
         before = json.dumps([snapshot["monitors"], snapshot["codes"]], sort_keys=True, default=str)
         for header, payload in (await elm.request_all(0x01, 0x01, attempts=1)).items():
-            snapshot["monitors"][header] = decode_monitors(payload)
+            if len(payload) >= 6:
+                snapshot["monitors"][header] = decode_monitors(payload)
         yield
         for label, mode in CODE_MODES:
             replies = await elm.request_all(mode, attempts=1)
             snapshot["codes"].setdefault(label, {}).update({h: decode_dtcs(p) for h, p in replies.items()})
             yield
+        if snapshot is not self.snapshot:
+            return  # A command such as clear read everything again meanwhile, so this older reading mustn't be saved over it.
         if 0x41 in snapshot["supported"]:
             snapshot["this_drive"] = await read_this_drive(elm) or snapshot["this_drive"]
         if json.dumps([snapshot["monitors"], snapshot["codes"]], sort_keys=True, default=str) != before:
-            if any(snapshot["codes"]["Stored"].values()) and not snapshot["freeze"]:
+            stored = {code for found in snapshot["codes"]["Stored"].values() for code in found}
+            if not stored:
+                snapshot["freeze"] = None
+            elif not snapshot["freeze"] or snapshot["freeze"]["code"] not in stored:
                 snapshot["freeze"] = await read_freeze_frame(elm)
             remember_snapshot(elm, snapshot)
 
@@ -1765,15 +1792,19 @@ class DashboardApp:
         previous = i18n.current_language()
         i18n.set_language(job.lang)
         job.status = "running"
+        finished = None
         try:
             with contextlib.redirect_stdout(job):
                 if job.action == "profile" and not car_modules.local_profile_files(job.params["name"]):
                     print(t("Downloading profile {name} from OBDb ...", name=job.params["name"]), flush=True)
-                    await asyncio.to_thread(car_modules.download_profile, job.params["name"])
+                    try:
+                        await asyncio.to_thread(car_modules.download_profile, job.params["name"])
+                    except OSError as error:  # no internet is no reason to drop the car
+                        raise ValueError(t("Error: {error}", error=error)) from None
                 handler = {"battery": run_battery, "info": run_info, "codes": run_codes, "report": run_report,
                            "scan": run_scan, "profile": run_profile, "clear": run_clear}[job.action]
                 await handler(elm, SimpleNamespace(**job.params))
-            job.status = "done"
+            job.status = finished = "done"
             if job.action == "clear":
                 self.snapshot = await read_snapshot(elm)
                 for pid, value in self.snapshot["values"].items():
@@ -1781,14 +1812,17 @@ class DashboardApp:
             elif job.action == "battery":
                 await elm.setup()  # the battery check resets the adapter
         except (OBDError, ValueError) as error:
-            job.status = "failed"
+            # Once the command itself has finished, trouble reading the car again doesn't undo it.
+            job.status = finished or "failed"
             job.write(f"{error}\n")
+            if finished or (isinstance(error, OBDError) and error.text in (ADAPTER_RESTARTED, ADAPTER_SILENT)):
+                raise  # the adapter or car needs connecting again
         except asyncio.CancelledError:
-            job.status = "failed"
+            job.status = finished or "failed"
             job.write(t("Stopped because you disconnected.", job.lang) + "\n")
             raise
         except Exception as error:
-            job.status = "failed"
+            job.status = finished or "failed"
             job.write(t("Error: {error}", error=error) + "\n")
             raise  # the connection is probably gone, so reconnect
         finally:
@@ -1844,6 +1878,15 @@ class DashboardApp:
             return (409, {"error": refusal}) if refusal else (200, {"file": body.get("file")})
         if method == "POST" and path == "/api/copy/close":
             self.close_car_copy()
+            return 200, {}
+        if method == "POST" and path == "/api/copy/delete":
+            refusal = self.delete_car_copy(body.get("file"), lang)
+            return (409, {"error": refusal}) if refusal else (200, {})
+        if method == "POST" and path == "/api/car/delete":
+            key = str(body.get("key", ""))
+            if self.args.demo or not re.fullmatch(r"[\w-]+", key) or not garage.delete_car(key):
+                return 404, {"error": t("Not found", lang)}
+            self.cars = garage.summaries()
             return 200, {}
         if method == "POST" and path == "/api/disconnect":
             refusal = self.disconnect(lang)
@@ -1923,6 +1966,7 @@ class DashboardApp:
         state["link"] = self.link_state
         state["copy"] = self.copy_status()
         state["can_save_copy"] = not self.copy and self.elm is not None
+        state["session"] = self.connections  # changes with every new connection, so the page can drop the last car's graphs
         return state
 
     def copy_status(self):
@@ -1935,13 +1979,21 @@ class DashboardApp:
         if self.recording:
             return t("Recording is already running.", lang)
         LOG_DIR.mkdir(parents=True, exist_ok=True)
-        path = LOG_DIR / f"drive_{datetime.now():%Y%m%d_%H%M%S}.csv"
-        log_file = path.open("w", newline="", encoding="utf-8-sig")
+        stem, number_tried = f"drive_{datetime.now():%Y%m%d_%H%M%S}", 0
+        while True:  # never write over a recording made earlier in the same second
+            path = LOG_DIR / (f"{stem}.csv" if not number_tried else f"{stem}_{number_tried}.csv")
+            try:
+                log_file = path.open("x", newline="", encoding="utf-8-sig")
+                break
+            except FileExistsError:
+                number_tried += 1
         writer = csv.writer(log_file)
         pids = list(self.reader.values)
         writer.writerow([t("time", lang)] + [column_title(p, lang) for p in pids])
         self.recording = {"path": path, "file": log_file, "writer": writer, "pids": pids, "rows": 0,
-                          "started": time.monotonic(), "highest": {}, "speed_total": 0.0, "speed_rows": 0, "written": {}}
+                          "started": time.monotonic(), "highest": {}, "speed_total": 0.0, "speed_rows": 0,
+                          # Readings taken before recording began aren't measurements from the recording.
+                          "written": dict(self.reader.read_at)}
         self.last_summary = None
         return None
 
@@ -2086,9 +2138,11 @@ class DashboardApp:
                 if asyncio.current_task().cancelling():
                     raise  # the app itself is closing
                 self.snapshot = self.reader = self.link = self.elm = None
+                self.fail_waiting_jobs()
                 continue  # only the connection was stopped, by the Disconnect button or a car copy
             except Exception as error:
-                self.snapshot = self.reader = self.link = None
+                self.snapshot = self.reader = self.link = self.elm = None
+                self.fail_waiting_jobs()  # or a queued command could run on the next car to connect
                 # Only a silent car proves the adapter is still there; any other failure may mean it's gone.
                 if not (isinstance(error, OBDError) and error.text in (CAR_SILENT, BUS_PROBLEM, ADAPTER_RESTARTED)):
                     self.adapter = None
