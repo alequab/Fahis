@@ -1,5 +1,6 @@
 """Offline tests using replies recorded from the car, so no adapter is needed."""
 import asyncio
+import contextlib
 import html
 import io
 import json
@@ -2287,7 +2288,254 @@ class AnalysisTests(unittest.TestCase):
     def test_earlier_visits_include_fuel_from_older_records(self):
         record = {"sessions": [{"fuel": 40.0, "averages": {}}, "damaged"], "status": {"values": {"Fuel level": "7.8 %"}}}
         self.assertEqual(obd_tool.earlier_visits(record)["fuel"], [40.0, 7.8])
-        self.assertEqual(obd_tool.earlier_visits({}), {"sessions": [], "fuel": []})
+        self.assertEqual(obd_tool.earlier_visits({}), {"sessions": [], "fuel": [], "followup": [], "test_history": []})
+
+
+class NewFeatureTests(unittest.IsolatedAsyncioTestCase):
+    """The used-car check, fault follow-up, self-test trends, cold start, moment recorder, start test, fill-ups and adapter rating."""
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.folder = Path(folder.name)
+        for target, name, value in ((garage, "CARS_DIR", self.folder / "cars"), (obd_tool, "LOG_DIR", self.folder / "logs"),
+                                    (obd_tool, "REPORT_DIR", self.folder / "reports")):
+            patcher = mock.patch.object(target, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    SNAPSHOT = {"codes": {"Stored": {"7E8": []}, "Pending": {"7E8": []}, "Permanent": {"7E8": []}},
+                "monitors": {"7E8": {"mil": False, "tests": [["Misfire", True], ["Catalyst", True]]}},
+                "vehicle": {"VIN": {"7E8": "AAAAAAAAAHA000000"}}, "module_records": [{"codes": []}],
+                "ecu_details": {"7E8": [{"label": "Stored VIN", "text": "AAAAAAAAAHA000000"}, {"label": "Last programmed", "text": "2017-04-05"}]},
+                "test_results": []}
+
+    def check(self, values=None, **changes):
+        snapshot = {**self.SNAPSHOT, **changes}
+        found = car_analysis.used_car_check(snapshot, values if values is not None else {0x31: "65535+", 0x30: "255+"}, 2017)
+        return {item["id"]: item for item in found}
+
+    def test_clean_car_passes_the_used_car_check(self):
+        found = self.check()
+        self.assertEqual({item["state"] for item in found.values()}, {"good"})
+        self.assertEqual(set(found), {"cleared", "unfinished", "codes", "past", "vin", "programmed"})
+
+    def test_recently_cleared_car_is_flagged(self):
+        found = self.check({0x31: 12, 0x30: 2}, monitors={"7E8": {"mil": False, "tests": [["Misfire", True], ["Catalyst", False]]}})
+        self.assertEqual((found["cleared"]["state"], found["unfinished"]["state"]), ("bad", "warn"))
+        self.assertEqual(found["unfinished"]["names"], ["Catalyst"])
+        self.assertEqual(list(found)[0], "cleared", "the worst sign comes first")
+
+    def test_used_car_check_spots_swapped_parts_and_hidden_faults(self):
+        found = self.check({0x31: 5000, 0x30: 200, 0x21: 340},
+                           codes={"Stored": {}, "Pending": {}, "Permanent": {"7E8": ["P0420"]}},
+                           module_records=[{"codes": [{"code": "P0455-00", "state": "history"}]}],
+                           ecu_details={"7E8": [{"label": "Stored VIN", "text": "BBBBBBBBBHB111111"}, {"label": "Last programmed", "text": "2023-06-01"}]},
+                           test_results=[{"state": "fail"}])
+        self.assertEqual({key: found[key]["state"] for key in ("codes", "light_distance", "past", "vin", "programmed", "failed_tests")},
+                         {"codes": "warn", "light_distance": "warn", "past": "warn", "vin": "bad", "programmed": "warn", "failed_tests": "bad"})
+        self.assertIn("permanent", found["codes"]["text"])
+        self.assertEqual(self.check(codes={"Stored": {"7E8": ["P0300"]}, "Pending": {}, "Permanent": {}})["codes"]["state"], "bad")
+        self.assertEqual(self.check({})["cleared"]["state"], "unknown")
+
+    def test_check_page_and_report_are_translated(self):
+        values = {0x31: 12, 0x30: 2}
+        snapshot = {**self.SNAPSHOT, "monitors": {"7E8": {"mil": True, "tests": [["Catalyst", False]]}}, "codes": {"Stored": {"7E8": ["P0300"]}}}
+        for lang in ("en", "ar"):
+            page = obd_tool.page_car_check(snapshot, values, lang)
+            self.assertEqual((page["bad"], page["warn"]), (2, 1))
+            self.assertNotIn("{", " ".join(item["text"] for item in page["findings"]))
+        self.assertIn(i18n.ARABIC["Catalyst"], " ".join(item["text"] for item in page["findings"]))
+        report = obd_tool.car_check_report(snapshot, values, "en")
+        self.assertIn("[Check this] Codes cleared recently?", report)
+        self.assertIn("cleared only 12 km and 2 warm-ups ago", report)
+        only_distance = obd_tool.page_car_check(self.SNAPSHOT, {0x31: 1234}, "en")["findings"]
+        self.assertIn("No sign of a recent clear: 1234 km since", " ".join(item["text"] for item in only_distance))
+        self.assertIn("doesn't replace a mechanic's inspection", report)
+
+    async def test_check_report_is_saved_but_not_in_demo(self):
+        app = obd_tool.DashboardApp(SimpleNamespace(demo=False, samples=None, interval=0, address=None))
+        self.assertEqual((await app.api("POST", "/api/check/save", {}, {}))[0], 409)
+        app.snapshot, app.reader = self.SNAPSHOT, SimpleNamespace(values={0x31: 12})
+        status, saved = await app.api("POST", "/api/check/save", {}, {"lang": "en"})
+        self.assertEqual(status, 200)
+        self.assertIn("Used-car check", Path(saved["file"]).read_text(encoding="utf-8"))
+        app.args.demo = True
+        self.assertEqual((await app.api("POST", "/api/check/save", {}, {}))[0], 409)
+
+    def test_fault_followup_tracks_a_code_through_pending_confirmed_and_gone(self):
+        entry = lambda time, **kinds: {"time": time, "codes": sorted({c for found in kinds.values() for c in found}), **kinds,
+                                       "modules": ["7E8"], "where": {c: "7E8" for found in kinds.values() for c in found}}
+        record = {"history": [entry("2026-11-01T10:00:00", pending=["P0455"]), entry("2026-11-02T10:00:00", pending=["P0455"], stored=["P0300"]),
+                              entry("2026-11-03T10:00:00", stored=["P0300"]), entry("2026-11-04T10:00:00", stored=["P0300"]),
+                              {"time": "2026-11-05T10:00:00", "codes": ["P0300"]}]}
+        cases = {case["code"]: case for case in garage.fault_followup(record)}
+        self.assertEqual((cases["P0455"]["status"], cases["P0455"]["clean_readings"], cases["P0455"]["confirmed"]), ("gone", 2, False))
+        self.assertEqual((cases["P0300"]["status"], cases["P0300"]["first_seen"][:10], cases["P0300"]["confirmed"]), ("seen", "2026-11-02", True))
+        found = {item["id"]: item for item in car_analysis.check_followup({"followup": list(cases.values())})}
+        self.assertEqual(found["followup_P0455"]["state"], "good")
+        self.assertIn("never confirmed", found["followup_P0455"]["text"])
+        self.assertEqual(found["followup_P0300"]["state"], "warn")
+        self.assertEqual(garage.fault_followup({}), [])
+        cleared = car_analysis.check_followup({"followup": [cases["P0455"]]}, {0x31: 5})[0]
+        self.assertEqual(cleared["state"], "unknown")
+        self.assertIn("isn't proof of a fix", cleared["text"])
+
+    def test_code_is_not_called_gone_when_its_computer_was_silent(self):
+        seen = {"time": "2026-11-01T10:00:00", "codes": ["P0700"], "stored": ["P0700"], "modules": ["7E8", "7E9"], "where": {"P0700": "7E8"}}
+        silent = {"time": "2026-11-02T10:00:00", "codes": [], "stored": [], "modules": ["7E9"], "where": {}}
+        answered = {"time": "2026-11-03T10:00:00", "codes": [], "stored": [], "modules": ["7E8", "7E9"], "where": {}}
+        old = {"time": "2026-11-02T10:00:00", "codes": []}
+        status = lambda *readings: (garage.fault_followup({"history": list(readings)})[0]["status"], garage.fault_followup({"history": list(readings)})[0]["clean_readings"])
+        self.assertEqual(status(seen, silent), ("unclear", 0))
+        self.assertEqual(status(seen, silent, answered), ("gone", 1))
+        self.assertEqual(status(seen, old), ("unclear", 0))
+        self.assertEqual(car_analysis.check_followup({"followup": garage.fault_followup({"history": [seen, silent]})}), [])
+
+    def test_status_readings_keep_code_kinds_and_self_test_values(self):
+        vehicle = {"VIN": {"7E8": "AAAAAAAAAHA000000"}}
+        result = {"module": "7E8", "monitor": 0x21, "test": 0x85, "value": 0.4, "state": "pass"}
+        data = {"active_codes": ["P0455"], "codes": {"Stored": {"7E8": []}, "Pending": {"7E8": ["P0455"]}}, "test_results": [result, {"state": "not_run"}]}
+        garage.remember(vehicle, "status", data)
+        garage.remember(vehicle, "status", data)
+        record = garage.load_car(garage.car_key(vehicle))
+        self.assertEqual(record["history"][-1]["pending"], ["P0455"])
+        self.assertEqual((record["history"][-1]["modules"], record["history"][-1]["where"]), (["7E8"], {"P0455": "7E8"}))
+        self.assertEqual([entry["values"] for entry in record["test_history"]], [{"7E8:21:85": 0.4}], "two readings in one visit count once")
+
+    def test_self_test_sliding_toward_its_limit_is_noticed(self):
+        result = {"module": "7E8", "monitor": 0x21, "test": 0x85, "value": 0.9, "low": 0, "high": 1, "state": "pass"}
+        snapshot = {"test_results": [result]}
+        history = lambda *values: {"test_history": [{"values": {"7E8:21:85": value}} for value in values]}
+        name = lambda monitor: f"M{monitor:02X}"
+        self.assertEqual(car_analysis.check_test_trends(snapshot, history(0.3, 0.5, 0.9), name)["state"], "warn")
+        self.assertEqual(car_analysis.check_test_trends(snapshot, history(0.88, 0.9, 0.9), name)["state"], "good")
+        self.assertEqual(car_analysis.check_test_trends(snapshot, history(0.3, 0.9), name)["state"], "unknown")
+        self.assertIsNone(car_analysis.check_test_trends({"test_results": []}, history(1, 2, 3), name))
+
+    def cold_drive(self, rear=0.7, warm_at=300):
+        stats = car_analysis.DriveStats()
+        for second in range(0, 400, 2):
+            values = {0x0C: 900, 0x0D: 0, 0x05: 20 + 50 * min(second / warm_at, 1.2), 0x1F: second + 5, 0x15: rear,
+                      0x03: "Closed loop" if second >= 40 else "Open loop (cold)"}
+            stats.update(values, {pid: second for pid in values}, second)
+        return stats
+
+    def test_cold_start_profile(self):
+        stats = self.cold_drive()
+        self.assertEqual((stats.cold_start, stats.closed_after, round(stats.warm_after / 60)), (True, 45, 5))
+        self.assertEqual(car_analysis.check_cold_start(stats, {})["state"], "good")
+        self.assertEqual(stats.averages()["cold"]["warm_after"], stats.warm_after)
+        earlier = {"sessions": [{"averages": {"cold": {"warm_after": 150}}}, {"averages": {"cold": {"warm_after": 160}}}]}
+        self.assertEqual(car_analysis.check_cold_start(stats, earlier)["state"], "warn")
+        high = car_analysis.check_cold_start(self.cold_drive(rear=1.2), {})
+        self.assertEqual((high["state"], high["values"]["value"]), ("warn", "1.20"))
+        warm = car_analysis.DriveStats()
+        warm.update({0x0C: 800, 0x05: 90, 0x1F: 600}, {}, 0)
+        self.assertEqual(car_analysis.check_cold_start(warm, {})["state"], "unknown")
+        self.assertIsNone(warm.averages()["cold"])
+
+    async def test_moment_recorder_saves_readings_around_a_new_code(self):
+        app = obd_tool.DashboardApp(SimpleNamespace(demo=False, samples=None, interval=0, address=None))
+        app.snapshot = {"codes": {"Stored": {"7E8": []}, "Pending": {"7E8": []}}, "test_results": []}
+        app.reader = SimpleNamespace(values={0x0C: 800.0, 0x0D: 0}, read_at={})
+        elm = SimpleNamespace(demo=False)
+        with mock.patch.object(obd_tool, "MOMENT_SECONDS", 0.2):
+            app.watch_moment(elm)
+            self.assertIsNone(app.moment, "what was there at the start isn't news")
+            app.snapshot["codes"]["Pending"]["7E8"] = ["P0455"]
+            app.watch_moment(elm)
+            self.assertEqual(app.moment["reason"], ["Faults seen once", "Fuel cap", "P0455"])
+            await asyncio.sleep(0.25)
+            app.reader.values[0x0C] = 950.0
+            app.watch_moment(elm)
+        self.assertIsNone(app.moment)
+        rows = Path(app.moments[0]["file"]).read_text(encoding="utf-8-sig").splitlines()
+        self.assertEqual(len(rows), 4)
+        self.assertIn("950.0", rows[-1])
+        app.watch_moment(elm)
+        self.assertEqual(len(app.moments), 1, "the same trouble isn't saved twice")
+
+    async def test_moment_recorder_writes_nothing_for_demo_or_copies(self):
+        app = obd_tool.DashboardApp(SimpleNamespace(demo=False, samples=None, interval=0, address=None))
+        app.reader = SimpleNamespace(values={0x0C: 800.0}, read_at={})
+        app.recent.append((0, "now", {0x0C: 800.0}))
+        app.moment = {"reason": ["P0455"], "until": 0}
+        app.save_moment(SimpleNamespace(demo=True))
+        self.assertEqual((app.moments, (self.folder / "logs").exists()), ([], False))
+
+    async def start_test(self, volts, car="0B B8", rpm_after="1F 40"):
+        """Run the start test against a scripted adapter. `volts` are the adapter's readings in turn."""
+        readings = list(volts)
+
+        class Transport:
+            asked = 0
+
+            async def send(self, command, wait=5):
+                if command == "ATRV":
+                    return [f"{readings.pop(0) if len(readings) > 1 else readings[0]}V"]
+                if command.startswith("010C"):
+                    Transport.asked += 1
+                    return ["7E8 04 41 0C 00 00" if Transport.asked == 1 else f"7E8 04 41 0C {rpm_after}"]
+                if command.startswith("0142"):
+                    return [f"7E8 04 41 42 {car}"]
+                return ["OK"] if command.startswith("AT") else ["NO DATA"]
+
+        output = io.StringIO()
+        with mock.patch.object(obd_tool, "START_TEST_SECONDS", 0.05), contextlib.redirect_stdout(output):
+            await obd_tool.run_start_test(ELM(Transport()), None)
+        return output.getvalue()
+
+    async def test_start_test_corrects_the_adapter_reading_and_judges_the_dip(self):
+        # The adapter reads 1 V above the car (13.0 against 12.0), so a dip to 10.9 at the adapter is 9.9 at the battery.
+        text = await self.start_test([13.0, 13.0, 13.0, 13.0, 12.9, 10.9, 14.8], car="2E E0")
+        self.assertIn("Resting voltage: 12.0 V", text)
+        self.assertIn("Lowest voltage while starting: 9.9 V", text)
+        self.assertIn("held up well", text)
+        self.assertIn("Voltage with the engine running: 13.8 V", text)
+        self.assertIn("probably weak", await self.start_test([12.4, 12.4, 12.4, 12.4, 8.1, 14.0], car="30 70"))
+        self.assertIn("No start was seen", await self.start_test([12.4], car="30 70", rpm_after="00 00"))
+
+    async def test_start_test_refuses_with_the_engine_running(self):
+        class Transport:
+            async def send(self, command, wait=5):
+                return ["7E8 04 41 0C 0C 80"] if command.startswith("010C") else ["OK"]
+
+        with self.assertRaises(OBDError):
+            await obd_tool.run_start_test(ELM(Transport()), None)
+
+    def test_fill_ups_are_noticed_between_visits_and_tank_size_is_kept(self):
+        vehicle = {"VIN": {"7E8": "AAAAAAAAAHA000000"}}
+        key = garage.car_key(vehicle)
+        garage.save_session(vehicle, {"id": "a", "started": "2026-11-01T10:00:00", "fuel": 20.0, "fuel_end": 8.0})
+        garage.save_session(vehicle, {"id": "a", "started": "2026-11-01T10:00:00", "fuel": 20.0, "fuel_end": 7.8})
+        garage.save_session(vehicle, {"id": "b", "started": "2026-11-02T10:00:00", "fuel": 31.4, "fuel_end": 31.0})
+        garage.save_session(vehicle, {"id": "b", "started": "2026-11-02T10:00:00", "fuel": 31.4, "fuel_end": 30.0})
+        garage.save_session(vehicle, {"id": "c", "started": "2026-11-03T10:00:00", "fuel": 29.0})
+        self.assertEqual(garage.load_car(key)["refuels"], [{"time": "2026-11-02T10:00:00", "before": 7.8, "after": 31.4}])
+        self.assertTrue(garage.set_tank(key, 45))
+        self.assertEqual(garage.load_car(key)["tank_litres"], 45)
+        self.assertTrue(garage.set_tank(key, None))
+        self.assertNotIn("tank_litres", garage.load_car(key))
+        self.assertFalse(garage.set_tank("NOCAR", 45))
+
+    async def test_tank_size_must_be_sensible(self):
+        garage.save_car("CAR1", {"vehicle": {}})
+        app = obd_tool.DashboardApp(SimpleNamespace(demo=False, samples=None, interval=0, address=None))
+        for litres, status in ((45, 200), (5, 400), ("45", 400), (True, 400), (None, 200)):
+            self.assertEqual((await app.api("POST", "/api/car/tank", {}, {"key": "CAR1", "litres": litres}))[0], status, litres)
+
+    def test_adapter_rating(self):
+        def rating(sent, lost, grouping, size=6, seconds=0.1):
+            transport = SimpleNamespace(replied=sent - lost, timeouts=lost, sent=sent, total_seconds=seconds * (sent - lost))
+            found = obd_tool.adapter_rating(SimpleNamespace(transport=transport, can_group=grouping, group_size=size))
+            return found and (found[0], found[1].split(":")[0])
+
+        self.assertIsNone(rating(20, 0, True))
+        self.assertEqual(rating(1000, 2, True), ("good", "Fast"))
+        self.assertEqual(rating(1000, 2, True, size=3, seconds=0.22), ("", "Average"))
+        self.assertEqual(rating(1000, 2, False), ("bad", "Slow"))
+        self.assertEqual(rating(1000, 60, True), ("bad", "Unreliable"))
 
 
 class RobustnessTests(unittest.IsolatedAsyncioTestCase):

@@ -13,6 +13,10 @@ MAX_SESSIONS = 100
 MAX_TESTS = 100
 MAX_TEST_OUTPUT = 20_000
 MAX_NAME = 40
+MAX_TEST_HISTORY = 40
+TEST_HISTORY_GAP_SECONDS = 3600  # readings closer together than this are the same visit
+MAX_REFUELS = 60
+REFUELLED_BY = 10  # percent of the tank
 UNKNOWN_CAR = "unknown-car"
 # VIN position 10 gives the model year. It repeats every 30 years, so this reads it as the most recent cycle.
 YEAR_LETTERS = "ABCDEFGHJKLMNPRSTVWXY"
@@ -88,10 +92,73 @@ def remember(vehicle, section, data):
     record.setdefault("vehicle", vehicle)
     record[section] = {"time": now(), **data}
     if section == "status":
+        codes = data.get("codes", {})
+        listed = lambda label: sorted({code for found in codes.get(label, {}).values() for code in found})
         history = record.setdefault("history", [])
-        history.append({"time": now(), "light": data.get("light"), "codes": data.get("active_codes", [])})
+        history.append({"time": now(), "light": data.get("light"), "codes": data.get("active_codes", []),
+                        "stored": listed("Stored"), "pending": listed("Pending"), "permanent": listed("Permanent"),
+                        # Which computers answered, and which one reported each code. A code missing from a reading only
+                        # counts as gone if its computer answered that time.
+                        "modules": sorted(codes.get("Stored", {})),
+                        "where": {code: header for found in codes.values() for header, module_codes in found.items() for code in module_codes}})
         del history[:-MAX_HISTORY]
+        remember_tests(record, data.get("test_results", []))
     save_car(key, record)
+
+
+def remember_tests(record, results):
+    """Keep each visit's self-test values, so a value sliding toward its limit can be seen over time."""
+    values = {f"{r['module']}:{r['monitor']:02X}:{r['test']:02X}": r["value"] for r in results
+              if r.get("state") in ("pass", "fail") and isinstance(r.get("value"), (int, float))}
+    if not values:
+        return
+    log = record.setdefault("test_history", [])
+    entry = {"time": now(), "values": values}
+    try:
+        same_visit = log and (datetime.fromisoformat(entry["time"]) - datetime.fromisoformat(log[-1]["time"])).total_seconds() < TEST_HISTORY_GAP_SECONDS
+    except (ValueError, KeyError, TypeError):
+        same_visit = False
+    if same_visit:
+        log[-1] = entry
+    else:
+        log.append(entry)
+    del log[:-MAX_TEST_HISTORY]
+
+
+def fault_followup(record):
+    """Follow each fault code across the saved readings: when it first showed, what kind it is, and whether it has gone.
+
+    A code counts as gone only after a later reading in which the computer that reported it answered without it.
+    Readings saved before that was recorded can't show this, so such a code is left as unclear.
+    """
+    readings = [entry for entry in record.get("history", []) if isinstance(entry, dict) and entry.get("time")]
+    cases = {}
+    for index, entry in enumerate(readings):
+        stored, pending, permanent = (set(entry.get(kind, [])) for kind in ("stored", "pending", "permanent"))
+        for code in set(entry.get("codes", [])) | stored | pending | permanent:
+            kind = "confirmed" if code in stored else "pending" if code in pending else "permanent" if code in permanent else "seen"
+            case = cases.setdefault(code, {"code": code, "first_seen": entry["time"], "confirmed": False, "module": None})
+            case.update(last_seen=entry["time"], last_index=index, kind=kind, module=entry.get("where", {}).get(code, case["module"]))
+            case["confirmed"] = case["confirmed"] or kind == "confirmed"
+    for case in cases.values():
+        later = readings[case.pop("last_index") + 1:]
+        module, kind = case.pop("module"), case.pop("kind")
+        case["clean_readings"] = sum(1 for entry in later if module and module in entry.get("modules", []))
+        case["status"] = kind if not later else "gone" if case["clean_readings"] else "unclear"
+    return sorted(cases.values(), key=lambda case: (case["status"] in ("gone", "unclear"), case["code"]))
+
+
+def set_tank(key, litres):
+    """Keep the size of a saved car's fuel tank, so fill-ups can be shown in litres. Nothing removes it but 0."""
+    record = load_car(key)
+    if not record:
+        return False
+    if litres:
+        record["tank_litres"] = litres
+    else:
+        record.pop("tank_litres", None)
+    save_car(key, record)
+    return True
 
 
 def save_session(vehicle, session):
@@ -104,6 +171,15 @@ def save_session(vehicle, session):
     record["last_seen"] = now()
     record.setdefault("vehicle", vehicle)
     sessions = [item for item in record.get("sessions", []) if item.get("id") != session["id"]]
+    if len(sessions) == len(record.get("sessions", [])) and sessions:
+        # A new connection. A fuel level well above where the last one ended means the car was filled up in between.
+        last = sessions[-1]
+        before = last.get("fuel_end") if last.get("fuel_end") is not None else last.get("fuel")
+        after = session.get("fuel")
+        if isinstance(before, (int, float)) and isinstance(after, (int, float)) and after - before >= REFUELLED_BY:
+            refuels = record.setdefault("refuels", [])
+            refuels.append({"time": session.get("started", now()), "before": round(before, 1), "after": round(after, 1)})
+            del refuels[:-MAX_REFUELS]
     sessions.append(session)
     record["sessions"] = sessions[-MAX_SESSIONS:]
     save_car(key, record)

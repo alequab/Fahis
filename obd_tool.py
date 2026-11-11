@@ -1112,7 +1112,8 @@ def earlier_visits(record):
     match = re.match(r"[\d.]+", str(record.get("status", {}).get("values", {}).get("Fuel level", "")))
     if match:
         fuel.append(float(match.group()))  # visits saved before fuel was kept per visit
-    return {"sessions": sessions, "fuel": [level for level in fuel if number(level) is not None]}
+    return {"sessions": sessions, "fuel": [level for level in fuel if number(level) is not None],
+            "followup": garage.fault_followup(record), "test_history": record.get("test_history", [])}
 
 
 def remember_snapshot(elm, snapshot):
@@ -1352,6 +1353,63 @@ def recheck_hint(freeze, lang=None):
 ECU_ROLES = {"7E8": ("Engine computer", "engine"), "7E9": ("Transmission computer", "transmission")}
 
 
+RATING_AFTER_REPLIES = 50
+
+
+def adapter_rating(elm):
+    """Judge the adapter from how it has behaved on this connection. Returns (tone, text, values), or None if it's too early."""
+    stats = elm.transport
+    if stats.replied < RATING_AFTER_REPLIES:
+        return None
+    milliseconds = round(stats.total_seconds / stats.replied * 1000)
+    lost = stats.timeouts / stats.sent
+    if lost > 0.02:
+        return "bad", "Unreliable: {percent}% of requests got no reply. Check it's pushed in firmly. If that doesn't help, another adapter may read better.", \
+            {"percent": round(lost * 100)}
+    if elm.can_group and elm.group_size >= MAX_PIDS_PER_REQUEST:
+        return "good", "Fast: answers several values at once, in about {ms} ms.", {"ms": milliseconds}
+    if elm.can_group:
+        return "", "Average: answers only {count} values at a time, in about {ms} ms. A better adapter would update readings more often.", \
+            {"count": elm.group_size, "ms": milliseconds}
+    return "bad", "Slow: answers one value at a time, in about {ms} ms, so readings update slowly.", {"ms": milliseconds}
+
+
+def translated_findings(found, lang=None):
+    """Fill in and translate findings for the page. A few values are words themselves, so they're translated too."""
+    shown = []
+    for item in found:
+        values = {key: t(value, lang) if key in ("what", "light") else value for key, value in item["values"].items()}
+        if "names" in item:
+            values["names"] = t(", ", lang).join(t(name, lang) for name in item["names"])
+        if "since" in item:
+            values["since"] = t(item["since"], lang, **item["values"])
+        shown.append({"id": item["id"], "title": t(item["title"], lang), "state": item["state"], "system": item["system"],
+                      "text": t(item["text"], lang, **values)})
+    return shown
+
+
+def car_check(snapshot, values):
+    vin = next(iter(snapshot["vehicle"].get("VIN", {}).values()), None)
+    return car_analysis.used_car_check(snapshot, values, garage.model_year(vin))
+
+
+def page_car_check(snapshot, values, lang=None):
+    found = car_check(snapshot, values)
+    return {"findings": translated_findings(found, lang),
+            "bad": sum(item["state"] == "bad" for item in found), "warn": sum(item["state"] == "warn" for item in found)}
+
+
+def car_check_report(snapshot, values, lang=None):
+    """The used-car check as text, for keeping or showing to a mechanic."""
+    labels = {"bad": "Check this", "warn": "Worth a look", "good": "Looks fine", "unknown": "Not enough data yet"}
+    vin = next(iter(snapshot["vehicle"].get("VIN", {}).values()), None)
+    lines = [t("Used-car check", lang), datetime.now().strftime("%Y-%m-%d %H:%M"), f"{t('VIN', lang)}: {vin or t('unknown', lang)}", ""]
+    for item in translated_findings(car_check(snapshot, values), lang):
+        lines += [f"[{t(labels[item['state']], lang)}] {item['title']}", f"  {item['text']}", ""]
+    lines.append(t("This check reads only the computers that answer, usually the engine and transmission. It can't see crash damage, mileage or wear, so it doesn't replace a mechanic's inspection.", lang))
+    return "\n".join(lines)
+
+
 def page_analysis(stats, values, snapshot, previous, lang=None):
     """Describe what this connection's readings show over time, for the Analysis page."""
     found = car_analysis.findings(stats, values, snapshot, previous, lambda monitor: monitor_name(monitor, lang))
@@ -1362,9 +1420,7 @@ def page_analysis(stats, values, snapshot, previous, lang=None):
             ranges.append({"name": t(LIVE_PIDS[pid][0], lang), "unit": t(LIVE_PIDS[pid][1], lang), "system": car_systems.value_system(pid),
                            "low": format_value(float(tally.low)), "average": format_value(float(tally.average)), "high": format_value(float(tally.high))})
     return {
-        "findings": [{"id": item["id"], "title": t(item["title"], lang), "state": item["state"], "system": item["system"],
-                      "text": t(item["text"], lang, **{key: t(value, lang) if key == "what" else value for key, value in item["values"].items()})}
-                     for item in found],
+        "findings": translated_findings(found, lang),
         "attention": sum(item["state"] in car_analysis.ATTENTION for item in found),
         "drive": [{"label": t(label, lang), "text": f"{shown(number_, unit)} {t(unit, lang) if number_ is not None else ''}".strip()}
                   for label, number_, unit in car_analysis.drive_summary(stats)],
@@ -1531,7 +1587,10 @@ class Job:
 
 
 # What the web app can run on the car. `live` and `log` are terminal commands, since they never end.
-WEB_ACTIONS = ("battery", "info", "codes", "report", "scan", "profile", "clear")
+WEB_ACTIONS = ("battery", "starttest", "info", "codes", "report", "scan", "profile", "clear")
+# Readings kept from before and after something new goes wrong, so the moment itself can be looked at later.
+MOMENT_SECONDS = 30
+MAX_MOMENTS_SHOWN = 10
 MAX_JOBS_KEPT = 20
 MAX_JOBS_WAITING = 5
 
@@ -1569,6 +1628,10 @@ class DashboardApp:
         self.copy = None  # the saved car copy being run instead of a car
         self.stats = car_analysis.DriveStats()
         self.previous = {}  # what earlier visits to this car showed, for comparing
+        self.recent = deque()  # (clock, time, values) for the last half minute
+        self.moment = None     # set while the half minute after a new problem is being collected
+        self.known_trouble = None
+        self.moments = []      # what was saved, for the Analysis page
         self.was_disconnected = False  # whether Disconnect had been pressed before a copy was opened
         self.skip_wait = False
 
@@ -1661,6 +1724,56 @@ class DashboardApp:
         self.link_state = "off"
         self.activity.event("Disconnected. It's safe to unplug the adapter.", "good")
 
+    def refresh_followup(self, elm, snapshot):
+        """Bring the fault follow-up up to date with the reading just saved. Earlier visits stay as they were at the start."""
+        if elm.demo or not self.previous:
+            return
+        with contextlib.suppress(OSError, ValueError, AttributeError):
+            self.previous["followup"] = garage.fault_followup(garage.load_car(garage.car_key(elm.vehicle or snapshot["vehicle"])))
+
+    def trouble_now(self):
+        """The fault codes and analysis findings that currently need attention, as names that stay the same over time."""
+        codes = {code for label in ("Stored", "Pending") for found in self.snapshot["codes"].get(label, {}).values() for code in found}
+        found = car_analysis.findings(self.stats, self.reader.values, self.snapshot, self.previous, monitor_name)
+        return codes | {item["title"] for item in found if item["state"] in car_analysis.ATTENTION and not item["id"].startswith("followup")}
+
+    def watch_moment(self, elm):
+        """Keep the last half minute of readings, and save them with the next half minute when something new goes wrong."""
+        now = time.monotonic()
+        self.recent.append((now, datetime.now().isoformat(timespec="milliseconds"), dict(self.reader.values)))
+        trouble = self.trouble_now()
+        if self.known_trouble is None:
+            self.known_trouble = trouble  # what was already wrong when the connection began isn't news
+        new = trouble - self.known_trouble
+        self.known_trouble |= trouble
+        if new and self.moment is None:
+            self.moment = {"reason": sorted(new), "until": now + MOMENT_SECONDS}
+        if self.moment is None:
+            while self.recent and now - self.recent[0][0] > MOMENT_SECONDS:
+                self.recent.popleft()
+        elif now >= self.moment["until"]:
+            self.save_moment(elm)
+
+    def save_moment(self, elm):
+        moment, self.moment = self.moment, None
+        if moment is None or not self.recent or self.args.demo or elm.demo:
+            return
+        pids = [pid for pid in self.reader.values if pid in LIVE_PIDS]
+        try:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            path = LOG_DIR / f"moment_{datetime.now():%Y%m%d_%H%M%S}.csv"
+            with path.open("x", newline="", encoding="utf-8-sig") as file:
+                writer = csv.writer(file)
+                writer.writerow([t("time")] + [column_title(pid) for pid in pids])
+                for _, stamp, values in self.recent:
+                    writer.writerow([stamp] + ["" if values.get(pid) is None else format_value(values[pid]) for pid in pids])
+        except OSError as error:
+            self.activity.event("Could not save this car's info: {error}", "bad", error=error)
+            return
+        self.moments.append({"time": garage.now(), "reason": moment["reason"], "file": str(path)})
+        del self.moments[:-MAX_MOMENTS_SHOWN]
+        self.activity.event("Saved the readings from around a new problem: {path}", "good", path=str(path))
+
     def start_drive(self, elm, snapshot):
         self.drive = {"id": garage.now(), "started": garage.now(), "ended": garage.now(), "seconds": 0, "adapter": elm.version,
                       "protocol": elm.protocol, "top_speed": None, "top_rpm": None, "top_coolant": None,
@@ -1691,7 +1804,7 @@ class DashboardApp:
         self.drive.update(ended=garage.now(), seconds=round(time.monotonic() - self.drive_began),
                           light=any(status["mil"] for status in snapshot["monitors"].values()),
                           codes=sorted({c for label in ("Stored", "Pending") for found in codes[label].values() for c in found}),
-                          method=elm.can_group, averages=self.stats.averages(), fuel=self.stats.fuel_at_start,
+                          method=elm.can_group, averages=self.stats.averages(), fuel=self.stats.fuel_at_start, fuel_end=self.stats.fuel_now,
                           distance=round(self.stats.distance_km, 1), fuel_used=round(self.stats.fuel_litres, 2),
                           checks=[item["title"] for item in car_analysis.findings(self.stats, self.reader.values if self.reader else {}, snapshot,
                                                                                     self.previous, monitor_name)
@@ -1740,6 +1853,7 @@ class DashboardApp:
             elif not snapshot["freeze"] or snapshot["freeze"]["code"] not in stored:
                 snapshot["freeze"] = await read_freeze_frame(elm)
             remember_snapshot(elm, snapshot)
+            self.refresh_followup(elm, snapshot)
 
     async def refresh_status(self, elm):
         async for _ in self.refresh_parts(elm):
@@ -1774,6 +1888,9 @@ class DashboardApp:
         stats = elm.transport
         since = time.monotonic() - self.connected_at
         rows = [row("Status", t("Connected", lang), "good"), *identity(elm)]
+        rating = adapter_rating(elm)
+        if rating:
+            rows.append(row("Adapter rating", t(rating[1], lang, **rating[2]), rating[0]))
         rows += [row("Protocol", elm.protocol or t("unknown", lang)),
                  row("Voltage at adapter (approximate)", t(self.reader.voltage, lang) if self.reader else "-"),
                  row("Connected for", f"{int(since // 60)}:{int(since % 60):02d}"),
@@ -1838,7 +1955,7 @@ class DashboardApp:
                         await asyncio.to_thread(car_modules.download_profile, job.params["name"])
                     except OSError as error:  # no internet is no reason to drop the car
                         raise ValueError(t("Error: {error}", error=error)) from None
-                handler = {"battery": run_battery, "info": run_info, "codes": run_codes, "report": run_report,
+                handler = {"battery": run_battery, "starttest": run_start_test, "info": run_info, "codes": run_codes, "report": run_report,
                            "scan": run_scan, "profile": run_profile, "clear": run_clear}[job.action]
                 await handler(elm, SimpleNamespace(**job.params))
             job.status = finished = "done"
@@ -1919,6 +2036,22 @@ class DashboardApp:
         if method == "POST" and path == "/api/copy/delete":
             refusal = self.delete_car_copy(body.get("file"), lang)
             return (409, {"error": refusal}) if refusal else (200, {})
+        if method == "POST" and path == "/api/check/save":
+            if self.snapshot is None or self.reader is None:
+                return 409, {"error": t("Not connected to a car", lang)}
+            if self.args.demo:
+                return 409, {"error": t("Reports aren't saved in demo mode.", lang)}
+            REPORT_DIR.mkdir(parents=True, exist_ok=True)
+            report = REPORT_DIR / f"check_{datetime.now():%Y%m%d_%H%M%S}.txt"
+            report.write_text(car_check_report(self.snapshot, self.reader.values, lang) + "\n", encoding="utf-8")
+            return 200, {"file": str(report)}
+        if method == "POST" and path == "/api/car/tank":
+            key = str(body.get("key", ""))
+            litres = body.get("litres")
+            valid = litres in (None, "", 0) or (isinstance(litres, (int, float)) and not isinstance(litres, bool) and 10 <= litres <= 300)
+            if self.args.demo or not valid or not re.fullmatch(r"[\w-]+", key) or not garage.set_tank(key, litres or None):
+                return 400, {"error": t("Enter the tank size in litres, between 10 and 300.", lang)}
+            return 200, {}
         if method == "POST" and path == "/api/car/delete":
             key = str(body.get("key", ""))
             if self.args.demo or not re.fullmatch(r"[\w-]+", key) or not garage.delete_car(key):
@@ -2004,6 +2137,9 @@ class DashboardApp:
         state["copy"] = self.copy_status()
         state["can_save_copy"] = not self.copy and self.elm is not None
         state["analysis"] = page_analysis(self.stats, self.reader.values, self.snapshot, self.previous, lang)
+        state["analysis"]["moments"] = [{"time": moment["time"], "file": moment["file"], "reason": t(", ", lang).join(t(name, lang) for name in moment["reason"])}
+                                        for moment in reversed(self.moments)]
+        state["car_check"] = page_car_check(self.snapshot, self.reader.values, lang)
         state["session"] = self.connections  # changes with every new connection, so the page can drop the last car's graphs
         return state
 
@@ -2104,6 +2240,9 @@ class DashboardApp:
         if not self.args.demo:
             remember_snapshot(elm, snapshot)
             self.cars = garage.summaries()
+            self.refresh_followup(elm, snapshot)
+        self.recent.clear()
+        self.moment, self.known_trouble = None, None
         self.reader = LiveReader(elm, snapshot["values"], snapshot["values"], snapshot["voltage"])
         self.reader.interval = self.args.interval
         self.snapshot = snapshot
@@ -2118,6 +2257,7 @@ class DashboardApp:
                 await self.run_waiting_jobs(elm)
                 await self.reader.step()
                 self.stats.update(self.reader.values, self.reader.read_at, time.monotonic())
+                self.watch_moment(elm)
                 self.track_charging()
                 self.record_row()
                 self.track_drive(elm, self.snapshot)
@@ -2132,6 +2272,7 @@ class DashboardApp:
                 count += 1
                 await asyncio.sleep(self.args.interval)
         finally:
+            self.save_moment(elm)  # a connection lost mid-way still keeps what led up to the problem
             self.save_drive(elm, self.snapshot)
             self.drive = None
             self.stop_recording()
@@ -2233,6 +2374,62 @@ def battery_advice(volts, running):
     if volts >= 12.0:
         return t("About 25% charged. It may not start, so charge it first.")
     return t("Very low. It probably won't start, so charge it or use a jump starter.")
+
+
+START_TEST_SECONDS = 20
+CRANK_GOOD_VOLTS, CRANK_WEAK_VOLTS = 9.6, 9.0
+CRANK_SEEN_DROP = 0.7  # a dip smaller than this isn't a start
+
+
+async def adapter_volts(elm):
+    match = re.search(r"\d+(\.\d+)?", await elm.voltage())
+    return float(match.group()) if match else None
+
+
+async def run_start_test(elm, _):
+    """Watch the voltage while the engine is started. The lowest point shows how well the battery copes with the starter."""
+    rpm = await elm.read_pid(0x0C)
+    if rpm is None or rpm > 0:
+        raise OBDError("The start test needs the engine off with the ignition ON.")
+    resting = [volts for volts in [await adapter_volts(elm) for _ in range(4)] if volts is not None]
+    if not resting:
+        raise OBDError("The adapter did not report a voltage.")
+    rest = sum(resting) / len(resting)
+    # Adapters often read high or low. The car's own reading, taken at the same moment, corrects for that.
+    car = number(await elm.read_pid(0x42))
+    offset = rest - car if car is not None and abs(rest - car) <= 2.5 else 0.0
+    print(t("Resting voltage: {volts} V", volts=f"{rest - offset:.1f}"))
+    print(t("Start the engine now. Watching for {seconds} seconds ...", seconds=START_TEST_SECONDS), flush=True)
+    lowest, readings, began = rest, 0, time.monotonic()
+    while time.monotonic() - began < START_TEST_SECONDS:
+        try:
+            volts = await adapter_volts(elm)
+        except OBDError as error:
+            if error.text == ADAPTER_RESTARTED:
+                print(t("The adapter lost power during the start, so the voltage fell very low at the port. That points to a weak battery or a poor connection."))
+            raise
+        if volts is not None:
+            readings += 1
+            lowest = min(lowest, volts)
+    after = await adapter_volts(elm)
+    rpm = await elm.read_pid(0x0C)
+    if rest - lowest < CRANK_SEEN_DROP:
+        if rpm:
+            print(t("The engine started, but no voltage dip was caught. The adapter reads voltage too slowly to be sure, so try once more."))
+        else:
+            print(t("No start was seen. Run the test again and start the engine when asked."))
+        return
+    dip = lowest - offset
+    print(t("Lowest voltage while starting: {volts} V, from {count} readings", volts=f"{dip:.1f}", count=readings))
+    if after is not None and rpm:
+        print(t("Voltage with the engine running: {volts} V", volts=f"{after - offset:.1f}"))
+    if dip >= CRANK_GOOD_VOLTS:
+        print(t("The battery held up well while starting."))
+    elif dip >= CRANK_WEAK_VOLTS:
+        print(t("The battery dipped lower than a healthy one usually does. It's worth testing before cold weather."))
+    else:
+        print(t("The battery dropped very low while starting. It's probably weak, so have it tested."))
+    print(t("The adapter takes a reading only every few tenths of a second, so the true lowest point may be lower still."))
 
 
 async def run_battery(elm, _):
@@ -2456,6 +2653,7 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("info", help=t("adapter, voltage, check engine light, self-tests")).set_defaults(handler=run_info)
     commands.add_parser("battery", help=t("check battery voltage")).set_defaults(handler=run_battery)
+    commands.add_parser("starttest", help=t("watch battery voltage while you start the engine")).set_defaults(handler=run_start_test)
     commands.add_parser("codes", help=t("read fault codes")).set_defaults(handler=run_codes)
     commands.add_parser("report", help=t("read everything once and save it to a file")).set_defaults(handler=run_report)
     commands.add_parser("scan", help=t("find other modules and read their fault codes")).set_defaults(handler=run_scan)

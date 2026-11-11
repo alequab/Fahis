@@ -294,6 +294,7 @@
     <a href="#/commands" data-page="commands"><span data-icon="page_commands"></span><span data-i18n="Commands">Commands</span></a>
     <a href="#/lookup" data-page="lookup"><span data-icon="page_lookup"></span><span data-i18n="Code lookup">Code lookup</span></a>
     <a href="#/reports" data-page="reports"><span data-icon="page_reports"></span><span data-i18n="Reports">Reports</span></a>
+    <a href="#/check" data-page="check"><span data-icon="page_check"></span><span data-i18n="Used-car check">Used-car check</span></a>
     <a href="#/log" data-page="log"><span data-icon="page_log"></span><span data-i18n="Live log">Live log</span></a>
     <div class="nav-group" data-i18n="Library">Library</div>
     <a href="#/saved" data-page="saved"><span data-icon="page_saved"></span><span data-i18n="Saved cars">Saved cars</span></a>
@@ -373,6 +374,11 @@
           <h2 data-i18n="What Fahis noticed">What Fahis noticed</h2>
           <div id="findings"></div>
         </section>
+        <section id="moments-section" hidden>
+          <h2 data-i18n="Moments saved">Moments saved</h2>
+          <p class="needs" data-i18n="When something new goes wrong, Fahis saves every reading from the half minute before and after it, so the moment can be looked at later.">When something new goes wrong, Fahis saves every reading from the half minute before and after it, so the moment can be looked at later.</p>
+          <div id="moments"></div>
+        </section>
         <section>
           <h2 data-i18n="This connection">This connection</h2>
           <div class="stat-tiles" id="drive-stats"></div>
@@ -381,6 +387,20 @@
         <section>
           <h2 data-i18n="Lowest, average and highest">Lowest, average and highest</h2>
           <div id="value-ranges"></div>
+        </section>
+      </div>
+    </div>
+
+    <div class="page" id="page-check" hidden>
+      <div class="needs-car">
+        <p class="intro" data-i18n="Looking at a car you don't know? This checks for signs that faults were hidden or parts were swapped. It reads only the computers that answer, usually the engine and transmission. It can't see crash damage, mileage or wear, so it doesn't replace a mechanic's inspection.">Looking at a car you don't know? This checks for signs that faults were hidden or parts were swapped. It reads only the computers that answer, usually the engine and transmission. It can't see crash damage, mileage or wear, so it doesn't replace a mechanic's inspection.</p>
+        <section>
+          <div class="section-head">
+            <h2 id="check-summary"></h2>
+            <button id="check-save" type="button" class="primary" data-i18n="Save as a report">Save as a report</button>
+          </div>
+          <p id="check-note" class="dim" role="status" hidden></p>
+          <div id="check-findings"></div>
         </section>
       </div>
     </div>
@@ -576,7 +596,7 @@
 const TILES = ["0C", "0D", "05", "0F", "11", "04"];
 const HISTORY = 60;
 const CATALOG_LIMIT = 200;
-const PAGES = {home: "Home", ecu: "ECU", analysis: "Analysis", overview: "Overview", systems: "Car systems", live: "Live data", faults: "Fault codes", commands: "Commands",
+const PAGES = {home: "Home", ecu: "ECU", analysis: "Analysis", check: "Used-car check", overview: "Overview", systems: "Car systems", live: "Live data", faults: "Fault codes", commands: "Commands",
                cars: "Supported cars", saved: "Saved cars", lookup: "Code lookup", reports: "Reports", log: "Live log"};
 const ICONS = {
   engine: "M4 10h3l2-3h6v3h3l2 2v4h-2v2h-5l-2 2H8l-2-3H4zM1.5 11v6M9 4h6M12 4v3",
@@ -592,6 +612,7 @@ const ICONS = {
   ecu: "M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4",
   page_ecu: "M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4",
   page_analysis: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+  page_check: "M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6zM8.5 12l2.5 2.5 4.5-5",
   page_home: "M3 11l9-8 9 8M5 9.5V21h14V9.5M10 21v-6h4v6",
   safe: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 12l3 3 5-6",
   page_overview: "M4 18a9.5 9.5 0 1 1 16 0M12 14l4-5M12 14v.01",
@@ -618,6 +639,8 @@ const graphData = {};
 const ACTIONS = [
   {id: "battery", title: "Battery check", what: "Explains the battery voltage. With the engine running, it also checks charging.",
    needs: "Needs: adapter powered by the car. Works even if the car's computer doesn't answer.", cmd: ".\\obd battery"},
+  {id: "starttest", title: "Battery start test", what: "Watches the voltage while you start the engine. How far it dips shows how well the battery copes with the starter.",
+   needs: "Needs: engine off and ignition ON. Press Run, then start the engine when asked.", cmd: ".\\obd starttest"},
   {id: "codes", title: "Fault codes command", what: "Shows stored, pending and permanent fault codes with descriptions.",
    needs: "Needs: ignition ON or engine running.", cmd: ".\\obd codes"},
   {id: "info", title: "Car information", what: "Shows the adapter, voltage, check engine light, self-tests and available values.",
@@ -776,7 +799,7 @@ function showPage() {
 }
 
 function updateConnectionViews() {
-  const needsCar = ["overview", "systems", "ecu", "analysis", "live", "faults"].includes(currentPage());
+  const needsCar = ["overview", "systems", "ecu", "analysis", "check", "live", "faults"].includes(currentPage());
   const off = lastState && lastState.link === "off";
   document.getElementById("waiting").hidden = connected || !needsCar || off;
   document.querySelectorAll(".needs-car").forEach(node => { node.hidden = !connected; });
@@ -1191,7 +1214,37 @@ async function renderCarPage(key, summary) {
   head.append(select);
   past.append(head, body);
 
-  const sections = [top, tiles, faults, past];
+  const fuel = el("section");
+  fuel.append(el("h2", tr("Fill-ups seen")));
+  const refuels = (record.refuels || []).slice().reverse();
+  if (!refuels.length) fuel.append(el("p", tr("None yet. Fahis notices a fill-up when the fuel level is well above where the last visit ended."), "dim"));
+  for (const item of refuels.slice(0, 12)) {
+    const added = record.tank_litres ? ` · ${tr("about {litres} L added", {litres: Math.round((item.after - item.before) * record.tank_litres / 100)})}` : "";
+    fuel.append(row(shortTime(item.time), `${Math.round(item.before)}% → ${Math.round(item.after)}%${added}`));
+  }
+  const tank = el("form", undefined, "rename");
+  const tankInput = el("input");
+  tankInput.type = "number";
+  tankInput.min = "10";
+  tankInput.max = "300";
+  tankInput.value = record.tank_litres || "";
+  tankInput.placeholder = tr("Tank size in litres");
+  tankInput.setAttribute("aria-label", tr("Tank size in litres"));
+  const saveTank = el("button", tr("Save"));
+  tank.append(tankInput, saveTank);
+  tank.style.marginTop = "10px";
+  tank.addEventListener("submit", async event => {
+    event.preventDefault();
+    try {
+      await post("/api/car/tank", {key, litres: tankInput.value === "" ? null : Number(tankInput.value)});
+      renderCarPage(key, summary);
+    } catch (problem) {
+      saveTank.textContent = problem.message;
+    }
+  });
+  fuel.append(tank, el("p", tr("With the tank size, fill-ups are shown in litres. Cars don't report their mileage over standard OBD, so Fahis can't work out fuel use between fill-ups."), "needs"));
+
+  const sections = [top, tiles, faults, fuel, past];
   const records = record.status ? record.status.module_records || [] : [];
   const kept = records.flatMap(item => item.codes.map(code => ({...code, module: item.hdr})));
   if (kept.length) {
@@ -1597,15 +1650,34 @@ function renderEcus(ecus) {
 
 const FINDING_STATES = {bad: ["Check this", "pill bad"], warn: ["Worth a look", "pill warn"], good: ["Looks fine", "pill good"], unknown: ["Not enough data yet", "pill"]};
 
+function findingRow(item) {
+  const line = el("div", undefined, "finding-row");
+  const [label, tone] = FINDING_STATES[item.state];
+  const about = el("div");
+  about.append(el("b", item.title), el("span", item.text, item.state === "unknown" ? "dim" : ""));
+  const tags = el("div", undefined, "fault-tags");
+  tags.append(systemTag(item.system));
+  line.append(el("span", tr(label), tone), about, tags);
+  return line;
+}
+
+function renderCarCheck(check) {
+  const summary = check.bad ? tr("{count} thing(s) to check before buying", {count: check.bad + check.warn})
+    : check.warn ? tr("{count} thing(s) worth asking about", {count: check.warn}) : tr("No warning signs found");
+  document.getElementById("check-summary").textContent = summary;
+  fillIfChanged("check-findings", JSON.stringify([check.findings, language]), () => check.findings.map(findingRow));
+}
+
 function renderAnalysis(analysis) {
-  fillIfChanged("findings", JSON.stringify([analysis.findings, language]), () => analysis.findings.map(item => {
+  fillIfChanged("findings", JSON.stringify([analysis.findings, language]), () => analysis.findings.map(findingRow));
+  document.getElementById("moments-section").hidden = !analysis.moments.length;
+  fillIfChanged("moments", JSON.stringify([analysis.moments, language]), () => analysis.moments.map(moment => {
     const line = el("div", undefined, "finding-row");
-    const [label, tone] = FINDING_STATES[item.state];
     const about = el("div");
-    about.append(el("b", item.title), el("span", item.text, item.state === "unknown" ? "dim" : ""));
-    const tags = el("div", undefined, "fault-tags");
-    tags.append(systemTag(item.system));
-    line.append(el("span", tr(label), tone), about, tags);
+    const file = el("span", moment.file, "dim");
+    file.dir = "ltr";
+    about.append(el("b", moment.reason), file);
+    line.append(el("span", shortTime(moment.time), "pill"), about);
     return line;
   }));
   fill(document.getElementById("drive-stats"), analysis.drive.map(item => {
@@ -1797,6 +1869,7 @@ function render(state) {
   document.getElementById("demo-banner").hidden = !state.demo;
   renderHealth(state);
   renderAnalysis(state.analysis);
+  renderCarCheck(state.car_check);
   renderEcus(state.ecus);
   renderSystems(state);
   renderValueFilter(state);
@@ -2085,6 +2158,16 @@ document.getElementById("copy-close").addEventListener("click", async () => {
   } catch (problem) {
     document.getElementById("copy-text").textContent = problem.message;
   }
+});
+document.getElementById("check-save").addEventListener("click", async () => {
+  const note = document.getElementById("check-note");
+  try {
+    const saved = await post("/api/check/save", {lang: language});
+    note.textContent = tr("Saved report: {path}", {path: saved.file});
+  } catch (problem) {
+    note.textContent = problem.message;
+  }
+  note.hidden = false;
 });
 document.getElementById("clear-button").addEventListener("click", async () => {
   const answer = document.getElementById("clear-answer");
