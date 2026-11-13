@@ -28,4 +28,5 @@ These are installed by `pip` and aren't stored in this repository. The ready-mad
 | [bleak](https://github.com/hbldh/bleak) | Bluetooth LE connection | Henrik Blidh and contributors | MIT |
 | `winrt-runtime` and `winrt-Windows.*` | Windows Bluetooth access, used by bleak | The pywinrt contributors | MIT |
 | `typing_extensions` | Python support, used by bleak | The Python Software Foundation and contributors | PSF-2.0 |
-| [Electron](https://github.com/electron/electron), installed by `npm` | Desktop window | OpenJS Foundation and Electron contributors | MIT |
+| [Tauri](https://github.com/tauri-apps/tauri) and its Rust dependencies, built into `fahis.exe` | Desktop window | The Tauri Programme within The Commons Conservancy and contributors | MIT or Apache-2.0 |
+| [Microsoft Edge WebView2](https://developer.microsoft.com/microsoft-edge/webview2/), part of Windows 10 and 11, not included | Draws the window's page | Microsoft | Microsoft software license |

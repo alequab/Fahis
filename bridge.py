@@ -1,6 +1,6 @@
 """Connects the backend to the desktop window through a private pipe, with no network port.
 
-Electron sends one JSON request per line on stdin, and each answer goes back as one line on stdout.
+The Tauri window sends one JSON request per line on stdin, and each answer goes back as one line on stdout.
 """
 import asyncio
 import json
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import i18n
 
-PAGE = Path(__file__).parent / "electron" / "index.html"
+PAGE = Path(__file__).parent / "app" / "index.html"
 
 
 async def answer(app, line):

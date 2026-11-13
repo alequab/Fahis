@@ -199,6 +199,17 @@ def came_back(code, module, readings, clears):
     return found
 
 
+def remember_explorer(vehicle, found):
+    """Keep the latest explorer map for a car. Only one is kept, as each run replaces what the last one showed."""
+    key = car_key(vehicle or {})
+    if key == UNKNOWN_CAR:
+        return
+    record = load_car(key)
+    if record:
+        record["explorer"] = found
+        save_car(key, record)
+
+
 def set_tank(key, litres):
     """Keep the size of a saved car's fuel tank, so fill-ups can be shown in litres. Nothing removes it but 0."""
     record = load_car(key)

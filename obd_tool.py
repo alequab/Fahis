@@ -20,6 +20,7 @@ from types import SimpleNamespace
 import bridge
 import car_analysis
 import car_copy
+import car_explorer
 import car_modules
 import car_systems
 import garage
@@ -495,6 +496,7 @@ class ELM:
         self.busy = {}  # when each module last said it needs more time
         self.heard = {}  # when each module last answered anything
         self.last_scan = self.identity_items = None  # results of the scan and identity commands, for the page
+        self.explorer = None  # the latest explorer map, and the one before it for comparing
         self.calibration = {}  # filled in when asked, or whenever a slow module finally answers
 
     def parsed(self, lines):
@@ -1117,7 +1119,7 @@ def earlier_visits(record):
         fuel.append(float(match.group()))  # visits saved before fuel was kept per visit
     return {"sessions": sessions, "fuel": [level for level in fuel if number(level) is not None],
             "followup": garage.fault_followup(record), "test_history": record.get("test_history", []),
-            "ecu_history": record.get("ecu_history", []), "scan": record.get("modules")}
+            "ecu_history": record.get("ecu_history", []), "scan": record.get("modules"), "explorer": record.get("explorer")}
 
 
 def remember_snapshot(elm, snapshot):
@@ -1531,6 +1533,25 @@ def ecu_report(snapshot, values, previous=None, elm=None, scan=None, items=None,
     return "\n".join(lines)
 
 
+EXPLORER_STATES = ("answered", "empty", "refused", "silent")
+
+
+def page_explorer(found, lang=None):
+    """The latest explorer map for the page, with each item's names and refusal reasons translated."""
+    if not found:
+        return None
+    modules = []
+    for module in found.get("modules", []):
+        items = [{"request": item["request"], "service": item["request"][:2], "names": ", ".join(t(name, lang) for name in item["names"][:3]),
+                  "state": item["state"], "text": t(item["text"], lang) if item["state"] == "refused" else item["text"], "raw": item["raw"],
+                  "changed": item.get("changed", False), "before": item.get("before", "")}
+                 for item in module.get("items", []) if item["state"] != "silent"]
+        counts = {state: sum(item["state"] == state for item in module.get("items", [])) for state in EXPLORER_STATES}
+        modules.append({"header": module["header"], "request": module["request"], "name": t(module.get("name", "Unknown module"), lang),
+                        "how": module.get("how", ""), "items": items, "counts": counts})
+    return {"time": found.get("time", ""), "deep": found.get("deep", False), "compared": found.get("compared"), "modules": modules}
+
+
 def page_ecu_tools(snapshot, values, previous, elm, scan, items, lang=None):
     identity = [{"label": t(label, lang), "text": t(text, lang)} for label, text in car_identity(snapshot, values, elm)]
     shown_scan = None
@@ -1709,7 +1730,7 @@ class Job:
 
 
 # What the web app can run on the car. `live` and `log` are terminal commands, since they never end.
-WEB_ACTIONS = ("battery", "starttest", "info", "codes", "report", "scan", "ecuread", "profile", "clear")
+WEB_ACTIONS = ("battery", "starttest", "info", "codes", "report", "scan", "ecuread", "explore", "exploredeep", "exploreagain", "profile", "clear")
 # Readings kept from before and after something new goes wrong, so the moment itself can be looked at later.
 MOMENT_SECONDS = 30
 MAX_MOMENTS_SHOWN = 10
@@ -1756,6 +1777,7 @@ class DashboardApp:
         self.moments = []      # what was saved, for the Analysis page
         self.scan = None            # the last module scan for this car
         self.identity_items = None  # every identity item read on request
+        self.explorer = None        # the latest explorer map for this car
         self.was_disconnected = False  # whether Disconnect had been pressed before a copy was opened
         self.skip_wait = False
 
@@ -2079,7 +2101,8 @@ class DashboardApp:
                         await asyncio.to_thread(car_modules.download_profile, job.params["name"])
                     except OSError as error:  # no internet is no reason to drop the car
                         raise ValueError(t("Error: {error}", error=error)) from None
-                handler = {"battery": run_battery, "starttest": run_start_test, "ecuread": run_identity_items, "info": run_info, "codes": run_codes, "report": run_report,
+                handler = {"battery": run_battery, "starttest": run_start_test, "ecuread": run_identity_items, "explore": run_explore,
+                           "exploredeep": run_explore_deep, "exploreagain": run_explore_again, "info": run_info, "codes": run_codes, "report": run_report,
                            "scan": run_scan, "profile": run_profile, "clear": run_clear}[job.action]
                 await handler(elm, SimpleNamespace(**job.params))
             job.status = finished = "done"
@@ -2087,6 +2110,8 @@ class DashboardApp:
                 self.scan = {"time": garage.now(), "modules": elm.last_scan}
             if job.action == "ecuread" and elm.identity_items is not None:
                 self.identity_items = elm.identity_items
+            if job.action.startswith("explore") and elm.explorer is not None:
+                self.explorer = elm.explorer
             if job.action == "clear":
                 self.snapshot = await read_snapshot(elm)
                 for pid, value in self.snapshot["values"].items():
@@ -2173,6 +2198,10 @@ class DashboardApp:
             report = REPORT_DIR / f"check_{datetime.now():%Y%m%d_%H%M%S}.txt"
             report.write_text(car_check_report(self.snapshot, self.reader.values, lang) + "\n", encoding="utf-8")
             return 200, {"file": str(report)}
+        if method == "GET" and path == "/api/explorer/report":
+            if not self.explorer:
+                return 409, {"error": t("Map the car's computers first, then read again to compare.", lang)}
+            return 200, {"text": car_explorer.report(self.explorer, lang)}
         if method == "GET" and path == "/api/ecu/report":
             if self.snapshot is None or self.reader is None:
                 return 409, {"error": t("Not connected to a car", lang)}
@@ -2282,6 +2311,7 @@ class DashboardApp:
                                         for moment in reversed(self.moments)]
         state["car_check"] = page_car_check(self.snapshot, self.reader.values, lang, self.previous)
         state["ecus"] = page_ecus(self.snapshot, self.elm.busy_modules() if self.elm else (), lang, self.previous, self.elm.heard if self.elm else None)
+        state["explorer"] = page_explorer(self.explorer, lang)
         state["ecu_tools"] = page_ecu_tools(self.snapshot, self.reader.values, self.previous, self.elm, self.scan, self.identity_items, lang)
         state["session"] = self.connections  # changes with every new connection, so the page can drop the last car's graphs
         return state
@@ -2387,6 +2417,8 @@ class DashboardApp:
         self.recent.clear()
         self.moment, self.known_trouble = None, None
         self.scan, self.identity_items = self.previous.get("scan"), None
+        self.explorer = self.previous.get("explorer")
+        elm.explorer = self.explorer
         self.reader = LiveReader(elm, snapshot["values"], snapshot["values"], snapshot["voltage"])
         self.reader.interval = self.args.interval
         self.snapshot = snapshot
@@ -2672,6 +2704,45 @@ async def run_identity_items(elm, _):
     save_report("ecu-data", report, elm.demo)
 
 
+def vehicle_make_and_year(elm):
+    vin = next(iter((elm.vehicle or {}).get("VIN", {}).values()), None)
+    return make_from_vin(vin), garage.model_year(vin)
+
+
+async def run_explore(elm, _, deep=False):
+    """Find which computers answer and what each will share. It only reads, so nothing on the car can change."""
+    make, year = vehicle_make_and_year(elm)
+    found = await car_explorer.explore(elm, make, year, deep, say=lambda text: print(text, flush=True))
+    elm.explorer = found
+    if not elm.demo:
+        garage.remember_explorer(elm.vehicle, found)
+    report = car_explorer.report(found)
+    print("\n" + report)
+    save_report("explorer", report, elm.demo)
+
+
+async def run_explore_deep(elm, args):
+    print(t("A deep map also tries the maker's own number ranges, which takes several minutes for each computer that answers."), flush=True)
+    await run_explore(elm, args, deep=True)
+
+
+async def run_explore_again(elm, _):
+    """Read again every item that answered last time, and show which changed, such as after opening a door."""
+    last = getattr(elm, "explorer", None)
+    if not last or not last.get("modules"):
+        raise OBDError("Map the car's computers first, then read again to compare.")
+    found = await car_explorer.read_again(elm, last)
+    changed = [(module["header"], item) for module in found["modules"] for item in module["items"] if item.get("changed")]
+    print(t("{count} item(s) changed since the last read.", count=len(changed)))
+    for header, item in changed:
+        print(f"  {header} {item['request']}: {item['before']} -> {item['raw']}")
+    elm.explorer = {**last, "time": found["time"], "modules": [
+        {**module, "items": [next((new for new in fresh["items"] if new["request"] == item["request"]), item) for item in module["items"]]}
+        for module, fresh in zip(last["modules"], found["modules"])]}
+    if not elm.demo:
+        garage.remember_explorer(elm.vehicle, elm.explorer)
+
+
 async def run_profile(elm, args):
     await check_battery(elm)
     profile = car_modules.load_profile(args.name, args.year)
@@ -2816,6 +2887,9 @@ def main():
     commands.add_parser("starttest", help=t("watch battery voltage while you start the engine")).set_defaults(handler=run_start_test)
     commands.add_parser("codes", help=t("read fault codes")).set_defaults(handler=run_codes)
     commands.add_parser("ecuread", help=t("read every identity item each computer will share")).set_defaults(handler=run_identity_items)
+    commands.add_parser("explore", help=t("map which computers answer and what each will share")).set_defaults(handler=run_explore)
+    commands.add_parser("exploredeep", help=t("map the computers, also trying the maker's own number ranges")).set_defaults(handler=run_explore_deep)
+    commands.add_parser("exploreagain", help=t("read the mapped items again and show which changed")).set_defaults(handler=run_explore_again)
     commands.add_parser("report", help=t("read everything once and save it to a file")).set_defaults(handler=run_report)
     commands.add_parser("scan", help=t("find other modules and read their fault codes")).set_defaults(handler=run_scan)
     commands.add_parser("cars", help=t("list cars saved on this laptop")).set_defaults(handler=None)

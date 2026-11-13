@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The app's own page may reach the backend through fahis_request, and nothing else from the system.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

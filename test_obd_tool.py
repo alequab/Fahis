@@ -18,6 +18,7 @@ from unittest import mock
 import bridge
 import car_analysis
 import car_copy
+import car_explorer
 import car_modules
 import car_systems
 import demo
@@ -1031,7 +1032,7 @@ class LocalizationTests(unittest.TestCase):
 
     def test_every_translatable_string_has_arabic(self):
         missing = set()
-        for name in ("obd_tool.py", "car_modules.py", "car_analysis.py"):
+        for name in ("obd_tool.py", "car_modules.py", "car_analysis.py", "car_explorer.py"):
             source = (ROOT / name).read_text(encoding="utf-8")
             found = re.findall(r'\b(?:t|OBDError)\(\s*"((?:[^"\\]|\\.)+)"', source)
             found += re.findall(r"\bt\(\s*'([^']+)'", source)
@@ -1237,7 +1238,7 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         self.assertLess(readme.index("<picture>"), 60)
         self.assertLess(basmala, readme.index("</picture>"))
         self.assertLess(salawat, readme.index("</picture>"))
-        self.assertLess(readme.index("</picture>"), readme.index("electron/icon.svg"))
+        self.assertLess(readme.index("</picture>"), readme.index("app/icon.svg"))
         self.assertTrue((ROOT / "docs" / "opening-dark.png").exists())
         self.assertTrue((ROOT / "docs" / "opening-light.png").exists())
         self.assertEqual(readme.count("<h1>"), 0)
@@ -1246,7 +1247,7 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         self.assertLess(arabic, english)
 
     def test_icon_file_has_every_windows_size(self):
-        data = (ROOT / "electron" / "icon.ico").read_bytes()
+        data = (ROOT / "app" / "icon.ico").read_bytes()
         self.assertEqual(data[:4], b"\x00\x00\x01\x00")
         count = int.from_bytes(data[4:6], "little")
         sizes = {data[6 + 16 * i] or 256 for i in range(count)}
@@ -1259,11 +1260,16 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         page = bridge.PAGE.read_text(encoding="utf-8")
         self.assertIn("default-src 'none'", page)
         self.assertNotIn("fetch(", page)
-        main_file = (ROOT / "electron" / "main.js").read_text(encoding="utf-8")
-        self.assertIn("contextIsolation: true", main_file)
-        self.assertIn("nodeIntegration: false", main_file)
-        self.assertIn("sandbox: true", main_file)
-        self.assertNotIn("createServer", main_file)
+        window = (ROOT / "src-tauri" / "src" / "main.rs").read_text(encoding="utf-8")
+        self.assertNotIn("TcpListener", window, "no network port")
+        self.assertIn('const REQUEST_KINDS: [&str; 3] = ["state", "i18n", "api"];', window)
+        self.assertIn("own_page", window)
+        # The debugging port that tests use must never be in a release build.
+        debug_port = window.index("FAHIS_DEBUG_PORT")
+        self.assertIn("if cfg!(debug_assertions) {", window[debug_port - 300:debug_port])
+        capability = json.loads((ROOT / "src-tauri" / "capabilities" / "default.json").read_text(encoding="utf-8"))
+        self.assertEqual(capability["permissions"], ["core:default"], "the page gets no file, shell or network access")
+        self.assertFalse((ROOT / "electron").exists())
 
 
 class SpyTransport(demo.DemoTransport):
@@ -2288,7 +2294,7 @@ class AnalysisTests(unittest.TestCase):
     def test_earlier_visits_include_fuel_from_older_records(self):
         record = {"sessions": [{"fuel": 40.0, "averages": {}}, "damaged"], "status": {"values": {"Fuel level": "7.8 %"}}}
         self.assertEqual(obd_tool.earlier_visits(record)["fuel"], [40.0, 7.8])
-        self.assertEqual(obd_tool.earlier_visits({}), {"sessions": [], "fuel": [], "followup": [], "test_history": [], "ecu_history": [], "scan": None})
+        self.assertEqual(obd_tool.earlier_visits({}), {"sessions": [], "fuel": [], "followup": [], "test_history": [], "ecu_history": [], "scan": None, "explorer": None})
 
 
 class NewFeatureTests(unittest.IsolatedAsyncioTestCase):
@@ -2708,6 +2714,116 @@ class EcuToolTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("isn't responsible", readme)
         self.assertIn("غير مسؤول", readme)
         self.assertIn("NOT LIABLE", (ROOT / "LICENSE").read_text(encoding="utf-8"))
+
+
+class ExplorerCar:
+    """A pretend car with an engine at 7E0 and a body computer at 770 that answers some items, refuses others and ignores the rest."""
+
+    def __init__(self):
+        self.header, self.sent, self.door = None, [], 0x00
+
+    async def send(self, command, wait=5):
+        self.sent.append(command)
+        if command.startswith("ATSH"):
+            self.header = command[4:]
+        if command.startswith("AT"):
+            return ["OK"]
+        if self.header == "7E0":
+            if command == "22F190":
+                return ["7E8 10 14 62 F1 90 41 41 41", "7E8 21 41 41 41 41 41 41 41", "7E8 22 41 41 41 41 41 41 41"]
+            if command == "2101":
+                return ["7E8 06 61 01 12 34 56 78"]
+            return ["7E8 03 7F 22 31"]
+        if self.header == "770":
+            if command == "22F190":
+                return ["778 03 7F 22 11"]  # refuses, but that still shows it's there
+            if command == "22BC03":
+                return [f"778 06 62 BC 03 00 {self.door:02X} 00"]
+            if command == "22F187":
+                return ["778 08 62 F1 87 42 4F 44 59 31"]
+            return ["NO DATA"]
+        return ["NO DATA"]
+
+
+class ExplorerTests(unittest.IsolatedAsyncioTestCase):
+    """The read-only ECU explorer."""
+
+    async def test_finds_computers_that_answer_or_refuse_and_ignores_silent_addresses(self):
+        car = ExplorerCar()
+        found = await car_explorer.find_modules(ELM(car))
+        self.assertEqual([(module["header"], module["request"], module["first"]) for module in found], [("778", "770", "refused"), ("7E8", "7E0", "answered")])
+
+    async def test_explorer_only_ever_reads(self):
+        car = ExplorerCar()
+        elm = ELM(car)
+        elm.demo = True
+        found = await car_explorer.explore(elm, "Kia", 2017, deep=True, say=lambda text: None)
+        await car_explorer.read_again(elm, found)
+        requests = [command for command in car.sent if not command.startswith("AT")]
+        self.assertTrue(requests)
+        self.assertEqual({command[:2] for command in requests} - car_modules.READ_ONLY_SERVICES, set())
+        self.assertFalse(any(command.startswith(("ATSH7DF", "10", "27", "2E", "31", "3B", "14", "04")) for command in car.sent[1:] if not command.startswith("ATSH7DF")))
+
+    async def test_maps_known_items_with_their_names(self):
+        car = ExplorerCar()
+        found = await car_explorer.explore(ELM(car), "Kia", 2017, say=lambda text: None)
+        body = next(module for module in found["modules"] if module["header"] == "778")
+        items = {item["request"]: item for item in body["items"]}
+        self.assertEqual(items["22BC03"]["state"], "answered")
+        self.assertTrue(items["22BC03"]["names"], "the Kia profile names this item")
+        self.assertEqual(items["22F187"]["text"], "BODY1")
+        self.assertEqual(items["22F18C"]["state"], "silent")
+        engine = next(module for module in found["modules"] if module["header"] == "7E8")
+        self.assertEqual({item["request"]: item["state"] for item in engine["items"]}.get("22F190"), "answered",
+                         "the presence check doesn't count, so F190 is asked again with the standard items")
+        self.assertEqual({item["request"]: item["state"] for item in engine["items"]}.get("2101"), "answered", "older-style items from the profile")
+
+    async def test_read_again_marks_what_changed(self):
+        car = ExplorerCar()
+        elm = ELM(car)
+        first = await car_explorer.explore(elm, "Kia", 2017, say=lambda text: None)
+        car.door = 0x01  # a door was opened
+        again = await car_explorer.read_again(elm, first)
+        body = next(module for module in again["modules"] if module["header"] == "778")
+        changed = [item["request"] for item in body["items"] if item["changed"]]
+        self.assertEqual(changed, ["22BC03"])
+        self.assertEqual(again["compared"], first["time"])
+
+    def test_known_items_come_from_the_kia_profiles(self):
+        known = car_explorer.known_items("Kia", 2017)
+        self.assertIn("22BC03", known["770"])
+        self.assertTrue(any(request.startswith("21") for request in known["7E0"]))
+        self.assertEqual(car_explorer.known_items(None), {})
+        self.assertTrue(all(request[:2] in car_modules.READ_ONLY_SERVICES for items in known.values() for request in items))
+
+    def test_replies_are_described(self):
+        self.assertEqual(car_explorer.describe(bytes.fromhex("7F2233"), "22F190")[:2], ("refused", "Locked by the maker's security"))
+        self.assertEqual(car_explorer.describe(bytes.fromhex("62F187FFFF"), "22F187"), ("answered", "FF FF", "FF FF"))
+        self.assertEqual(car_explorer.describe(bytes.fromhex("62BC03000000"), "22BC03"), ("answered", "00 00 00", "00 00 00"), "zeros are data")
+        self.assertEqual(car_explorer.describe(bytes.fromhex("62F187"), "22F187")[0], "empty")
+        self.assertEqual(car_explorer.describe(bytes.fromhex("62F18B20170302"), "22F18B")[1], "2017-03-02", "dates are shown as dates")
+        self.assertEqual(car_explorer.describe(bytes.fromhex("610112345678"), "2101"), ("answered", "12 34 56 78", "12 34 56 78"))
+
+    async def test_page_and_report_and_jobs(self):
+        car = ExplorerCar()
+        elm = ELM(car)
+        elm.demo = True
+        elm.vehicle = {"VIN": {"7E8": "KNAAA000AHT000000"}}
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            await obd_tool.run_explore(elm, None)
+            car.door = 0x01
+            await obd_tool.run_explore_again(elm, None)
+        self.assertIn("1 item(s) changed", output.getvalue())
+        page = obd_tool.page_explorer(elm.explorer, "ar")
+        body = next(module for module in page["modules"] if module["header"] == "778")
+        self.assertEqual(body["name"], i18n.ARABIC["Body control (doors, belts, lights)"])
+        self.assertTrue(any(item["changed"] for item in body["items"]))
+        self.assertFalse(any(item["state"] == "silent" for item in body["items"]), "silent items aren't listed")
+        self.assertIn("ECU explorer map", car_explorer.report(elm.explorer))
+        self.assertIsNone(obd_tool.page_explorer(None))
+        with self.assertRaises(OBDError):
+            await obd_tool.run_explore_again(ELM(ExplorerCar()), None)
 
 
 class RobustnessTests(unittest.IsolatedAsyncioTestCase):

@@ -8,7 +8,7 @@
 
 <br>
 
-<img src="electron/icon.svg" alt="أيقونة فاحص: عدسة مكبرة بداخلها حرف الفاء" width="128">
+<img src="app/icon.svg" alt="أيقونة فاحص: عدسة مكبرة بداخلها حرف الفاء" width="128">
 
 <h2>فاحص · Fahis</h2>
 
@@ -20,7 +20,7 @@
 
 ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-5cb8ff?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.12-5cb8ff?style=flat-square)
-![Electron](https://img.shields.io/badge/Electron-45-5cb8ff?style=flat-square)
+![Tauri](https://img.shields.io/badge/Tauri-2-5cb8ff?style=flat-square)
 ![Bluetooth LE](https://img.shields.io/badge/Bluetooth-LE-5cb8ff?style=flat-square)
 ![Arabic and English](https://img.shields.io/badge/Arabic%20%7C%20English-4cc38a?style=flat-square)
 [![Free for individuals](https://img.shields.io/badge/license-free%20for%20individuals-4cc38a?style=flat-square)](LICENSE)
@@ -94,7 +94,7 @@
 | | التطبيق الجاهز | من الشيفرة المصدرية |
 |---|---|---|
 | **السعر** | مدفوع، وسيتوفر قريبًا | مجاني للأفراد |
-| **التثبيت** | ملف تثبيت واحد، دون أي إعداد | يحتاج إلى Python 3.12 و‏Node.js |
+| **التثبيت** | ملف تثبيت واحد، دون أي إعداد | يحتاج إلى Python 3.12 و‏Node.js و‏Rust وأدوات C++‎ من Microsoft |
 | **المزايا** | المزايا نفسها | المزايا نفسها |
 
 التطبيق الجاهز غير متاح للبيع بعد، وسيدعم شراؤه تطوير فاحص. يمكنك الآن تشغيله من الشيفرة المصدرية بالخطوات التالية.
@@ -109,11 +109,12 @@ cd Fahis
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 npm install
-npm run setup
 npm start
 ```
 
 </div>
+
+يحتاج ذلك أولًا إلى تثبيت [Rust](https://rustup.rs) و[أدوات Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) مع مكوّن «تطوير سطح المكتب باستخدام C++‎». ويستغرق أول تشغيل بضع دقائق لأنه يبني النافذة.
 
 لتجربته دون سيارة ببيانات محاكاة، شغّل `npm run demo`.
 
@@ -132,7 +133,7 @@ npm start
 
 ```mermaid
 flowchart LR
-    A["نافذة Electron"] <-- "قناة خاصة" --> B["خدمة Python"]
+    A["نافذة Tauri"] <-- "قناة خاصة" --> B["خدمة Python"]
     B <-- "Bluetooth LE" --> C["محوّل ELM327"]
     C <-- "OBD-II" --> D["السيارة"]
 ```
@@ -228,7 +229,8 @@ flowchart LR
 | `car_analysis.py` | رصد الأنماط في القراءات طوال الاتصال |
 | `i18n.py` | النصوص العربية والإنجليزية |
 | `bridge.py` | القناة الخاصة بين النافذة والخدمة الخلفية |
-| `electron/` | نافذة سطح المكتب وصفحات التطبيق والأيقونة |
+| `app/` | صفحات التطبيق والأيقونة |
+| `src-tauri/` | نافذة سطح المكتب، مكتوبة بلغة Rust |
 | `demo.py` | محوّل محاكاة للوضع التجريبي |
 | `dtc_codes.py` | البحث عن أوصاف رموز الأعطال |
 | `profiles\` | قائمة السيارات وملف Kia Picanto، من OBDb |
@@ -321,7 +323,7 @@ There are two ways to get Fahis. Both need Windows 10 or 11 with Bluetooth, a BL
 | | Ready-made app | From source |
 |---|---|---|
 | **Price** | Paid, coming soon | Free for individuals |
-| **Install** | One installer, no setup | Needs Python 3.12 and Node.js |
+| **Install** | One installer, no setup | Needs Python 3.12, Node.js, Rust and Microsoft's C++ Build Tools |
 | **Features** | The same | The same |
 
 The ready-made app isn't on sale yet, and buying it will support Fahis's development. For now, you can run it from source with the steps below.
@@ -334,9 +336,10 @@ cd Fahis
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 npm install
-npm run setup
 npm start
 ```
+
+This first needs [Rust](https://rustup.rs) and [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with "Desktop development with C++". The first start takes a few minutes, as it builds the window.
 
 To try it with simulated data and no car, run `npm run demo`.
 
@@ -353,7 +356,7 @@ The app keeps looking for the adapter until the car answers. Before unplugging t
 
 ```mermaid
 flowchart LR
-    A["Electron window"] <-- "private pipe" --> B["Python backend"]
+    A["Tauri window"] <-- "private pipe" --> B["Python backend"]
     B <-- "Bluetooth LE" --> C["ELM327 adapter"]
     C <-- "OBD-II" --> D["Your car"]
 ```
@@ -443,7 +446,8 @@ Run the offline tests, which don't need a car or adapter:
 | `car_analysis.py` | Spots patterns in the readings over a connection |
 | `i18n.py` | English and Arabic text |
 | `bridge.py` | Private pipe between the window and the backend |
-| `electron/` | Desktop window, the app's pages and the icon |
+| `app/` | The app's pages and the icon |
+| `src-tauri/` | The desktop window, written in Rust |
 | `demo.py` | Simulated adapter for demo mode |
 | `dtc_codes.py` | Fault code lookups |
 | `profiles\` | Car catalog and the Kia Picanto profile, from OBDb |

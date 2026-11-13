@@ -17,3 +17,7 @@ settings.json
 
 # Profiles fetched on demand
 profiles/downloaded/
+
+# Tauri build output
+src-tauri/target/
+src-tauri/gen/
