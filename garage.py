@@ -14,6 +14,7 @@ MAX_TESTS = 100
 MAX_TEST_OUTPUT = 20_000
 MAX_NAME = 40
 MAX_TEST_HISTORY = 40
+MAX_ECU_HISTORY = 40
 TEST_HISTORY_GAP_SECONDS = 3600  # readings closer together than this are the same visit
 MAX_REFUELS = 60
 REFUELLED_BY = 10  # percent of the tank
@@ -100,10 +101,28 @@ def remember(vehicle, section, data):
                         # Which computers answered, and which one reported each code. A code missing from a reading only
                         # counts as gone if its computer answered that time.
                         "modules": sorted(codes.get("Stored", {})),
-                        "where": {code: header for found in codes.values() for header, module_codes in found.items() for code in module_codes}})
+                        "where": {code: header for found in codes.values() for header, module_codes in found.items() for code in module_codes},
+                        # How far and how many warm-ups since codes were cleared. A drop between readings means a clear in between.
+                        "since_clear": data.get("since_clear") or {}})
         del history[:-MAX_HISTORY]
         remember_tests(record, data.get("test_results", []))
+        remember_ecus(record, data.get("ecu_ids"))
     save_car(key, record)
+
+
+def remember_ecus(record, ids):
+    """Keep what each computer reported about its software whenever it differs from last time, so a change shows."""
+    if not ids:
+        return
+    log = record.setdefault("ecu_history", [])
+    last = log[-1]["ids"] if log else {}
+    # Some items arrive late or not at all on a visit, so one missing now isn't a change.
+    merged = {header: {**last.get(header, {}), **items} for header, items in ids.items()}
+    if any(last.get(header, {}).get(item) not in (None, value) for header, items in ids.items() for item, value in items.items()) or not log:
+        log.append({"time": now(), "ids": merged})
+    elif merged != last:
+        log[-1]["ids"] = {**last, **merged}
+    del log[:-MAX_ECU_HISTORY]
 
 
 def remember_tests(record, results):
@@ -140,12 +159,44 @@ def fault_followup(record):
             case = cases.setdefault(code, {"code": code, "first_seen": entry["time"], "confirmed": False, "module": None})
             case.update(last_seen=entry["time"], last_index=index, kind=kind, module=entry.get("where", {}).get(code, case["module"]))
             case["confirmed"] = case["confirmed"] or kind == "confirmed"
+    clears, before = set(), None
+    for index, entry in enumerate(readings):
+        since = entry.get("since_clear") if isinstance(entry.get("since_clear"), dict) else {}
+        if before is not None:
+            for key in ("km", "warm_ups"):
+                earlier, now_ = before.get(key), since.get(key)
+                if isinstance(earlier, (int, float)) and isinstance(now_, (int, float)) and now_ < earlier:
+                    clears.add(index)  # codes were cleared after the earlier reading and before this one
+        before = since or before
     for case in cases.values():
         later = readings[case.pop("last_index") + 1:]
         module, kind = case.pop("module"), case.pop("kind")
         case["clean_readings"] = sum(1 for entry in later if module and module in entry.get("modules", []))
         case["status"] = kind if not later else "gone" if case["clean_readings"] else "unclear"
-    return sorted(cases.values(), key=lambda case: (case["status"] in ("gone", "unclear"), case["code"]))
+        case["returned"] = came_back(case["code"], module, readings, clears)
+    return sorted(cases.values(), key=lambda case: (case["status"] in ("gone", "unclear"), not case["returned"], case["code"]))
+
+
+def came_back(code, module, readings, clears):
+    """Find when a code went away and then showed again. Returns {gone, back, after_clear}, or None.
+
+    A reading without the code only counts as "went away" if its computer answered then, or if it's from before
+    that was recorded. A clear counts if one was seen between the code going away and showing again.
+    """
+    present = lambda entry: code in set(entry.get("codes", [])) | {c for kind in ("stored", "pending", "permanent") for c in entry.get(kind, [])}
+    answered = lambda entry: "modules" not in entry or (module is not None and module in entry["modules"])
+    seen, gone_at, found = False, None, None
+    for index, entry in enumerate(readings):
+        if present(entry):
+            if gone_at is not None:
+                found = {"gone": readings[gone_at]["time"], "back": entry["time"],
+                         # A clear between its last showing and its return: one just before it went missing, or while it was gone.
+                         "after_clear": any(between in clears for between in range(gone_at, index + 1))}
+                gone_at = None
+            seen = True
+        elif seen and gone_at is None and answered(entry):
+            gone_at = index
+    return found
 
 
 def set_tank(key, litres):

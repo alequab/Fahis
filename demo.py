@@ -124,6 +124,8 @@ class DemoTransport:
             return frames("7E8", [0x49, 0x04, 0x01] + list(b"DEMO-CAL-0001".ljust(16, b"\x00")))
         if command == "0906":
             return frames("7E8", [0x49, 0x06, 0x01, 0x12, 0x34, 0xAB, 0xCD])
+        if command in ("22F18A", "22F18B"):
+            return frames("7E8", [0x62, 0xF1, int(command[4:], 16)] + (list(b"DEMO SUPPLIER") if command == "22F18A" else [0x20, 0x17, 0x03, 0x02]))
         if command in DEMO_ECU:
             return frames("7E8", [0x62, 0xF1, int(command[4:], 16)] + list(DEMO_ECU[command]))
         if command == "1908E0AF":

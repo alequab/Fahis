@@ -34,6 +34,68 @@ MAX_SILENT = 3
 UDS_READ_CODES = "1902AF"
 KWP_READ_CODES = "1800FF00"
 FIRST_FAULT_REQUEST, LATEST_FAULT_REQUEST = "190B", "190D"
+# The standard identity items a computer can be asked for (ISO 14229), all read without unlocking anything.
+IDENTITY_ITEMS = {
+    0xF100: "Maker's description", 0xF180: "Boot software", 0xF181: "Application software", 0xF182: "Application data",
+    0xF183: "Boot software fingerprint", 0xF184: "Application software fingerprint", 0xF185: "Application data fingerprint",
+    0xF186: "Active diagnostic session", 0xF187: "Part number", 0xF188: "ECU software number", 0xF189: "Software version",
+    0xF18A: "Supplier", 0xF18B: "Manufacturing date", 0xF18C: "Serial number", 0xF18D: "Supported functional units",
+    0xF18E: "Kit part number", 0xF190: "Stored VIN", 0xF191: "Hardware number", 0xF192: "Supplier hardware number",
+    0xF193: "Supplier hardware version", 0xF194: "Supplier software number", 0xF195: "Supplier software version",
+    0xF196: "Exhaust approval number", 0xF197: "System name", 0xF198: "Repair shop code", 0xF199: "Last programmed",
+    0xF19A: "Calibration shop code", 0xF19B: "Calibration date", 0xF19C: "Calibration equipment software", 0xF19D: "Installed on",
+    0xF19E: "Diagnostic file name", 0xF19F: "Diagnostic file entity",
+}
+IDENTITY_DATES = {0xF18B, 0xF199, 0xF19B, 0xF19D}
+# Some computers stay silent on items they don't have instead of refusing, so one that has answered gets more room.
+SWEEP_SILENT_AFTER_ANSWER = 40
+
+
+async def read_identity_items(elm, headers, on_progress=None):
+    """Ask each computer for every identity item from F100 to F1FF. Read-only, in the normal session.
+
+    The 32 standard items (F180 to F19F) are always all asked. The maker's own items around them are asked until the
+    computer has been silent for a while. Returns {reply header: [{item, label, text}]}, leaving out refused or empty items.
+    """
+    found = {}
+    groups = (range(0xF180, 0xF1A0), range(0xF100, 0xF180), range(0xF1A0, 0xF200))
+    total = sum(len(group) for group in groups)
+    try:
+        for header in headers:
+            request_id, values, answered, asked = f"{int(header, 16) - 8:03X}", found.setdefault(header, []), False, 0
+            for standard, group in zip((True, False, False), groups):
+                if not standard and not answered:
+                    break  # a computer that didn't answer any standard item won't answer the rest
+                silent = 0
+                for item in group:
+                    asked += 1
+                    if on_progress:
+                        on_progress(asked, total)
+                    request = f"22{item:04X}"
+                    reply = await elm.module_request(request_id, header, request, keep_address=True)
+                    if reply is None:
+                        silent += 1
+                        # Every computer asked has already answered normal requests, so all 32 standard items are worth asking.
+                        if not standard and silent >= SWEEP_SILENT_AFTER_ANSWER:
+                            break
+                        continue
+                    silent, answered = 0, True
+                    if not getattr(reply, "complete", True):
+                        reply = await elm.module_request(request_id, header, request, fc=True, keep_address=True) or reply
+                    if reply.startswith(b"\x62" + item.to_bytes(2, "big")) and getattr(reply, "complete", True):
+                        text = readable_date(reply[3:]) if item in IDENTITY_DATES else None
+                        text = text or readable_detail(reply[3:])
+                        if text:
+                            values.append({"item": f"{item:04X}", "label": IDENTITY_ITEMS.get(item, "Item {item}"), "text": text})
+            values.sort(key=lambda value: value["item"])
+    finally:
+        if headers:
+            await elm.restore_addressing()
+    return found
+
+
+# Shortest stretch of letters and digits worth showing from a value that's partly binary.
+READABLE_RUN = 4
 # Stop asking a computer about itself after this many silent replies in a row.
 ECU_SILENT_LIMIT = 2
 # Standard identity values a computer can report about itself.
@@ -426,7 +488,11 @@ def readable_detail(data):
         return None  # A real transmission computer filled its part number with FF.
     if all(32 <= ord(character) < 127 for character in text):
         return text
-    return bytes(data).hex(" ").upper()
+    # Some computers mix text with binary, as a real transmission did in its part number and description.
+    # The readable stretches are what a person can use, so they're shown and the binary is left out.
+    runs = [" ".join(run.split()) for run in re.findall(rb"[\x20-\x7e]{%d,}" % READABLE_RUN, bytes(data)) for run in [run.decode()]]
+    runs = [run for run in runs if run.strip()]
+    return " · ".join(runs) if runs else bytes(data).hex(" ").upper()
 
 
 async def read_ecu_details(elm, headers):

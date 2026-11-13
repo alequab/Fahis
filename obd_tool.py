@@ -493,12 +493,15 @@ class ELM:
         self.reads_seen = {}
         self.addressed = None
         self.busy = {}  # when each module last said it needs more time
+        self.heard = {}  # when each module last answered anything
+        self.last_scan = self.identity_items = None  # results of the scan and identity commands, for the page
         self.calibration = {}  # filled in when asked, or whenever a slow module finally answers
 
     def parsed(self, lines):
         """Rebuild replies from CAN lines, keeping track of modules that say they need more time."""
         replies = parse_can(lines or [])
         for header, reply in replies.items():
+            self.heard[header] = time.monotonic()
             if len(reply) >= 3 and reply[0] == 0x7F and reply[2] == RESPONSE_PENDING:
                 self.busy[header] = time.monotonic()
                 continue
@@ -1113,7 +1116,8 @@ def earlier_visits(record):
     if match:
         fuel.append(float(match.group()))  # visits saved before fuel was kept per visit
     return {"sessions": sessions, "fuel": [level for level in fuel if number(level) is not None],
-            "followup": garage.fault_followup(record), "test_history": record.get("test_history", [])}
+            "followup": garage.fault_followup(record), "test_history": record.get("test_history", []),
+            "ecu_history": record.get("ecu_history", []), "scan": record.get("modules")}
 
 
 def remember_snapshot(elm, snapshot):
@@ -1131,6 +1135,8 @@ def remember_snapshot(elm, snapshot):
         "freeze": snapshot["freeze"],
         "module_records": snapshot.get("module_records", []),
         "test_results": snapshot.get("test_results", []),
+        "since_clear": {"km": number(snapshot["values"].get(0x31)), "warm_ups": number(snapshot["values"].get(0x30))},
+        "ecu_ids": ecu_fingerprint(snapshot),
         "supported_pids": sorted(f"{pid:02X}" for pid in snapshot["supported"]),
         "values": {LIVE_PIDS[pid][0]: f"{'-' if value is None else format_value(value)} {LIVE_PIDS[pid][1]}".strip()
                    for pid, value in snapshot["values"].items()},
@@ -1298,7 +1304,8 @@ def dashboard_state(snapshot, reader, demo=False, lang=None, cars=()):
             "values": [{"name": t(v["name"], lang), "unit": t(v["unit"], lang), "text": t(v["text"], lang)}
                        for v in freeze["values"]]},
         "systems": page_systems(snapshot, reader, lang),
-        "ecus": page_ecus(snapshot, getattr(getattr(reader, "elm", None), "busy_modules", set)(), lang),
+        "ecus": page_ecus(snapshot, getattr(getattr(reader, "elm", None), "busy_modules", set)(), lang, None,
+                          getattr(getattr(reader, "elm", None), "heard", None)),
         "values": [*[{"pid": f"{pid:02X}", "name": t(LIVE_PIDS[pid][0], lang), "system": car_systems.value_system(pid), "tone": value_tone(pid, value),
                     "unit": "" if value == "Not reported" else t(LIVE_PIDS[pid][1], lang),
                     "value": value if isinstance(value, (int, float)) else None,
@@ -1380,7 +1387,7 @@ def translated_findings(found, lang=None):
     for item in found:
         values = {key: t(value, lang) if key in ("what", "light") else value for key, value in item["values"].items()}
         if "names" in item:
-            values["names"] = t(", ", lang).join(t(name, lang) for name in item["names"])
+            values["names"] = values["items"] = t(", ", lang).join(t(name, lang) for name in item["names"])
         if "since" in item:
             values["since"] = t(item["since"], lang, **item["values"])
         shown.append({"id": item["id"], "title": t(item["title"], lang), "state": item["state"], "system": item["system"],
@@ -1388,13 +1395,19 @@ def translated_findings(found, lang=None):
     return shown
 
 
-def car_check(snapshot, values):
+def car_check(snapshot, values, previous=None):
     vin = next(iter(snapshot["vehicle"].get("VIN", {}).values()), None)
-    return car_analysis.used_car_check(snapshot, values, garage.model_year(vin))
+    found = car_analysis.used_car_check(snapshot, values, garage.model_year(vin))
+    changed = sorted({change["label"] for changes in ecu_changes(snapshot, previous).values() for change in changes})
+    if changed:
+        found.insert(0, {**car_analysis.finding("software_changed", "Computer software changed", "warn",
+                                                "Since an earlier visit, a computer reports different software: {items}. That follows an official update or a reflash, which can include tuning. Ask what was done.",
+                                                "status"), "names": changed})
+    return found
 
 
-def page_car_check(snapshot, values, lang=None):
-    found = car_check(snapshot, values)
+def page_car_check(snapshot, values, lang=None, previous=None):
+    found = car_check(snapshot, values, previous)
     return {"findings": translated_findings(found, lang),
             "bad": sum(item["state"] == "bad" for item in found), "warn": sum(item["state"] == "warn" for item in found)}
 
@@ -1428,10 +1441,114 @@ def page_analysis(stats, values, snapshot, previous, lang=None):
     }
 
 
-def page_ecus(snapshot, busy=(), lang=None):
+# What each computer says about its software. A change between visits means new software: an update, or a reflash.
+FINGERPRINT_ITEMS = ("Calibration ID", "Calibration check", "Software version", "Hardware number", "Part number")
+VIN_REGIONS = (("ABCDEFGH", "Africa"), ("JKLMNPR", "Asia"), ("STUVWXYZ", "Europe"), ("12345", "North America"), ("67", "Oceania"), ("89", "South America"))
+VIN_COUNTRIES = {"J": "Japan", "K": "South Korea", "L": "China", "M": "India", "W": "Germany", "V": "France or Spain", "S": "United Kingdom",
+                 "Z": "Italy", "Y": "Sweden or Finland", "T": "Czechia or Hungary", "1": "United States", "4": "United States",
+                 "5": "United States", "2": "Canada", "3": "Mexico", "9": "Brazil", "6": "Australia"}
+
+
+def ecu_fingerprint(snapshot):
+    """Return {reply header: {item: text}} for the software details each computer reported."""
+    found = {}
+    for label in ("Calibration ID", "Calibration check"):
+        for header, text in snapshot["vehicle"].get(label, {}).items():
+            if text:
+                found.setdefault(header, {})[label] = text
+    for header, items in (snapshot.get("ecu_details") or {}).items():
+        for item in items:
+            if item["label"] in FINGERPRINT_ITEMS:
+                found.setdefault(header, {})[item["label"]] = item["text"]
+    return found
+
+
+def ecu_changes(snapshot, previous):
+    """Compare each computer's software details with the last visit. Returns {header: [{label, before, now, since}]}."""
+    log = (previous or {}).get("ecu_history") or []
+    if not log:
+        return {}
+    last, since = log[-1].get("ids", {}), log[-1].get("time", "")[:10]
+    changes = {}
+    for header, items in ecu_fingerprint(snapshot).items():
+        for label, now_ in items.items():
+            before = last.get(header, {}).get(label)
+            if before and before != now_:
+                changes.setdefault(header, []).append({"label": label, "before": before, "now": now_, "since": since})
+    return changes
+
+
+def car_identity(snapshot, values, elm=None):
+    """Describe the car from its VIN and what it reports, as (label, text) pairs. The VIN itself is shown elsewhere."""
+    vin = next(iter(snapshot["vehicle"].get("VIN", {}).values()), None) or ""
+    rows = []
+    # Only a VIN of the right shape says where the car was built. The letters I, O and Q are never used.
+    if re.fullmatch(r"[A-HJ-NPR-Z0-9]{17}", vin.upper()):
+        if make_from_vin(vin):
+            rows.append(("Maker", make_from_vin(vin)))
+        year = garage.model_year(vin)
+        if year:
+            rows.append(("Model year", str(year)))
+        country = VIN_COUNTRIES.get(vin[:1].upper())
+        region = next((name for letters, name in VIN_REGIONS if vin[:1].upper() in letters), None)
+        if country or region:
+            rows.append(("Built in", country or region))
+    for pid, label in ((0x51, "Fuel type"), (0x1C, "OBD standard")):
+        if values.get(pid) not in (None, ""):
+            rows.append((label, str(values[pid])))
+    if elm is not None:
+        rows += [("Protocol", elm.protocol or "unknown"), ("Adapter", elm.version or "unknown")]
+    computers = sorted({*known_modules(snapshot["vehicle"]), *snapshot["monitors"]})
+    rows.append(("Computers answering", ", ".join(computers) or "-"))
+    return rows
+
+
+def ecu_report(snapshot, values, previous=None, elm=None, scan=None, items=None, lang=None):
+    """Everything the ECU page shows, as text for keeping, copying or sending to a mechanic."""
+    lines = [t("ECU report", lang), datetime.now().strftime("%Y-%m-%d %H:%M"), ""]
+    vin = next(iter(snapshot["vehicle"].get("VIN", {}).values()), None)
+    lines.append(f"{t('VIN', lang)}: {vin or t('unknown', lang)}")
+    lines += [f"{t(label, lang)}: {t(text, lang)}" for label, text in car_identity(snapshot, values, elm)]
+    changes = ecu_changes(snapshot, previous)
+    for ecu in page_ecus(snapshot, (), lang, previous):
+        lines += ["", f"{ecu['role']} ({ecu['header']})"]
+        lines += [f"  {row['label']}: {row['text']}" for row in ecu["rows"]]
+        if ecu["faults"]:
+            lines.append(f"  {t('Fault codes', lang)}: {', '.join(ecu['faults'])}")
+        lines += [f"  {t(text, lang)}" for text in ecu["changes"]]
+    for header, found in (items or {}).items():
+        if found:
+            lines += ["", f"{t('All identity data read', lang)} ({header})"]
+            lines += [f"  {item['item']} {t(item['label'], lang, item=item['item'])}: {item['text']}" for item in found]
+    if scan and scan.get("modules"):
+        lines += ["", f"{t('Other computers found by the last scan', lang)} ({scan.get('time', '')[:16].replace('T', ' ')})"]
+        for module in scan["modules"]:
+            codes = ", ".join(item["code"] for item in module.get("codes", [])) or t("No fault codes", lang)
+            lines.append(f"  {module['hdr']} {t(module.get('name', ''), lang)}: {codes if module.get('read_codes', True) else t('Answered, but refused to share fault codes with these commands', lang)}")
+    if not changes:
+        lines += ["", t("No software changes found since the last visit.", lang) if (previous or {}).get("ecu_history") else
+                  t("Software changes can be spotted from the next visit on.", lang)]
+    return "\n".join(lines)
+
+
+def page_ecu_tools(snapshot, values, previous, elm, scan, items, lang=None):
+    identity = [{"label": t(label, lang), "text": t(text, lang)} for label, text in car_identity(snapshot, values, elm)]
+    shown_scan = None
+    if scan and scan.get("modules") is not None:
+        shown_scan = {"time": scan.get("time", ""), "modules": [
+            {"header": module["hdr"], "name": t(module.get("name", "Unknown module"), lang), "codes": [item["code"] for item in module.get("codes", [])],
+             "refused": not module.get("read_codes", True), "refusal": t(module["refusal"], lang) if module.get("refusal") else None}
+            for module in scan["modules"]]}
+    shown_items = {header: [{"item": item["item"], "label": t(item["label"], lang, item=item["item"]), "text": item["text"]} for item in found]
+                   for header, found in (items or {}).items()}
+    return {"identity": identity, "scan": shown_scan, "items": shown_items}
+
+
+def page_ecus(snapshot, busy=(), lang=None, previous=None, heard=None):
     """Describe each computer that has answered on this car, from what it reports about itself. Nothing here writes to it."""
     vehicle = snapshot["vehicle"]
     ecus = []
+    changes = ecu_changes(snapshot, previous)
     for header in sorted({*known_modules(vehicle), *snapshot["monitors"]}):
         role, icon = ECU_ROLES.get(header, ("Computer {header}", "ecu"))
         rows = []
@@ -1446,7 +1563,12 @@ def page_ecus(snapshot, busy=(), lang=None):
         warning = t("This computer stores a different VIN from the car's. It may have been replaced, which isn't always a problem.", lang) \
             if car_vin and stored_vin and stored_vin != car_vin else None
         state = "busy" if header in busy else "answering" if header in snapshot["monitors"] else "silent"
-        ecus.append({"header": header, "role": t(role, lang, header=header), "icon": icon, "state": state, "rows": rows, "faults": faults, "warning": warning})
+        changed = [t("{item} changed since {date}: it was {before}, and now it's {now}. New software means an update or a reflash, so ask what was done.", lang,
+                     item=t(change["label"], lang), date=change["since"], before=change["before"], now=change["now"])
+                   for change in changes.get(header, [])]
+        quiet = round(time.monotonic() - heard[header]) if heard and header in heard else None
+        ecus.append({"header": header, "role": t(role, lang, header=header), "icon": icon, "state": state, "rows": rows, "faults": faults, "warning": warning,
+                     "changes": changed, "quiet": quiet})
     return ecus
 
 
@@ -1587,7 +1709,7 @@ class Job:
 
 
 # What the web app can run on the car. `live` and `log` are terminal commands, since they never end.
-WEB_ACTIONS = ("battery", "starttest", "info", "codes", "report", "scan", "profile", "clear")
+WEB_ACTIONS = ("battery", "starttest", "info", "codes", "report", "scan", "ecuread", "profile", "clear")
 # Readings kept from before and after something new goes wrong, so the moment itself can be looked at later.
 MOMENT_SECONDS = 30
 MAX_MOMENTS_SHOWN = 10
@@ -1632,6 +1754,8 @@ class DashboardApp:
         self.moment = None     # set while the half minute after a new problem is being collected
         self.known_trouble = None
         self.moments = []      # what was saved, for the Analysis page
+        self.scan = None            # the last module scan for this car
+        self.identity_items = None  # every identity item read on request
         self.was_disconnected = False  # whether Disconnect had been pressed before a copy was opened
         self.skip_wait = False
 
@@ -1955,10 +2079,14 @@ class DashboardApp:
                         await asyncio.to_thread(car_modules.download_profile, job.params["name"])
                     except OSError as error:  # no internet is no reason to drop the car
                         raise ValueError(t("Error: {error}", error=error)) from None
-                handler = {"battery": run_battery, "starttest": run_start_test, "info": run_info, "codes": run_codes, "report": run_report,
+                handler = {"battery": run_battery, "starttest": run_start_test, "ecuread": run_identity_items, "info": run_info, "codes": run_codes, "report": run_report,
                            "scan": run_scan, "profile": run_profile, "clear": run_clear}[job.action]
                 await handler(elm, SimpleNamespace(**job.params))
             job.status = finished = "done"
+            if job.action == "scan" and elm.last_scan is not None:
+                self.scan = {"time": garage.now(), "modules": elm.last_scan}
+            if job.action == "ecuread" and elm.identity_items is not None:
+                self.identity_items = elm.identity_items
             if job.action == "clear":
                 self.snapshot = await read_snapshot(elm)
                 for pid, value in self.snapshot["values"].items():
@@ -2044,6 +2172,19 @@ class DashboardApp:
             REPORT_DIR.mkdir(parents=True, exist_ok=True)
             report = REPORT_DIR / f"check_{datetime.now():%Y%m%d_%H%M%S}.txt"
             report.write_text(car_check_report(self.snapshot, self.reader.values, lang) + "\n", encoding="utf-8")
+            return 200, {"file": str(report)}
+        if method == "GET" and path == "/api/ecu/report":
+            if self.snapshot is None or self.reader is None:
+                return 409, {"error": t("Not connected to a car", lang)}
+            return 200, {"text": ecu_report(self.snapshot, self.reader.values, self.previous, self.elm, self.scan, self.identity_items, lang)}
+        if method == "POST" and path == "/api/ecu/save":
+            if self.snapshot is None or self.reader is None:
+                return 409, {"error": t("Not connected to a car", lang)}
+            if self.args.demo:
+                return 409, {"error": t("Reports aren't saved in demo mode.", lang)}
+            REPORT_DIR.mkdir(parents=True, exist_ok=True)
+            report = REPORT_DIR / f"ecu_{datetime.now():%Y%m%d_%H%M%S}.txt"
+            report.write_text(ecu_report(self.snapshot, self.reader.values, self.previous, self.elm, self.scan, self.identity_items, lang) + "\n", encoding="utf-8")
             return 200, {"file": str(report)}
         if method == "POST" and path == "/api/car/tank":
             key = str(body.get("key", ""))
@@ -2139,7 +2280,9 @@ class DashboardApp:
         state["analysis"] = page_analysis(self.stats, self.reader.values, self.snapshot, self.previous, lang)
         state["analysis"]["moments"] = [{"time": moment["time"], "file": moment["file"], "reason": t(", ", lang).join(t(name, lang) for name in moment["reason"])}
                                         for moment in reversed(self.moments)]
-        state["car_check"] = page_car_check(self.snapshot, self.reader.values, lang)
+        state["car_check"] = page_car_check(self.snapshot, self.reader.values, lang, self.previous)
+        state["ecus"] = page_ecus(self.snapshot, self.elm.busy_modules() if self.elm else (), lang, self.previous, self.elm.heard if self.elm else None)
+        state["ecu_tools"] = page_ecu_tools(self.snapshot, self.reader.values, self.previous, self.elm, self.scan, self.identity_items, lang)
         state["session"] = self.connections  # changes with every new connection, so the page can drop the last car's graphs
         return state
 
@@ -2243,6 +2386,7 @@ class DashboardApp:
             self.refresh_followup(elm, snapshot)
         self.recent.clear()
         self.moment, self.known_trouble = None, None
+        self.scan, self.identity_items = self.previous.get("scan"), None
         self.reader = LiveReader(elm, snapshot["values"], snapshot["values"], snapshot["voltage"])
         self.reader.interval = self.args.interval
         self.snapshot = snapshot
@@ -2506,10 +2650,26 @@ async def run_scan(elm, _):
     await check_battery(elm)
     print(t("Asking each possible module, this takes about a minute ..."), flush=True)
     modules = await car_modules.scan_modules(elm, on_progress=show_progress)
+    elm.last_scan = modules
     garage.remember(elm.vehicle, "modules", {"modules": modules})
     report = car_modules.format_scan(modules, describe_dtc)
     print(report)
     save_report("modules", report, elm.demo)
+
+
+async def run_identity_items(elm, _):
+    """Read every standard identity item each computer will share. It changes nothing and needs no unlocking."""
+    headers = [header for header in known_modules(elm.vehicle) if re.fullmatch(r"7E[89A-F]", header)] or ["7E8"]
+    print(t("Asking each computer for every identity item it will share, about a minute each ...", ), flush=True)
+    found = await car_modules.read_identity_items(elm, headers, on_progress=show_progress)
+    elm.identity_items = found
+    lines = []
+    for header, items in found.items():
+        lines += ["", t("Computer {header}", header=header)]
+        lines += [f"  {item['item']}  {t(item['label'], item=item['item'])}: {item['text']}" for item in items] or ["  " + t("It shared no identity items.")]
+    report = "\n".join(lines).strip()
+    print("\n" + report)
+    save_report("ecu-data", report, elm.demo)
 
 
 async def run_profile(elm, args):
@@ -2655,6 +2815,7 @@ def main():
     commands.add_parser("battery", help=t("check battery voltage")).set_defaults(handler=run_battery)
     commands.add_parser("starttest", help=t("watch battery voltage while you start the engine")).set_defaults(handler=run_start_test)
     commands.add_parser("codes", help=t("read fault codes")).set_defaults(handler=run_codes)
+    commands.add_parser("ecuread", help=t("read every identity item each computer will share")).set_defaults(handler=run_identity_items)
     commands.add_parser("report", help=t("read everything once and save it to a file")).set_defaults(handler=run_report)
     commands.add_parser("scan", help=t("find other modules and read their fault codes")).set_defaults(handler=run_scan)
     commands.add_parser("cars", help=t("list cars saved on this laptop")).set_defaults(handler=None)

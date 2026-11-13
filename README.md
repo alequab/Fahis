@@ -39,6 +39,8 @@
 
 كثير من محوّلات ELM327 تعمل بتقنية Bluetooth LE، ولا يعطيها Windows منفذ COM، لذلك لا تجدها معظم برامج OBD-II. أما **فاحص** فيتصل بالمحوّل مباشرة، ويعرض بيانات سيارتك في تطبيق سطح مكتب بالعربية والإنجليزية.
 
+> **تنبيه:** استخدم فاحص على مسؤوليتك. فهو ليس تشخيصًا احترافيًا، ومؤلفه غير مسؤول عن أي ضرر. راجع [إخلاء المسؤولية](#إخلاء-المسؤولية).
+
 <table>
 <tr>
 <td width="50%"><img src="docs/overview-ar.png" alt="صفحة النظرة العامة ببيانات محاكاة"><p align="center"><b>نظرة عامة</b></p></td>
@@ -60,7 +62,7 @@
 
 <table>
 <tr>
-<td width="50%" valign="top"><b>تطبيق سطح مكتب</b><br>شاشة بداية تختار منها بين المراقبة المباشرة ومسح الأعطال أو حاسوب السيارة، وزر لقطع الاتصال قبل فصل المحوّل بأمان، ونسخ محفوظة من بيانات السيارة لاختبار التطبيق دون سيارة، ثم صفحات: نظرة عامة مع حالة المحوّل، وأنظمة السيارة، وتحليل يرصد الأنماط في القراءات ويقارن الزيارات ويتابع كل عطل ويحفظ القراءات المحيطة بأي خلل جديد، وفحص للسيارة المستعملة يبحث عن علامات إخفاء الأعطال، واختبار للبطارية عند التشغيل، وحاسوب السيارة، وبيانات مباشرة، ورموز أعطال، وأوامر، وسيارات مدعومة، وسيارات محفوظة، وبحث عن رمز، وتقارير، وسجل مباشر مع مراجعة تلقائية.</td>
+<td width="50%" valign="top"><b>تطبيق سطح مكتب</b><br>شاشة بداية تختار منها بين المراقبة المباشرة ومسح الأعطال أو حاسوب السيارة، وزر لقطع الاتصال قبل فصل المحوّل بأمان، ونسخ محفوظة من بيانات السيارة لاختبار التطبيق دون سيارة، ثم صفحات: نظرة عامة مع حالة المحوّل، وأنظمة السيارة، وتحليل يرصد الأنماط في القراءات ويقارن الزيارات ويتابع كل عطل ويحفظ القراءات المحيطة بأي خلل جديد، وفحص للسيارة المستعملة يبحث عن علامات إخفاء الأعطال، واختبار للبطارية عند التشغيل، وأدوات لحاسوب السيارة ترصد تغيّر برامجه بين الزيارات وتقرأ كل بيانات الهوية التي يشاركها، وحاسوب السيارة، وبيانات مباشرة، ورموز أعطال، وأوامر، وسيارات مدعومة، وسيارات محفوظة، وبحث عن رمز، وتقارير، وسجل مباشر مع مراجعة تلقائية.</td>
 <td width="50%" valign="top"><b>الأوامر داخل التطبيق</b><br>شغّل فحص البطارية والتقرير والبحث عن الوحدات وغيرها، واقرأ النتيجة في الصفحة نفسها.</td>
 </tr>
 <tr>
@@ -237,6 +239,17 @@ flowchart LR
 
 </details>
 
+### إخلاء المسؤولية
+
+يُقدَّم فاحص **كما هو، دون أي ضمان**، و**تستخدمه على مسؤوليتك الخاصة**.
+
+- مؤلف فاحص **غير مسؤول** عن أي ضرر يلحق بسيارتك أو بالمحوّل أو بحاسوبك أو ببياناتك، ولا عن أي إصابة أو تكلفة أو خسارة تنتج عن استخدامه، بما في ذلك ما يحدث بعد مسح رموز الأعطال.
+- فاحص **ليس تشخيصًا احترافيًا** ولا يغني عن فحص ميكانيكي مؤهل. والأوصاف والتلميحات وخطط الإصلاح فيه إرشادية وقد تكون خاطئة أو لا تنطبق على سيارتك.
+- **لا تستخدمه أثناء القيادة**، والتزم بالقوانين المعمول بها حيث تعيش، ومنها قوانين الانبعاثات.
+- لا ينتمي فاحص إلى Kia أو Hyundai أو أي شركة سيارات أخرى ولا تدعمه، وأسماؤها علامات تجارية لأصحابها.
+
+الشروط الكاملة في ملف [LICENSE](LICENSE).
+
 ### الرخصة
 
 يمكن **للأفراد** استخدام الشيفرة المصدرية لفاحص وتعديلها ومشاركتها مجانًا للأغراض الشخصية. **ولا يحق للشركات والمؤسسات استخدامه** بدون إذن كتابي، ويشمل ذلك العاملين لحسابهم الخاص والأعمال الفردية عند استخدامه في عملهم، ولو اشتروا التطبيق الجاهز. ولا يجوز لأي شخص آخر بيعه.
@@ -252,6 +265,8 @@ flowchart LR
 ## English
 
 Many ELM327 adapters are Bluetooth LE. Windows gives them no COM port, so most OBD-II programs can't find them. **Fahis** talks to the adapter directly and shows your car's data in a desktop app, in Arabic and English.
+
+> **Note:** Use Fahis at your own risk. It isn't a professional diagnosis, and its author isn't responsible for any damage. See the [disclaimer](#disclaimer).
 
 <table>
 <tr>
@@ -274,7 +289,7 @@ Many ELM327 adapters are Bluetooth LE. Windows gives them no COM port, so most O
 
 <table>
 <tr>
-<td width="50%" valign="top"><b>Desktop app</b><br>A start screen to choose live monitoring and fault clearing or the ECU section, a Disconnect button for unplugging the adapter safely, and saved car copies for testing with no car. Then pages for: overview with adapter status, car systems, an analysis that spots patterns in the readings, compares visits, follows each fault and saves the readings around any new problem, a used-car check that looks for signs of hidden faults, a battery start test, ECU details, live data, fault codes, commands, supported cars, saved cars, code lookup, reports, and a live log with an automatic review.</td>
+<td width="50%" valign="top"><b>Desktop app</b><br>A start screen to choose live monitoring and fault clearing or the ECU section, a Disconnect button for unplugging the adapter safely, and saved car copies for testing with no car. Then pages for: overview with adapter status, car systems, an analysis that spots patterns in the readings, compares visits, follows each fault and saves the readings around any new problem, a used-car check that looks for signs of hidden faults, a battery start test, ECU tools that spot software changes between visits and read every identity item the computers share, ECU details, live data, fault codes, commands, supported cars, saved cars, code lookup, reports, and a live log with an automatic review.</td>
 <td width="50%" valign="top"><b>Commands in the app</b><br>Run a battery check, report, module scan and more, and read the result on the page.</td>
 </tr>
 <tr>
@@ -438,6 +453,17 @@ Run the offline tests, which don't need a car or adapter:
 | `test_obd_tool.py` | Offline tests |
 
 </details>
+
+### Disclaimer
+
+Fahis is provided **as is, without any warranty**, and **you use it at your own risk**.
+
+- Its author **isn't responsible** for any damage to your car, adapter, computer or data, or for any injury, cost or loss that comes from using it, including after clearing fault codes.
+- Fahis **isn't a professional diagnosis** and doesn't replace a qualified mechanic. Its descriptions, hints and repair plans are guidance and may be wrong or not apply to your car.
+- **Don't use it while driving**, and follow the laws where you live, including emissions laws.
+- Fahis isn't connected with or endorsed by Kia, Hyundai or any other car maker. Their names are trademarks of their owners.
+
+The full terms are in the [LICENSE](LICENSE) file.
 
 ### License
 

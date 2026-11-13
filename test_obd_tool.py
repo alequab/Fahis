@@ -2288,7 +2288,7 @@ class AnalysisTests(unittest.TestCase):
     def test_earlier_visits_include_fuel_from_older_records(self):
         record = {"sessions": [{"fuel": 40.0, "averages": {}}, "damaged"], "status": {"values": {"Fuel level": "7.8 %"}}}
         self.assertEqual(obd_tool.earlier_visits(record)["fuel"], [40.0, 7.8])
-        self.assertEqual(obd_tool.earlier_visits({}), {"sessions": [], "fuel": [], "followup": [], "test_history": []})
+        self.assertEqual(obd_tool.earlier_visits({}), {"sessions": [], "fuel": [], "followup": [], "test_history": [], "ecu_history": [], "scan": None})
 
 
 class NewFeatureTests(unittest.IsolatedAsyncioTestCase):
@@ -2380,6 +2380,47 @@ class NewFeatureTests(unittest.IsolatedAsyncioTestCase):
         cleared = car_analysis.check_followup({"followup": [cases["P0455"]]}, {0x31: 5})[0]
         self.assertEqual(cleared["state"], "unknown")
         self.assertIn("isn't proof of a fix", cleared["text"])
+
+    def test_code_that_comes_back_is_pointed_out(self):
+        reading = lambda time, codes, km=None, modules=("7E8",): {"time": time, "codes": codes, "stored": codes, "modules": list(modules),
+                                                                  "where": {c: "7E8" for c in codes}, "since_clear": {"km": km, "warm_ups": None}}
+        cleared = [reading("2026-11-01T10:00:00", ["P0700"], km=900), reading("2026-11-02T10:00:00", [], km=3),
+                   reading("2026-11-09T10:00:00", ["P0700"], km=229)]
+        case = garage.fault_followup({"history": cleared})[0]
+        self.assertEqual(case["returned"], {"gone": "2026-11-02T10:00:00", "back": "2026-11-09T10:00:00", "after_clear": True})
+        found = car_analysis.check_followup({"followup": [case]})[0]
+        self.assertEqual(found["state"], "bad")
+        self.assertIn("came back after the codes were cleared", found["text"])
+        # Gone and back with no clear seen, as in readings saved before clears were tracked.
+        came_back = [{"time": "2026-11-01T10:00:00", "codes": ["P0700"]}, {"time": "2026-11-02T10:00:00", "codes": []},
+                     {"time": "2026-11-09T10:00:00", "codes": ["P0700"]}]
+        case = garage.fault_followup({"history": came_back})[0]
+        self.assertFalse(case["returned"]["after_clear"])
+        self.assertEqual(car_analysis.check_followup({"followup": [case]})[0]["values"]["gone"], "2026-11-02")
+        # Its computer being silent isn't the code going away.
+        silent = [reading("2026-11-01T10:00:00", ["P0700"]), reading("2026-11-02T10:00:00", [], modules=["7E9"]),
+                  reading("2026-11-09T10:00:00", ["P0700"])]
+        self.assertIsNone(garage.fault_followup({"history": silent})[0]["returned"])
+        # A clear seen while the code stays gone isn't a return.
+        stays_gone = cleared[:2] + [reading("2026-11-09T10:00:00", [], km=40)]
+        self.assertIsNone(garage.fault_followup({"history": stays_gone})[0]["returned"])
+
+    def test_readings_keep_distance_since_clear(self):
+        vehicle = {"VIN": {"7E8": "AAAAAAAAAHA000000"}}
+        garage.remember(vehicle, "status", {"active_codes": [], "codes": {}, "since_clear": {"km": 229, "warm_ups": 18}})
+        self.assertEqual(garage.load_car(garage.car_key(vehicle))["history"][-1]["since_clear"], {"km": 229, "warm_ups": 18})
+
+    def test_used_car_check_says_when_faults_were_set_again_after_a_clear(self):
+        found = self.check({0x31: 229, 0x30: 18}, codes={"Stored": {"7E8": ["P0700"], "7E9": ["P0741"]}, "Pending": {"7E8": ["P0700"]}})
+        self.assertEqual(found["cleared"]["state"], "bad")
+        self.assertIn("set again since", found["cleared"]["text"])
+        self.assertEqual(found["cleared"]["values"]["codes"], "P0700, P0741")
+        self.assertIn("can hide a fault", self.check({0x31: 12, 0x30: 2})["cleared"]["text"])
+
+    def test_readable_text_is_taken_out_of_mixed_values(self):
+        self.assertEqual(car_modules.readable_detail(b"AB12CD34" + bytes.fromhex("87789888")), "AB12CD34")
+        self.assertEqual(car_modules.readable_detail(b"abcd1234  V001" + bytes(8) + b"XYZ9K22" + bytes.fromhex("01020304")), "abcd1234 V001 · XYZ9K22")
+        self.assertEqual(car_modules.readable_detail(bytes.fromhex("0141FE")), "01 41 FE", "a stray letter isn't text")
 
     def test_code_is_not_called_gone_when_its_computer_was_silent(self):
         seen = {"time": "2026-11-01T10:00:00", "codes": ["P0700"], "stored": ["P0700"], "modules": ["7E8", "7E9"], "where": {"P0700": "7E8"}}
@@ -2536,6 +2577,137 @@ class NewFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rating(1000, 2, True, size=3, seconds=0.22), ("", "Average"))
         self.assertEqual(rating(1000, 2, False), ("bad", "Slow"))
         self.assertEqual(rating(1000, 60, True), ("bad", "Unreliable"))
+
+
+class EcuToolTests(unittest.IsolatedAsyncioTestCase):
+    """Software changes between visits, car identity, the identity sweep, reports and the disclaimer."""
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.folder = Path(folder.name)
+        for target, name, value in ((garage, "CARS_DIR", self.folder / "cars"), (obd_tool, "REPORT_DIR", self.folder / "reports")):
+            patcher = mock.patch.object(target, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def snapshot(self, calibration="CAL-1", software="SW-1"):
+        return {"vehicle": {"VIN": {"7E8": "KNAAA000AHT000000"}, "Module name": {"7E8": "ECM"}, "Calibration ID": {"7E8": calibration},
+                            "Calibration check": {"7E8": "AB12CD34"}},
+                "ecu_details": {"7E8": [{"label": "Software version", "text": software}, {"label": "Stored VIN", "text": "KNAAA000AHT000000"}]},
+                "monitors": {"7E8": {"mil": False, "tests": []}}, "codes": {"Stored": {}, "Pending": {}}, "module_records": [], "test_results": []}
+
+    def test_fingerprints_are_kept_once_per_change(self):
+        record = {}
+        garage.remember_ecus(record, obd_tool.ecu_fingerprint(self.snapshot()))
+        garage.remember_ecus(record, {"7E8": {"Calibration ID": "CAL-1"}})
+        self.assertEqual(len(record["ecu_history"]), 1, "an item missing on one visit isn't a change")
+        garage.remember_ecus(record, obd_tool.ecu_fingerprint(self.snapshot(calibration="CAL-2")))
+        self.assertEqual([entry["ids"]["7E8"]["Calibration ID"] for entry in record["ecu_history"]], ["CAL-1", "CAL-2"])
+        self.assertEqual(record["ecu_history"][-1]["ids"]["7E8"]["Software version"], "SW-1")
+
+    def test_new_software_is_pointed_out_on_the_ecu_page_and_in_the_check(self):
+        previous = {"ecu_history": [{"time": "2026-11-01T10:00:00", "ids": {"7E8": {"Calibration ID": "CAL-1", "Software version": "SW-1"}}}]}
+        snapshot = self.snapshot(calibration="CAL-2")
+        self.assertEqual(obd_tool.ecu_changes(snapshot, previous)["7E8"],
+                         [{"label": "Calibration ID", "before": "CAL-1", "now": "CAL-2", "since": "2026-11-01"}])
+        ecu = obd_tool.page_ecus(snapshot, (), "en", previous)[0]
+        self.assertIn("it was CAL-1, and now it's CAL-2", ecu["changes"][0])
+        found = {item["id"]: item for item in obd_tool.car_check(snapshot, {}, previous)}
+        self.assertEqual(found["software_changed"]["state"], "warn")
+        self.assertIn("Calibration ID", obd_tool.page_car_check(snapshot, {}, "en", previous)["findings"][0]["text"])
+        self.assertEqual(obd_tool.ecu_changes(self.snapshot(), previous), {})
+        self.assertEqual(obd_tool.ecu_changes(snapshot, {}), {})
+
+    def test_car_identity_from_the_vin(self):
+        rows = dict(obd_tool.car_identity(self.snapshot(), {0x51: "Diesel", 0x1C: "EOBD"}, SimpleNamespace(protocol="CAN", version="ELM327 v2.1")))
+        self.assertEqual((rows["Maker"], rows["Model year"], rows["Built in"], rows["Fuel type"]), ("Kia", "2017", "South Korea", "Diesel"))
+        self.assertEqual(rows["Computers answering"], "7E8")
+        self.assertNotIn("VIN", rows)
+        self.assertEqual(dict(obd_tool.car_identity({"vehicle": {}, "monitors": {}}, {}))["Computers answering"], "-")
+        fake = dict(obd_tool.car_identity({"vehicle": {"VIN": {"7E8": "DEMO0000000000000"}}, "monitors": {}}, {}))
+        self.assertNotIn("Built in", fake, "a VIN with the letter O isn't a real one")
+
+    async def test_identity_sweep_reads_everything_shared_and_stops_at_silence(self):
+        class Transport:
+            asked = []
+
+            async def send(self, command, wait=5):
+                if command.startswith("AT"):
+                    return ["OK"]
+                Transport.asked.append(command)
+                item = int(command[2:], 16)
+                if item == 0xF187:
+                    return ["7E8 08 62 F1 87 41 42 43 31 32"]
+                if item == 0xF18B:
+                    return ["7E8 07 62 F1 8B 20 17 04 05"]
+                if item == 0xF18C:
+                    return ["7E8 07 62 F1 8C FF FF FF FF"]
+                return ["7E8 03 7F 22 31"] if item < 0xF1A0 else ["NO DATA"]
+
+        found = await car_modules.read_identity_items(ELM(Transport()), ["7E8"])
+        self.assertEqual(found["7E8"], [{"item": "F187", "label": "Part number", "text": "ABC12"},
+                                        {"item": "F18B", "label": "Manufacturing date", "text": "2017-04-05"}])
+        # All 32 standard items, all 128 maker items before them (each refused), then a limited run of silence after.
+        self.assertEqual(len(Transport.asked), 32 + 128 + car_modules.SWEEP_SILENT_AFTER_ANSWER)
+        self.assertTrue(all(command[:2] in car_modules.READ_ONLY_SERVICES for command in Transport.asked))
+
+    async def test_identity_sweep_gives_up_quickly_on_a_computer_that_never_answers(self):
+        transport = FakeTransport({})
+        found = await car_modules.read_identity_items(ELM(transport), ["7EA"])
+        self.assertEqual(found, {"7EA": []})
+        self.assertEqual(sum(command.startswith("22") for command in transport.sent), 32, "only the standard items, then it stops")
+
+    async def test_identity_sweep_keeps_asking_standard_items_through_gaps(self):
+        class Transport:
+            async def send(self, command, wait=5):
+                if command.startswith("AT"):
+                    return ["OK"]
+                return {"22F180": ["7E8 06 62 F1 80 42 4F 4F"], "22F19E": ["7E8 08 62 F1 9E 46 49 4C 45 31"]}.get(command, ["NO DATA"])
+
+        found = await car_modules.read_identity_items(ELM(Transport()), ["7E8"])
+        self.assertEqual([item["item"] for item in found["7E8"]], ["F180", "F19E"])
+
+    async def test_ecu_report_and_copy_and_save(self):
+        app = obd_tool.DashboardApp(SimpleNamespace(demo=False, samples=None, interval=0, address=None))
+        self.assertEqual((await app.api("GET", "/api/ecu/report", {}, {}))[0], 409)
+        app.snapshot, app.reader = self.snapshot(), SimpleNamespace(values={0x51: "Diesel"})
+        app.scan = {"time": "2026-11-13T10:00:00", "modules": [{"hdr": "7D1", "name": "ABS", "codes": [{"code": "C1234"}], "read_codes": True}]}
+        app.identity_items = {"7E8": [{"item": "F18B", "label": "Manufacturing date", "text": "2017-04-05"}]}
+        status, report = await app.api("GET", "/api/ecu/report", {"lang": "en"}, {})
+        self.assertEqual(status, 200)
+        for text in ("ECU report", "Engine computer (7E8)", "Calibration ID: CAL-1", "F18B Manufacturing date: 2017-04-05", "7D1 ABS: C1234",
+                     "Software changes can be spotted from the next visit on."):
+            self.assertIn(text, report["text"])
+        status, saved = await app.api("POST", "/api/ecu/save", {}, {"lang": "ar"})
+        self.assertEqual(status, 200)
+        self.assertIn("تقرير حاسوب السيارة", Path(saved["file"]).read_text(encoding="utf-8"))
+        app.args.demo = True
+        self.assertEqual((await app.api("POST", "/api/ecu/save", {}, {}))[0], 409)
+
+    def test_ecu_tools_page_shows_scan_and_items(self):
+        tools = obd_tool.page_ecu_tools(self.snapshot(), {}, {}, None, {"time": "t", "modules": [{"hdr": "770", "name": "Body control (doors, belts, lights)",
+                                                                                                  "codes": [], "read_codes": False, "refusal": "Busy"}]},
+                                        {"7E8": [{"item": "F1A5", "label": "Item {item}", "text": "X"}]}, "ar")
+        self.assertEqual(tools["scan"]["modules"][0]["refusal"], i18n.ARABIC["Busy"])
+        self.assertEqual(tools["items"]["7E8"][0]["label"], "البند F1A5")
+        self.assertIsNone(obd_tool.page_ecu_tools(self.snapshot(), {}, {}, None, None, None)["scan"])
+
+    def test_last_answered_is_tracked_per_computer(self):
+        elm = ELM(FakeTransport({}))
+        elm.parsed(["7E8 03 41 0D 00", "7E9 03 41 0D 00"])
+        self.assertEqual(set(elm.heard), {"7E8", "7E9"})
+        ecu = obd_tool.page_ecus(self.snapshot(), (), "en", None, {"7E8": time.monotonic() - 42})[0]
+        self.assertEqual(ecu["quiet"], 42)
+
+    def test_disclaimer_is_in_the_app_and_both_readme_sections(self):
+        page = bridge.PAGE.read_text(encoding="utf-8")
+        self.assertIn("at your own risk", page)
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertLess(readme.index("### إخلاء المسؤولية"), readme.index("### Disclaimer"), "Arabic comes first")
+        self.assertIn("isn't responsible", readme)
+        self.assertIn("غير مسؤول", readme)
+        self.assertIn("NOT LIABLE", (ROOT / "LICENSE").read_text(encoding="utf-8"))
 
 
 class RobustnessTests(unittest.IsolatedAsyncioTestCase):

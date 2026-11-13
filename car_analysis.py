@@ -442,6 +442,16 @@ def check_followup(previous, values=None):
     for case in previous.get("followup", [])[:4]:
         key, title = f"followup_{case['code']}", t("Fault follow-up")
         days = dict(code=case["code"], first=case["first_seen"][:10], last=case["last_seen"][:10], count=case["clean_readings"])
+        returned = case.get("returned")
+        if returned and case["status"] not in ("gone", "unclear"):
+            when = dict(gone=returned["gone"][:10], back=returned["back"][:10])
+            if returned["after_clear"]:
+                found.append(finding(key, title, "bad", t("{code} came back after the codes were cleared. Clearing didn't fix it, so whatever causes it is still there."),
+                                     "status", **days, **when))
+            else:
+                found.append(finding(key, title, "warn", t("{code} went away on {gone} and came back on {back}. A fault that keeps returning usually has a real cause, even if it wasn't cleared."),
+                                     "status", **days, **when))
+            continue
         if case["status"] == "gone" and cleared:
             found.append(finding(key, title, "unknown", t("{code} hasn't shown since {last}, but fault codes were cleared recently. It may come back once the car has run its tests again, so this isn't proof of a fix."),
                                  "status", **days))
@@ -473,8 +483,13 @@ def used_car_check(snapshot, values, model_year=None):
     elif (number(distance) is not None and distance < RECENT_CLEAR_KM) or (number(warm_ups) is not None and warm_ups < RECENT_CLEAR_WARM_UPS):
         # Cars differ in which of the two they report, so each is named only if it's there.
         since = t("{distance} km ago") if warm_ups is None else t("{warm_ups} warm-ups ago") if distance is None else t("{distance} km and {warm_ups} warm-ups ago")
-        found.append({**finding("cleared", title, "bad", t("Fault codes were cleared only {since}. A clear just before a sale can hide a fault that hasn't come back yet. Ask why, and check again after 100 to 200 km of driving."),
-                                "status", distance=distance, warm_ups=warm_ups), "since": since})
+        if stored or pending:
+            # Clearing erases every code, so any there now was set again since. The clear didn't hide them for long.
+            found.append({**finding("cleared", title, "bad", t("Fault codes were cleared only {since}, and these have been set again since: {codes}. Clearing didn't fix them, so the faults are real and still there."),
+                                    "status", distance=distance, warm_ups=warm_ups, codes=", ".join(stored + [code for code in pending if code not in stored])), "since": since})
+        else:
+            found.append({**finding("cleared", title, "bad", t("Fault codes were cleared only {since}. A clear just before a sale can hide a fault that hasn't come back yet. Ask why, and check again after 100 to 200 km of driving."),
+                                    "status", distance=distance, warm_ups=warm_ups), "since": since})
     else:
         since = t("{distance} km") if warm_ups is None else t("{warm_ups} warm-ups") if distance is None else t("{distance} km and {warm_ups} warm-ups")
         found.append({**finding("cleared", title, "good", t("No sign of a recent clear: {since} since codes were last cleared."), "status", distance=distance, warm_ups=warm_ups),

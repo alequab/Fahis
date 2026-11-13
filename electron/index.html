@@ -349,6 +349,7 @@
           <span data-i18n="See the car's computers: their names, calibration, software and whether they answer.">See the car's computers: their names, calibration, software and whether they answer.</span>
         </a>
       </div>
+      <p class="notice" data-i18n="Use Fahis at your own risk. It isn't a professional diagnosis, and its author isn't responsible for any damage to your car, adapter or data.">Use Fahis at your own risk. It isn't a professional diagnosis, and its author isn't responsible for any damage to your car, adapter or data.</p>
       <div class="home-links">
         <a class="button" href="#/saved" data-i18n="Saved cars">Saved cars</a>
         <a class="button" href="#/lookup" data-i18n="Code lookup">Code lookup</a>
@@ -408,7 +409,31 @@
     <div class="page" id="page-ecu" hidden>
       <div class="needs-car">
         <p class="intro" data-i18n="Read only. Fahis shows what each computer reports about itself. It doesn't copy or change the ECU's program.">Read only. Fahis shows what each computer reports about itself. It doesn't copy or change the ECU's program.</p>
+        <section>
+          <h2 data-i18n="Car identity">Car identity</h2>
+          <div class="values" id="ecu-identity"></div>
+        </section>
         <div class="ecu-grid" id="ecus"></div>
+        <section>
+          <h2 data-i18n="ECU tools">ECU tools</h2>
+          <div class="health-actions">
+            <button id="ecu-copy" type="button" data-i18n="Copy details">Copy details</button>
+            <button id="ecu-save" type="button" data-i18n="Save as a report">Save as a report</button>
+            <button id="ecu-read" type="button" class="primary" data-needs-connection="1" data-i18n="Read all identity data">Read all identity data</button>
+            <button id="ecu-scan" type="button" data-needs-connection="1" data-i18n="Scan for other computers">Scan for other computers</button>
+          </div>
+          <p class="needs" data-i18n="Read all identity data asks each computer for every standard identity item it will share, which takes about a minute each. Scanning asks every possible address, which takes about a minute. Both only read, and neither unlocks anything. Copying or changing the ECU's program needs the maker's security unlock, so Fahis doesn't do it.">Read all identity data asks each computer for every standard identity item it will share, which takes about a minute each. Scanning asks every possible address, which takes about a minute. Both only read, and neither unlocks anything. Copying or changing the ECU's program needs the maker's security unlock, so Fahis doesn't do it.</p>
+          <p id="ecu-note" class="dim" role="status" hidden></p>
+        </section>
+        <section id="ecu-items-section" hidden>
+          <h2 data-i18n="All identity data read">All identity data read</h2>
+          <div id="ecu-items"></div>
+        </section>
+        <section id="ecu-scan-section" hidden>
+          <h2 data-i18n="Other computers found by the last scan">Other computers found by the last scan</h2>
+          <p id="ecu-scan-time" class="dim"></p>
+          <div id="ecu-scan-list"></div>
+        </section>
       </div>
     </div>
 
@@ -588,6 +613,7 @@
 
     <footer>
       <span data-i18n="Standard OBD-II data only: ABS, airbag and body modules usually need other tools. Don't watch this page while driving.">Standard OBD-II data only: ABS, airbag and body modules usually need other tools. Don't watch this page while driving.</span>
+      <span data-i18n="Use Fahis at your own risk. It isn't a professional diagnosis, and its author isn't responsible for any damage to your car, adapter or data.">Use Fahis at your own risk. It isn't a professional diagnosis, and its author isn't responsible for any damage to your car, adapter or data.</span>
       <span id="english-note" hidden data-i18n="Some fault code descriptions are only available in English.">Some fault code descriptions are only available in English.</span>
     </footer>
   </main>
@@ -641,6 +667,8 @@ const ACTIONS = [
    needs: "Needs: adapter powered by the car. Works even if the car's computer doesn't answer.", cmd: ".\\obd battery"},
   {id: "starttest", title: "Battery start test", what: "Watches the voltage while you start the engine. How far it dips shows how well the battery copes with the starter.",
    needs: "Needs: engine off and ignition ON. Press Run, then start the engine when asked.", cmd: ".\\obd starttest"},
+  {id: "ecuread", title: "Read all identity data", what: "Asks each computer for every standard identity item it will share, and saves them to a report. It only reads.",
+   needs: "Needs: ignition ON or engine running. Takes about a minute for each computer.", cmd: ".\\obd ecuread"},
   {id: "codes", title: "Fault codes command", what: "Shows stored, pending and permanent fault codes with descriptions.",
    needs: "Needs: ignition ON or engine running.", cmd: ".\\obd codes"},
   {id: "info", title: "Car information", what: "Shows the adapter, voltage, check engine light, self-tests and available values.",
@@ -741,6 +769,8 @@ async function setLanguage(value) {
   logAfter = 0;
   fill(document.getElementById("log-lines"), []);
   document.getElementById("action-error").hidden = true;
+  // Messages from the last button press are in the old language, so they go rather than stay half translated.
+  for (const note of ["ecu-note", "check-note", "copy-note"]) document.getElementById(note).hidden = true;
   renderActions();
   renderCatalog();
   showPage();
@@ -792,7 +822,8 @@ function showPage() {
     box.open = true;
     box.scrollIntoView({block: "center"});
   }
-  if (lastState && lastState.connected) {
+  // Just after a language switch the last reading is still in the old language, so it waits for the next one.
+  if (lastState && lastState.connected && stateLanguage === language) {
     renderSystems(lastState);
     if (openSystem()) document.getElementById("system-detail").scrollIntoView({block: "nearest"});
   }
@@ -1562,7 +1593,8 @@ function systemCard(system, selected) {
 }
 
 function renderSystemGrid(id, systems, selected) {
-  const signature = JSON.stringify([systems.map(system => [system.id, systemStatus(system)]), selected, language]);
+  // The names come from the backend in the language it was asked for, so they're part of what decides a redraw.
+  const signature = JSON.stringify([systems.map(system => [system.id, system.name, system.what, systemStatus(system)]), selected, language]);
   fillIfChanged(id, signature, () => systems.map(system => systemCard(system, system.id === selected)));
 }
 
@@ -1580,7 +1612,7 @@ function renderSystems(state) {
   detail.hidden = !open;
   if (!open) return;
   const system = state.systems.find(item => item.id === open);
-  fillIfChanged("system-head", JSON.stringify([open, language]), () => {
+  fillIfChanged("system-head", JSON.stringify([open, system.name, system.what, language]), () => {
     const badge = el("span", undefined, "system-icon");
     badge.append(icon(open));
     const titles = el("div");
@@ -1631,13 +1663,18 @@ function renderSystems(state) {
 const ECU_STATES = {answering: ["Answering", "pill good"], busy: ["Busy", "pill warn"], silent: ["Didn't answer this time", "pill"]};
 
 function renderEcus(ecus) {
-  fillIfChanged("ecus", JSON.stringify([ecus, language]), () => ecus.map(ecu => {
+  // How long since each computer answered changes every second, so it's left out of what decides a full redraw.
+  fillIfChanged("ecus", JSON.stringify([ecus.map(ecu => ({...ecu, quiet: ecu.quiet === null ? null : ecu.quiet > 30})), language]), () => ecus.map(ecu => {
     const card = el("section");
     const head = el("div", undefined, "ecu-head");
     const [stateText, tone] = ECU_STATES[ecu.state];
     head.append(icon(ecu.icon), el("h2", ecu.role), el("span", tr(stateText), tone));
     card.append(head, row(tr("Address"), ecu.header));
     if (ecu.warning) card.append(el("p", ecu.warning, "notice"));
+    for (const text of ecu.changes || []) card.append(el("p", text, "notice"));
+    if (ecu.quiet !== null && ecu.quiet !== undefined) {
+      card.append(row(tr("Last answered"), tr("{seconds} seconds ago", {seconds: ecu.quiet}), ecu.quiet > 30 ? "warn" : ""));
+    }
     for (const item of ecu.rows) card.append(row(item.label, item.text));
     const faults = el("a", ecu.faults.length ? tr("{count} fault(s)", {count: ecu.faults.length}) : tr("See fault codes"), ecu.faults.length ? "button danger" : "button");
     faults.href = "#/faults";
@@ -1692,6 +1729,50 @@ function renderAnalysis(analysis) {
     line.append(el("span", item.unit ? `${item.name} (${item.unit})` : item.name), el("span", item.low), el("span", item.average), el("span", item.high));
     return line;
   })] : [el("p", tr("Readings appear here after a few updates."), "dim")]);
+}
+
+function renderEcuTools(tools) {
+  fillIfChanged("ecu-identity", JSON.stringify([tools.identity, language]), () => tools.identity.map(item => row(item.label, item.text)));
+  const headers = Object.keys(tools.items || {});
+  document.getElementById("ecu-items-section").hidden = !headers.length;
+  fillIfChanged("ecu-items", JSON.stringify([tools.items, language]), () => headers.map(header => {
+    const box = el("details", undefined, "test-group");
+    box.open = true;
+    const found = tools.items[header];
+    box.append(el("summary", `${tr("Computer {header}", {header})} · ${tr("{count} item(s)", {count: found.length})}`));
+    if (!found.length) box.append(el("p", tr("It shared no identity items."), "dim"));
+    for (const item of found) box.append(row(`${item.item} ${item.label}`, item.text));
+    return box;
+  }));
+  const scan = tools.scan;
+  document.getElementById("ecu-scan-section").hidden = !scan;
+  if (scan) document.getElementById("ecu-scan-time").textContent = shortTime(scan.time);
+  fillIfChanged("ecu-scan-list", JSON.stringify([scan, language]), () => !scan ? [] : scan.modules.length ? scan.modules.map(module => {
+    const text = module.refused ? (module.refusal ? tr("This module refused the request: {reason}", {reason: module.refusal}) : tr("This module refused the request"))
+      : module.codes.length ? module.codes.join(", ") : tr("No fault codes");
+    return row(`${module.header} ${module.name}`, text, module.codes.length ? "bad" : module.refused ? "dim" : "good");
+  }) : [el("p", tr("None. The car may block these requests, or the adapter may not support them."), "dim")]);
+}
+
+async function ecuNote(text) {
+  const note = document.getElementById("ecu-note");
+  note.textContent = text;
+  note.hidden = false;
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (error) {
+    // The page may not be allowed the clipboard, so fall back to selecting the text and copying it.
+    const box = Object.assign(document.createElement("textarea"), {value: text});
+    document.body.append(box);
+    box.select();
+    const copied = document.execCommand("copy");
+    box.remove();
+    return copied;
+  }
 }
 
 function renderHealth(state) {
@@ -1870,6 +1951,7 @@ function render(state) {
   renderHealth(state);
   renderAnalysis(state.analysis);
   renderCarCheck(state.car_check);
+  renderEcuTools(state.ecu_tools);
   renderEcus(state.ecus);
   renderSystems(state);
   renderValueFilter(state);
@@ -2103,7 +2185,7 @@ async function loadReports() {
 }
 
 const ASK_MS = 150, REDRAW_MS = 1000;
-let lastShown = null, lastReading = null, lastDrawn = 0, newReading = false;
+let lastShown = null, lastReading = null, lastDrawn = 0, newReading = false, stateLanguage = null;
 
 async function update() {
   const asked = language;
@@ -2123,6 +2205,7 @@ async function update() {
     const shown = `${state.reading}/${asked}`;
     newReading = state.reading !== lastReading;
     if (asked === language && (shown !== lastShown || !state.connected || Date.now() - lastDrawn >= REDRAW_MS)) {
+      stateLanguage = asked;
       render(state);
       lastShown = shown;
       lastReading = state.reading;
@@ -2159,6 +2242,24 @@ document.getElementById("copy-close").addEventListener("click", async () => {
     document.getElementById("copy-text").textContent = problem.message;
   }
 });
+document.getElementById("ecu-copy").addEventListener("click", async () => {
+  try {
+    const report = await api("GET", "/api/ecu/report", {lang: language});
+    ecuNote(tr(await copyText(report.text) ? "Copied. You can paste it into a message or a document." : "Could not copy. Save it as a report instead."));
+  } catch (problem) {
+    ecuNote(problem.message);
+  }
+});
+document.getElementById("ecu-save").addEventListener("click", async () => {
+  try {
+    const saved = await post("/api/ecu/save", {lang: language});
+    ecuNote(tr("Saved report: {path}", {path: saved.file}));
+  } catch (problem) {
+    ecuNote(problem.message);
+  }
+});
+document.getElementById("ecu-read").addEventListener("click", () => runAction("ecuread"));
+document.getElementById("ecu-scan").addEventListener("click", () => runAction("scan"));
 document.getElementById("check-save").addEventListener("click", async () => {
   const note = document.getElementById("check-note");
   try {
