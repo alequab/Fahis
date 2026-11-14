@@ -564,6 +564,9 @@ class EverythingTests(unittest.IsolatedAsyncioTestCase):
         values = {v["pid"]: v for v in obd_tool.dashboard_state(snapshot, reader, lang="en")["values"]}
         self.assertEqual(values["5C"]["unit"], "")
         self.assertEqual(values["05"]["unit"], "C")
+        report = obd_tool.format_report({**snapshot, "values": {0x2D: "Not reported", 0x05: 90}, "voltage": "12.6V"}).splitlines()
+        self.assertTrue(next(line for line in report if line.startswith("  2D")).endswith("Not reported"))
+        self.assertTrue(next(line for line in report if line.startswith("  05")).endswith("90 C"))
 
     async def test_page_state_carries_the_mark(self):
         elm = ELM(FakeTransport({}))
@@ -2583,6 +2586,8 @@ class NewFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rating(1000, 2, True, size=3, seconds=0.22), ("", "Average"))
         self.assertEqual(rating(1000, 2, False), ("bad", "Slow"))
         self.assertEqual(rating(1000, 60, True), ("bad", "Unreliable"))
+        # On a real car the first grouped request was lost, and the rating said "Slow" until grouping was settled.
+        self.assertIsNone(rating(1000, 2, None))
 
 
 class EcuToolTests(unittest.IsolatedAsyncioTestCase):
@@ -2803,6 +2808,17 @@ class ExplorerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(car_explorer.describe(bytes.fromhex("62F187"), "22F187")[0], "empty")
         self.assertEqual(car_explorer.describe(bytes.fromhex("62F18B20170302"), "22F18B")[1], "2017-03-02", "dates are shown as dates")
         self.assertEqual(car_explorer.describe(bytes.fromhex("610112345678"), "2101"), ("answered", "12 34 56 78", "12 34 56 78"))
+        # A real gasoline engine's E004 measurements held the bytes 22 31 49 31, which were shown as the word '"1I1'.
+        measured = "BFC0FE032823000063108B10" + "22314931" + "1100E6092D0C0007861A"
+        self.assertEqual(car_explorer.describe(bytes.fromhex("62E004" + measured), "22E004")[1], bytes.fromhex(measured).hex(" ").upper())
+        self.assertEqual(car_explorer.describe(bytes.fromhex("62BC01" + b"ABCD".hex() + "00"), "22BC01")[1], "ABCD", "whole text stays text")
+        self.assertEqual(car_explorer.describe(bytes.fromhex("62F180" + b"FBL12543".hex()), "22F180")[1], "FBL12543")
+        lines = car_explorer.report({"time": "", "modules": [{"header": "7E8", "request": "7E0", "name": "Engine", "items": [
+            {"request": "22E001", "names": [], "state": "answered", "text": "12 34", "raw": "12 34"},
+            {"request": "22F180", "names": [], "state": "answered", "text": "AB12", "raw": "41 42 31 32"}]}]}).splitlines()
+        self.assertTrue(lines[4].endswith("12 34") and "(" not in lines[4], "bytes aren't repeated")
+        self.assertTrue(lines[5].endswith("(41 42 31 32)"))
+        self.assertIn("other cars by the same maker", lines[-1])
 
     async def test_page_and_report_and_jobs(self):
         car = ExplorerCar()
@@ -2824,6 +2840,27 @@ class ExplorerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(obd_tool.page_explorer(None))
         with self.assertRaises(OBDError):
             await obd_tool.run_explore_again(ELM(ExplorerCar()), None)
+
+    async def test_read_again_with_the_car_switched_off_keeps_the_map(self):
+        # A real car switched off during "read again" gave 44 empty "changes" and would have emptied the saved map.
+        car = ExplorerCar()
+        elm = ELM(car)
+        elm.demo = True
+        with contextlib.redirect_stdout(io.StringIO()):
+            await obd_tool.run_explore(elm, None)
+        kept = json.dumps(elm.explorer["modules"])
+        car.header, original = None, car.send
+
+        async def silent(command, wait=5):
+            reply = await original(command, wait)
+            return reply if command.startswith("AT") else ["NO DATA"]
+        car.send = silent
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), self.assertRaises(OBDError) as stopped:
+            await obd_tool.run_explore_again(elm, None)
+        self.assertIn("nothing was compared", str(stopped.exception.text))
+        self.assertEqual(json.dumps(elm.explorer["modules"]), kept)
+        self.assertNotIn("changed since", output.getvalue())
 
 
 class RobustnessTests(unittest.IsolatedAsyncioTestCase):

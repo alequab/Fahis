@@ -28,7 +28,9 @@ ARABIC = {
     'No computer answered. The car may block these requests, or the adapter may not support them.': 'لم يستجب أي حاسوب. قد تحجب السيارة هذه الطلبات، أو قد لا يدعمها المحوّل.',
     'asked at {address}': 'يُسأل على {address}',
     '{answered} answered, {refused} refused, {silent} silent': 'استجاب {answered}، ورفض {refused}، وصمت {silent}',
-    'Nothing to show with this filter.': 'لا شيء يُعرض بهذا التصفية.',
+    'Nothing to show with this filter.': 'لا شيء يُعرض بهذه التصفية.',
+    'Names other than the standard F1xx items come from community profiles of other cars by the same maker, so they may not match what this car keeps there.':
+        'أسماء البنود غير القياسية (غير F1xx) مأخوذة من ملفات مجتمعية لسيارات أخرى من الصانع نفسه، فقد لا تطابق ما تحفظه هذه السيارة فيها.',
     'Older-style item': 'بند بالنمط الأقدم',
     'Unnamed item': 'بند بلا اسم',
     'Answered': 'استجاب',
@@ -51,6 +53,9 @@ ARABIC = {
     "A deep map also tries the maker's own number ranges, which takes several minutes for each computer that answers.": 'تجرّب الخريطة المعمّقة أيضًا نطاقات أرقام الشركة المصنعة، وهذا يستغرق عدة دقائق لكل حاسوب يستجيب.',
     "Map the car's computers first, then read again to compare.": 'ارسم خريطة حواسيب السيارة أولًا، ثم أعد القراءة للمقارنة.',
     '{count} item(s) changed since the last read.': 'البنود التي تغيّرت منذ آخر قراءة: {count}',
+    '{count} item(s) got no answer this time, so they keep their last value.': 'بنود لم تُجب هذه المرة فبقيت على قيمتها السابقة: {count}',
+    'No computer answered this time, so nothing was compared and the last map is kept. Check the ignition is ON, then try again.':
+        'لم يستجب أي حاسوب هذه المرة، فلم تتم المقارنة وبقيت الخريطة السابقة. تأكد أن مفتاح التشغيل على وضع ON ثم أعد المحاولة.',
     'asked at': 'يُسأل على',
     'changed': 'تغيّر',
     'answered': 'استجاب',

@@ -16,6 +16,8 @@ PRESENCE_REQUESTS = ("22F190", "1902AF", "2101")
 DEEP_RANGES = ((0xBC00, 0xBD00), (0x0100, 0x0200), (0xB000, 0xB100))
 DEEP_SILENT_LIMIT = 40  # silent replies in a row before moving on from a range
 STANDARD_ITEMS = range(0xF180, 0xF1A0)
+# Item names come from community profiles of every model by the same maker, so a gasoline car showed diesel names.
+NAMES_NOTE = "Names other than the standard F1xx items come from community profiles of other cars by the same maker, so they may not match what this car keeps there."
 
 
 def known_items(make, year=None):
@@ -53,9 +55,22 @@ def describe(reply, request):
         return "empty", "", ""
     # Zeros and other binary values are real data, such as a door switch that reads 00 when closed, so only text
     # is shown as words and everything else as the bytes themselves.
-    date = car_modules.readable_date(data) if request[:2] == "22" and int(request[2:], 16) in car_modules.IDENTITY_DATES else None
-    text = date or car_modules.readable_detail(data) or data.hex(" ").upper()
-    return "answered", text, data.hex(" ").upper()
+    number = int(request[2:], 16) if request[:2] == "22" else None
+    raw = data.hex(" ").upper()
+    if number is not None and number in STANDARD_ITEMS:
+        date = car_modules.readable_date(data) if number in car_modules.IDENTITY_DATES else None
+        return "answered", date or car_modules.readable_detail(data) or raw, raw
+    # Other items hold measurements, where a few bytes can happen to be letters: a real engine's E004 showed '"1I1'.
+    # So they're shown as words only when the whole value is text.
+    return "answered", whole_text(data) or raw, raw
+
+
+def whole_text(data):
+    """The value as text if every byte before any padding is a printable letter, else None."""
+    text = bytes(data).rstrip(b"\x00\xff ")
+    if len(text) >= car_modules.READABLE_RUN and all(0x20 <= byte < 0x7F for byte in text):
+        return text.decode("ascii")
+    return None
 
 
 async def ask(elm, header, request):
@@ -150,6 +165,11 @@ async def read_again(elm, last):
         try:
             for request, item in before.items():
                 result = await ask(elm, module["header"], request)
+                if result is None:
+                    # Silence isn't a new value. A real car switched off mid-read gave 44 empty "changes" and an
+                    # emptied map, so a missed item keeps what it had and is only marked as missed.
+                    items.append({**item, "changed": False, "before": item["raw"], "missed": True})
+                    continue
                 row = item_row(request, item["names"], result)
                 row["changed"] = row["raw"] != item["raw"]
                 row["before"] = item["raw"]
@@ -171,6 +191,8 @@ def report(found, lang=None):
             label = f"{item['request']}  " + (", ".join(item["names"][:3]) if item["names"] else "")
             value = item["text"] if item["state"] != "refused" else t(item["text"], lang)
             changed = f"  [{t('changed', lang)}: {item['before']} -> {item['raw']}]" if item.get("changed") else ""
-            lines.append(f"  {label.strip()}: {t(item['state'], lang)}: {value}{changed}  ({item['raw']})")
+            raw = f"  ({item['raw']})" if item["raw"] and item["raw"] != value else ""
+            lines.append(f"  {label.strip()}: {t(item['state'], lang)}: {value}{changed}{raw}")
         lines.append("")
+    lines.append(t(NAMES_NOTE, lang))
     return "\n".join(lines)

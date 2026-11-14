@@ -1850,12 +1850,15 @@ function renderExplorer(found) {
         const [label, tone] = EXPLORER_STATES[item.state];
         const what = el("span", item.names || tr(item.service === "21" ? "Older-style item" : "Unnamed item"), item.names ? "" : "dim");
         const value = el("span");
-        value.append(el("span", item.text || "-"), el("div", item.changed ? `${item.before} → ${item.raw}` : item.raw, "raw"));
+        value.append(el("span", item.text || "-"));
+        // A value with no text is already shown as its bytes, so they aren't repeated underneath.
+        if (item.changed || (item.raw && item.raw !== item.text)) value.append(el("div", item.changed ? `${item.before} → ${item.raw}` : item.raw, "raw"));
         line.append(el("span", item.request, "code"), what, value, el("span", tr(item.changed ? "Changed" : label), item.changed ? "pill warn" : tone));
         box.append(line);
       }
       sections.push(box);
     }
+    if (found.modules.length) sections.push(el("p", tr("Names other than the standard F1xx items come from community profiles of other cars by the same maker, so they may not match what this car keeps there."), "dim"));
     return sections;
   });
 }

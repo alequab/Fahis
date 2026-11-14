@@ -1093,7 +1093,8 @@ def format_report(snapshot):
     lines += ["", t("ALL VALUES")]
     for pid, value in snapshot["values"].items():
         name, unit, _ = LIVE_PIDS[pid]
-        lines.append(f"  {pid:02X}  {t(name):24} {shown_value(value):>20} {t(unit)}")
+        # A real car's report read "EGR error  Not reported %", so the unit goes only with a number.
+        lines.append(f"  {pid:02X}  {t(name):24} {shown_value(value):>20} {'' if value == 'Not reported' else t(unit)}".rstrip())
     if snapshot["this_drive"]:
         lines += ["", t("SELF-TESTS THIS DRIVE")]
         lines += [f"  {t(name):22} {t('finished') if done else t('NOT finished')}" for name, done in snapshot["this_drive"]]
@@ -1368,7 +1369,8 @@ RATING_AFTER_REPLIES = 50
 def adapter_rating(elm):
     """Judge the adapter from how it has behaved on this connection. Returns (tone, text, values), or None if it's too early."""
     stats = elm.transport
-    if stats.replied < RATING_AFTER_REPLIES:
+    # Until grouping has been tried, an adapter that turns out to answer several values would be called slow.
+    if stats.replied < RATING_AFTER_REPLIES or elm.can_group is None:
         return None
     milliseconds = round(stats.total_seconds / stats.replied * 1000)
     lost = stats.timeouts / stats.sent
@@ -2732,8 +2734,14 @@ async def run_explore_again(elm, _):
     if not last or not last.get("modules"):
         raise OBDError("Map the car's computers first, then read again to compare.")
     found = await car_explorer.read_again(elm, last)
+    asked = [item for module in found["modules"] for item in module["items"]]
+    missed = sum(bool(item.get("missed")) for item in asked)
+    if asked and missed == len(asked):
+        raise OBDError("No computer answered this time, so nothing was compared and the last map is kept. Check the ignition is ON, then try again.")
     changed = [(module["header"], item) for module in found["modules"] for item in module["items"] if item.get("changed")]
     print(t("{count} item(s) changed since the last read.", count=len(changed)))
+    if missed:
+        print(t("{count} item(s) got no answer this time, so they keep their last value.", count=missed))
     for header, item in changed:
         print(f"  {header} {item['request']}: {item['before']} -> {item['raw']}")
     elm.explorer = {**last, "time": found["time"], "modules": [
